@@ -10,7 +10,7 @@
   const ago = t => { if (!t) return 'never'; const s = (Date.now() - new Date(t)) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; if (s < 7 * 86400) return Math.floor(s / 86400) + ' d ago'; return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
   const store = { get(k, d) { try { const v = localStorage.getItem('nx-admin-' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('nx-admin-' + k, JSON.stringify(v)); } catch {} } };
   const ERR = { not_admin: 'Admins only.', not_high_admin: 'Only admins and high-admins can do that.', user_not_found: 'No account with that email.', invalid_level: 'Pick a valid level.',
-    not_found: 'Not found (or you no longer have access).', name_required: 'Give it a name.', too_many: 'Too many at once (500 max).', bad_action: 'Unknown action.' };
+    not_found: 'Not found (or you no longer have access).', conflict: 'Someone else saved this first. Reload to see their version.', name_required: 'Give it a name.', too_many: 'Too many at once (500 max).', bad_action: 'Unknown action.' };
   const needSql = m => /does not exist|schema cache|Could not find the function|PGRST20[02]/i.test(m || '');
   async function rpc(fn, args) {
     const { data, error } = await sb.rpc(fn, args);
@@ -70,8 +70,9 @@
       o.connect(g).connect(audio.destination); o.start(t); o.stop(t + .36);
     } catch {}
   }
-  // kind: chat | requests | feedback | reports.  force: a mention (gets through muted rooms, not Do not disturb)
-  function notify({ kind, title, body, who, tab, onClick, force = false }) {
+  // kind: chat | requests | feedback | reports | tasks | audit | schedules | hub.  force: a mention (gets through muted rooms, not Do not disturb)
+  function notify({ kind, title, body, who, tab, onClick, force = false, room, to }) {
+    emit('notify', { kind, title, body, tab, room, to, force });   // the Mac hub forwards these to phones
     const p = NX.A.prefs, n = p.notify || {};
     if (!force && n[kind] === false) return;
     const dnd = p.status === 'dnd';
@@ -93,12 +94,14 @@
   }
 
   // ---------- layout
+  const HUB_LABEL = window.apojiDesktop ? 'This Mac' : 'Mac hub';
   const TABS = [
-    ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat', 'chat'], ['tasks', '✅', 'Tasks', 'tasks']]],
+    ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat', 'chat'], ['tasks', '✅', 'Tasks', 'tasks'], ['notes', '📓', 'Team notes']]],
     ['INBOX', [['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation']]],
-    ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['maint', '🛠', 'Maintenance']]],
-    ['', [['audit', '📜', 'Audit log'], ['me', '⚙︎', 'My settings']]]
+    ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['schedules', '⏰', 'Schedules']]],
+    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['audit', '📜', 'Audit log']]],
+    ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['me', '⚙︎', 'My settings']]]
   ];
   const ALL_TABS = TABS.flatMap(g => g[1].map(t => t[0]));
   function shell() {
@@ -163,7 +166,8 @@
   const listeners = {};
   const on = (table, fn) => { (listeners[table] = listeners[table] || []).push(fn); return () => { listeners[table] = listeners[table].filter(f => f !== fn); }; };
   const emit = (table, payload) => (listeners[table] || []).slice().forEach(fn => { try { fn(payload); } catch (e) { console.error(e); } });
-  const LIVE_TABLES = ['admin_messages', 'admin_reads', 'admin_prefs', 'admin_groups', 'admin_group_members', 'beta_requests', 'feedback_reports', 'feedback_replies', 'content_reports', 'maintenance_config', 'admin_tasks'];
+  const LIVE_TABLES = ['admin_messages', 'admin_reads', 'admin_prefs', 'admin_groups', 'admin_group_members', 'beta_requests', 'feedback_reports', 'feedback_replies', 'content_reports', 'maintenance_config', 'admin_tasks',
+    'broadcasts', 'admin_schedules', 'admin_hub', 'admin_team_notes', 'moderation_log'];
   function realtime() {
     let ch = sb.channel('admin-live');
     for (const t of LIVE_TABLES) ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, p => emit(t, p));
@@ -193,6 +197,12 @@
     });
     on('feedback_replies', p => { if (p.eventType === 'INSERT' && !p.new.is_staff) notify({ kind: 'feedback', title: '📮 They replied', body: p.new.body, onClick: () => go('feedback', { arg: p.new.report_id }) }); });
     on('content_reports', p => { if (p.eventType === 'INSERT') notify({ kind: 'reports', title: '🚩 New content report', body: `${p.new.kind} · ${p.new.reason}${p.new.target_label ? ' · ' + p.new.target_label : ''}`, tab: 'reports' }); refreshCounts(); });
+    // Audit alerts: another admin changed roles, banned someone, removed content…
+    on('moderation_log', p => {
+      const r = p.new; if (p.eventType !== 'INSERT' || !r || r.performed_by === NX.A.user.id) return;
+      const by = adminById(r.performed_by);
+      notify({ kind: 'audit', title: '📜 ' + String(r.action || 'Admin action').replace(/_/g, ' '), body: `${by ? nameOf(by) : 'An admin'}${r.target_email ? ' → ' + r.target_email : ''}`, who: by, tab: 'audit' });
+    });
     on('admin_prefs', p => {
       const r = p.new; if (!r?.user_id) return;
       const a = adminById(r.user_id); if (a) Object.assign(a, { status: r.status, status_text: r.status_text, idle: r.idle, last_seen: r.last_seen, read_receipts: r.read_receipts });
@@ -274,6 +284,6 @@
     pages: {},
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0 },
-      prefs: { read_receipts: true, status: 'auto', status_text: '', muted_rooms: [], notify: { chat: true, requests: true, feedback: true, reports: true, tasks: true, sound: true } } }
+      prefs: { read_receipts: true, status: 'auto', status_text: '', muted_rooms: [], notify: { chat: true, requests: true, feedback: true, reports: true, tasks: true, audit: true, schedules: true, sound: true } } }
   };
 })();

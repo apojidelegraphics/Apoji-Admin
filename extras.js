@@ -173,8 +173,9 @@
   }
 
   // =========================================================== Command palette (⌘K) + shortcuts
-  const PAGES = [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat'], ['tasks', '✅', 'Tasks'], ['requests', '🧪', 'Beta requests'], ['feedback', '📮', 'Feedback & bugs'], ['reports', '🚩', 'Reports'],
-    ['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['maint', '🛠', 'Maintenance'], ['audit', '📜', 'Audit log'], ['me', '⚙︎', 'My settings']];
+  const PAGES = [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat'], ['tasks', '✅', 'Tasks'], ['notes', '📓', 'Team notes'], ['requests', '🧪', 'Beta requests'], ['feedback', '📮', 'Feedback & bugs'], ['reports', '🚩', 'Reports'],
+    ['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['schedules', '⏰', 'Schedules'],
+    ['health', '🩺', 'Health'], ['releases', '🚀', 'Releases'], ['audit', '📜', 'Audit log'], ['hub', '🖥', window.apojiDesktop ? 'This Mac' : 'Mac hub'], ['me', '⚙︎', 'My settings']];
   function actions() {
     return [
       { ic: '✅', label: 'New task', words: 'add todo', run: () => taskModal() },
@@ -183,6 +184,9 @@
       { ic: '🟢', label: 'Status: Automatic', words: 'online available', run: () => NX.savePrefs({ status: 'auto' }).then(() => toast('🟢 Online')) },
       { ic: '⚪', label: 'Status: Invisible', words: 'hide offline', run: () => NX.savePrefs({ status: 'invisible' }).then(() => toast('⚪ Invisible')) },
       { ic: '🔒', label: 'Lock admin chat on this device', words: 'encryption passphrase', run: async () => { await NX.chat.lock(); toast('🔒 Locked'); if (A.tab === 'chat') NX.pages.chat(); } },
+      { ic: '📡', label: 'New broadcast', words: 'notify everyone push message', run: () => NX.go('broadcast') },
+      { ic: '⏰', label: 'Run due schedules now', words: 'jobs schedule', run: () => NX.hub?.runNow() },
+      { ic: '📓', label: 'New team note', words: 'doc playbook write', run: () => { NX.go('notes'); setTimeout(() => document.getElementById('nNew')?.click(), 500); } },
       { ic: '⌨', label: 'Keyboard shortcuts', words: 'help keys', run: () => shortcutsHelp() }
     ];
   }
@@ -223,7 +227,7 @@
     $('palR').onclick = e => { const b = e.target.closest('[data-i]'); if (b) run(items[+b.dataset.i]); };
     search(''); setTimeout(() => q.focus(), 20);
   }
-  const KEYS = { d: 'dashboard', c: 'chat', t: 'tasks', b: 'requests', f: 'feedback', r: 'reports', u: 'users', m: 'moderation', a: 'announce', s: 'me' };
+  const KEYS = { d: 'dashboard', c: 'chat', t: 'tasks', o: 'notes', b: 'requests', f: 'feedback', r: 'reports', u: 'users', m: 'moderation', a: 'announce', p: 'broadcast', j: 'schedules', h: 'health', l: 'releases', x: 'hub', s: 'me' };
   function shortcutsHelp() {
     NX.modal(`<h3>⌨ Keyboard shortcuts</h3><div class="keys">
       <div><kbd>⌘</kbd><kbd>K</kbd> or <kbd>Ctrl</kbd><kbd>K</kbd><span>Search and jump anywhere</span></div>

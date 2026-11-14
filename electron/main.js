@@ -1,6 +1,7 @@
 // Apoji Admin for Mac: the admin portal as its own app. The portal's files ship inside the app and load from
 // apoji://admin (a private, secure origin), so it opens instantly and doesn't depend on GitHub Pages.
 // Supabase, the chat encryption and notifications work the same as in the browser.
+// 1.2: it can also be your team's Mac hub over Tailscale (hub.js): phone notifications, schedules, keep awake.
 const { app, BrowserWindow, Menu, protocol, net, shell, ipcMain, session, nativeTheme } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -8,10 +9,18 @@ const { pathToFileURL } = require('url');
 const ROOT = path.join(__dirname, '..');
 const HOME = 'apoji://admin/index.html';
 const RELEASES = 'https://github.com/apojidelegraphics/Apoji-Admin/releases/latest';
+const SB_URL = process.env.APOJI_TEST_SUPABASE || 'https://yzbnxpkuhlxsuwzbjifx.supabase.co', SB_KEY = 'sb_publishable_LY-EZORCvEQqW6AeQC5a8w_Z7wmeyjn';
 protocol.registerSchemesAsPrivileged([{ scheme: 'apoji', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
-if (!app.requestSingleInstanceLock()) app.quit();
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
 let win = null;
+const { setupHub } = require('./hub');
+const hubApp = !gotLock ? { keepRunning: () => false, openedAtLogin: () => false } : setupHub({ getWin: () => win, showWin: tab => showWin(tab), sbUrl: SB_URL, sbKey: SB_KEY });
+function showWin(tab) {
+  if (!win) createWindow(); else { if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+  if (tab) win.webContents.executeJavaScript(`window.NX && NX.A.user && NX.go(${JSON.stringify(tab)})`).catch(() => {});
+}
 
 function serve() {
   protocol.handle('apoji', req => {
@@ -31,10 +40,14 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1320, height: 880, minWidth: 380, minHeight: 520, show: false, title: 'Apoji Admin',
     backgroundColor: '#0a0817', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 21 },
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true }
+    // keeps running at full speed in the background (the hub runs schedules and sends phone notifications)
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true, backgroundThrottling: false }
   });
   win.loadURL(HOME);
-  win.once('ready-to-show', () => win.show());
+  // Opened at login as the hub: start in the background (click the Dock or menu bar icon to open it)
+  win.once('ready-to-show', () => { if (!(hubApp.keepRunning() && hubApp.openedAtLogin())) win.show(); });
+  // With the hub on, closing the window hides it so the hub keeps working. ⌘Q still quits.
+  win.on('close', e => { if (hubApp.keepRunning() && !app.isQuitting) { e.preventDefault(); win.hide(); } });
   // Links to GitHub, Supabase, etc. open in your browser. The GitHub App setup also happens in the browser.
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('apoji://admin/')) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); } });
@@ -69,6 +82,6 @@ app.whenReady().then(() => {
   setTimeout(() => checkUpdate(false), 8000);
   setInterval(() => checkUpdate(false), 6 * 3600e3);
 });
-app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
-app.on('activate', () => { if (!win) createWindow(); else win.show(); });
+app.on('second-instance', () => showWin());
+app.on('activate', () => showWin());
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

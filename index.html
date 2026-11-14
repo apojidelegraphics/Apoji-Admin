@@ -34,9 +34,13 @@
 <script src="chat.js"></script>
 <script src="pages.js"></script>
 <script src="extras.js"></script>
+<script src="features.js"></script>
 <script>
   NX.start();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('message', e => { if (/^#[\w/-]*$/.test(e.data?.go || '')) location.hash = e.data.go; });   // tapped a phone notification
+  }
 </script>
 </body>
 </html>

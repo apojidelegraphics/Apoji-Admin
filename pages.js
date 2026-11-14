@@ -491,8 +491,9 @@
           <div class="row" style="margin-bottom:6px">${perm === 'granted' ? '<span class="ok">✓ Desktop notifications are on for this browser.</span>' : perm === 'denied' ? '<span class="err">Notifications are blocked for this site. Allow them in your browser\'s site settings.</span>' : perm === 'unsupported' ? '<span class="muted">This browser can\'t show notifications. You\'ll still get pop-ups in the portal.</span>' : '<button class="btn primary" id="perm">Turn on desktop notifications</button>'}<span class="sp"></span><button class="btn sm" id="ntest">Test</button></div>
           ${tog('nChat', '💬 Admin chat', 'New messages (muted chats only for @mentions)', n.chat !== false)}${tog('nReq', '🧪 Beta requests', 'Someone asks to be a beta tester', n.requests !== false)}
           ${tog('nFb', '📮 Feedback & bugs', 'New reports and replies from people', n.feedback !== false)}${tog('nTask', '✅ Tasks', 'Someone gives you a task', n.tasks !== false)}${tog('nRep', '🚩 Content reports', 'Something reported in Shared Spaces or a shared agent', n.reports !== false)}
+          ${tog('nAudit', '📜 Audit alerts', 'Another admin changes roles, bans someone or removes content', n.audit !== false)}${tog('nSched', '⏰ Schedules', 'A schedule ran or failed', n.schedules !== false)}
           ${tog('nSound', '🔊 Sound', 'A soft chime with each notification', n.sound !== false)}
-          <p class="muted" style="margin:6px 0 0">Notifications arrive while the portal is open in a tab (even in the background). On iPhone, add the portal to your Home Screen first.</p></div>
+          <p class="muted" style="margin:6px 0 0">Notifications arrive while Apoji Admin is open (even in the background). For notifications on your phone when it's closed, see <a href="#hub">${window.apojiDesktop ? 'This Mac' : 'Mac hub'}</a>.</p></div>
         <div class="card"><h3>🔒 Chat encryption</h3><p class="muted" style="margin-top:0">Admin chat messages and files are end-to-end encrypted with the team passphrase. Supabase only stores scrambled text.</p>
           <div class="row">${NXCrypto.ready() ? '<span class="ok">✓ Unlocked on this device</span><span class="sp"></span><button class="btn" id="eLock">Lock on this device</button>' : '<span class="muted">Locked on this device.</span><span class="sp"></span><button class="btn primary" id="eOpen">Unlock in Admin chat</button>'}</div>
           ${A.level === 'high-admin' && NXCrypto.ready() ? '<div class="row" style="margin-top:10px"><button class="btn" id="eOld">Encrypt messages from before</button><span class="muted" id="eOldN"></span></div>' : ''}</div>
@@ -501,7 +502,7 @@
           <div class="row" style="margin-top:14px"><span class="sp"></span><button class="btn danger" id="out">Sign out</button></div></div>
       </div>
       <div class="cols">${NX.replies.card()}<div class="card"><h3>⌨ Shortcuts</h3><p class="muted" style="margin:0 0 8px">Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>) to jump anywhere: pages, admins, users, feedback and tasks. <kbd>G</kbd> then a letter goes to a page, <kbd>N</kbd> makes a task.</p><button class="btn" id="keysHelp">See all shortcuts</button></div></div>`);
-    const N = { nChat: 'chat', nReq: 'requests', nFb: 'feedback', nRep: 'reports', nTask: 'tasks', nSound: 'sound' };
+    const N = { nChat: 'chat', nReq: 'requests', nFb: 'feedback', nRep: 'reports', nTask: 'tasks', nAudit: 'audit', nSched: 'schedules', nSound: 'sound' };
     $('main').onchange = async e => {
       const id = e.target.id;
       if (N[id]) { await NX.savePrefs({ notify: { ...A.prefs.notify, [N[id]]: e.target.checked } }); toast('✓ Saved'); }

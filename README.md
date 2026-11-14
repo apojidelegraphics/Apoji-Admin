@@ -3,7 +3,7 @@
 # Apoji Admin
 
 The admin app for **Nexus '28** and **N28C**.
-Live at **https://apojidelegraphics.github.io/Apoji-Admin/**. Install it like an app from your browser: on a Mac, Chrome's install button or Safari's *File → Add to Dock*; on an iPhone, *Share → Add to Home Screen*.
+A Mac app (download it from Releases) and a website (GitHub Pages) that works from any browser or phone.
 
 Only accounts in `public.admin_roles` can use it. Everything goes through Supabase row-level security.
 
@@ -27,7 +27,26 @@ It's the same portal with the files built in, plus a Dock badge for unread items
 - **Tasks**: the team's to-do board (To do · Doing · Done) with owners, due dates and priorities, linked to feedback, users or reports. Drag cards between columns.
 - **Command palette**: ⌘K / Ctrl+K jumps to any page, admin, user, feedback report or task. `G` then a letter goes to a page, `N` makes a task, `?` lists every shortcut.
 - **Saved replies**: your own snippets for feedback replies and chat (⚡).
-- **Notifications**: pop-ups, desktop notifications, a chime and an app badge.
+- **Notifications**: pop-ups, desktop notifications, a chime and an app badge. Phone notifications through your Mac hub (below).
+- **Team notes**: playbooks and how-tos, end-to-end encrypted like the chat, saved as you type, with a markdown preview and no silent overwrites.
+- **Broadcasts**: a notification in everyone's Nexus Mac app and N28C (everyone, beta testers, admins or people on older versions), now or later.
+- **Schedules**: turn announcements, maintenance and feature flags on or off at a set time.
+- **Health**: Supabase speed, live updates, the Mac hub, N28C requests waiting, failed schedules, free AI key credit, database and storage size.
+- **Releases**: downloads from GitHub, which versions people run and a one-click "please update" broadcast.
+- **Audit alerts**: a notification when another admin changes roles, bans someone or removes content.
+
+## Mac hub (Tailscale)
+
+Supabase stays the source of truth, so the website and the Mac app both work from anywhere. Turn on **This Mac → Use this Mac as the hub** and that Mac also:
+
+- runs a small private API on your **tailnet only** (`tailscale serve` on port 8443, with a real HTTPS certificate). Every call needs a Tailscale account (optionally from an allow list) **and** a signed-in Apoji admin;
+- sends **phone notifications** (web push from your Mac; phones only see "New message in #room" for chat unless you allow the text);
+- runs **schedules** on time (every 30 seconds) and stays **awake** (only while plugged in, if you like). The screen can still turn off;
+- opens at login and lives in the menu bar when you close the window (⌘Q quits).
+
+The website finds the hub by itself. On a phone with Tailscale on, open the website → **Mac hub** → **Turn on notifications** (on iPhone, add the site to your Home Screen first). From there you can also run schedules right away and see what's new on the Mac. Without a hub, schedules run whenever any Apoji Admin is open.
+
+Setup: install [Tailscale](https://tailscale.com/download) on the Mac and your phone (same account), and in the Tailscale admin console → DNS turn on **MagicDNS** and **HTTPS Certificates**.
 
 ## Encrypted admin chat
 
@@ -40,10 +59,11 @@ Messages and files are encrypted in your browser before they're sent (AES-256-GC
 
 ## Setup
 
-1. **SQL**: in Supabase → SQL Editor, run `supabase/apoji-admin.sql` (after Nexus' `nexus-v2.2.sql`), then `supabase/apoji-admin-1.1.sql`.
+1. **SQL**: in Supabase → SQL Editor, run `supabase/apoji-admin.sql` (after Nexus' `nexus-v2.2.sql`), then `supabase/apoji-admin-1.1.sql`, then `supabase/apoji-admin-1.2.sql`.
 2. **Encryption**: open **Admin chat** as a high-admin and set the team passphrase.
-3. **Website (optional)**: repo *Settings → Pages → Deploy from a branch → `main` / root*.
+3. **Website**: Settings → Pages → Deploy from a branch → `main` / `(root)`.
+4. **Hub** (optional): see above.
 
 ## Develop
 
-Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`). `crypto.js` is the encryption, `chat.js` the chat, `pages.js` every other page, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications).
+Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`), `npm test` tests the hub. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` most pages, `extras.js` tasks and the command palette, `features.js` the hub, notes, broadcasts, schedules, health and releases, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications). `electron/hub-core.js` is the hub API, `electron/hub.js` keep-awake, login item and menu bar.
