@@ -18,7 +18,10 @@ const TS_PORT = 8443;        // the tailnet port (443 is left free for anything 
 const ORIGINS = ['https://apojidelegraphics.github.io', 'apoji://admin'];
 const KINDS = ['requests', 'feedback', 'reports', 'tasks', 'chat', 'audit', 'schedules', 'hub'];
 const DEFAULT_KINDS = ['requests', 'feedback', 'reports', 'tasks', 'chat', 'audit', 'schedules', 'hub'];
-const CLI_PATHS = ['/Applications/Tailscale.app/Contents/MacOS/Tailscale', '/opt/homebrew/bin/tailscale', '/usr/local/bin/tailscale', '/usr/bin/tailscale'];
+// The Mac app's own binary is also its command line, but only when it's told to be (TAILSCALE_BE_CLI=1); run from
+// another app without that, it just pokes the menu bar app and prints nothing. /usr/local/bin/tailscale exists if
+// you picked "Install CLI" in Tailscale's settings; Homebrew installs go in /opt/homebrew/bin.
+const CLI_PATHS = ['/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale', `${process.env.HOME || ''}/Applications/Tailscale.app/Contents/MacOS/Tailscale`, '/usr/bin/tailscale'];
 
 function createHub(opts) {
   const { dir, version = '0.0.0', name = 'Mac', sbUrl, sbKey, webpush, seal = s => s, unseal = s => s, onNudge = () => {}, onChange = () => {}, log = () => {} } = opts;
@@ -44,17 +47,19 @@ function createHub(opts) {
   // ---------- Tailscale
   let cli = opts.cli || null;
   function findCli() { if (cli) return cli; cli = CLI_PATHS.find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } }) || 'tailscale'; return cli; }
-  const ts = args => new Promise(res => execFile(findCli(), args, { timeout: 10000, env: { ...process.env, PATH: (process.env.PATH || '') + ':/opt/homebrew/bin:/usr/local/bin' } },
+  const ts = args => new Promise(res => execFile(findCli(), args, { timeout: 10000, env: { ...process.env, TAILSCALE_BE_CLI: '1', PATH: (process.env.PATH || '') + ':/opt/homebrew/bin:/usr/local/bin' } },
     (err, out, errOut) => res({ ok: !err, out: String(out || ''), err: String(errOut || err?.message || '') })));
+  const detail = r => `${findCli()} → ${(r.err || r.out || 'no output').trim().split('\n').slice(-2).join(' ').slice(0, 220)}`;
   async function tailscale() {
     const r = await ts(['status', '--json']);
-    if (!r.ok && /ENOENT|not found/i.test(r.err)) return (state.ts = { installed: false, running: false, error: 'Tailscale isn’t installed on this Mac.' });
-    let j = null; try { j = JSON.parse(r.out); } catch {}
-    if (!j) return (state.ts = { installed: true, running: false, error: r.err.trim().slice(0, 200) || 'Tailscale isn’t running.' });
+    if (!r.ok && /ENOENT|not found/i.test(r.err)) { cli = null; return (state.ts = { installed: false, running: false, error: 'Couldn’t find Tailscale on this Mac.', detail: detail(r) }); }
+    let j = null; try { j = JSON.parse(r.out.slice(r.out.indexOf('{'))); } catch {}
+    if (!j) { cli = null; return (state.ts = { installed: true, running: false, error: 'Tailscale didn’t answer. Make sure it’s connected in the menu bar, then Check again.', detail: detail(r) }); }
     const self = j.Self || {}, user = (j.User || {})[self.UserID] || {};
     const dns = String(self.DNSName || '').replace(/\.$/, '');
     state.ts = { installed: true, running: j.BackendState === 'Running', backend: j.BackendState || '', dnsName: dns, login: user.LoginName || '', tailnet: j.CurrentTailnet?.Name || '',
       https: Array.isArray(j.CertDomains) && j.CertDomains.length > 0, magicDns: j.CurrentTailnet?.MagicDNSEnabled !== false, error: '' };
+    state.ts.detail = findCli();
     if (!state.ts.running) state.ts.error = j.BackendState === 'NeedsLogin' ? 'Sign in to Tailscale on this Mac.' : 'Tailscale is off. Turn it on from the menu bar.';
     else if (!state.ts.https) state.ts.error = 'Turn on HTTPS certificates: Tailscale admin console → DNS → HTTPS Certificates.';
     return state.ts;

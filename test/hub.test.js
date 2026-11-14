@@ -14,7 +14,7 @@ let n = 0; const ok = m => { n++; console.log('  ✓ ' + m); };
   // a stand-in Tailscale CLI
   const cli = path.join(dir, 'tailscale');
   fs.writeFileSync(cli, `#!/bin/sh
-echo "$@" >> "${dir}/ts.log"
+echo "$@ BE_CLI=$TAILSCALE_BE_CLI" >> "${dir}/ts.log"
 if [ "$1" = "status" ]; then echo '{"BackendState":"Running","Self":{"DNSName":"studio-mac.tail1234.ts.net.","UserID":7},"User":{"7":{"LoginName":"luke@example.com"}},"CertDomains":["studio-mac.tail1234.ts.net"],"CurrentTailnet":{"Name":"example.com","MagicDNSEnabled":true}}'; fi
 exit 0
 `, { mode: 0o755 });
@@ -39,6 +39,7 @@ exit 0
   assert.strictEqual(hub.url(), 'https://studio-mac.tail1234.ts.net:8443');
   const log = fs.readFileSync(path.join(dir, 'ts.log'), 'utf8');
   assert.ok(log.includes('serve --bg --https=8443 http://127.0.0.1:47120'), log);
+  assert.ok(log.includes('status --json BE_CLI=1'), 'the Mac app binary is told to act as the CLI');
   ok('Tailscale: reads status, serves the hub on :8443 with HTTPS (leaves 443 alone)');
 
   const srv = http.createServer((q, s) => hub.handle(q, s)); await new Promise(r => srv.listen(0, '127.0.0.1', r));

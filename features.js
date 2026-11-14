@@ -131,7 +131,7 @@
     paintDeskHub(await D.hub.status(true));
   }
   function tsHelp(t) {
-    if (!t.installed) return `<ol class="hubsteps"><li>Install <a href="https://tailscale.com/download/mac" target="_blank" rel="noopener">Tailscale for Mac</a> and sign in.</li><li>In the <a href="https://login.tailscale.com/admin/dns" target="_blank" rel="noopener">Tailscale admin console → DNS</a>, turn on <b>MagicDNS</b> and <b>HTTPS Certificates</b>.</li><li>Come back here and press <b>Check again</b>.</li></ol>`;
+    if (!t.installed) return `<ol class="hubsteps"><li>Install <a href="https://tailscale.com/download/mac" target="_blank" rel="noopener">Tailscale for Mac</a> and sign in. Already have it? Open Tailscale's Settings and pick <b>Install CLI</b>.</li><li>In the <a href="https://login.tailscale.com/admin/dns" target="_blank" rel="noopener">Tailscale admin console → DNS</a>, turn on <b>MagicDNS</b> and <b>HTTPS Certificates</b>.</li><li>Come back here and press <b>Check again</b>.</li></ol>`;
     if (!t.running) return `<p class="muted">Open Tailscale from the menu bar and connect, then press <b>Check again</b>.</p>`;
     if (!t.https) return `<p class="muted">In the <a href="https://login.tailscale.com/admin/dns" target="_blank" rel="noopener">Tailscale admin console → DNS</a>, turn on <b>MagicDNS</b> and <b>HTTPS Certificates</b>, then press <b>Check again</b>.</p>`;
     return '';
@@ -149,7 +149,7 @@
         <div class="stat"><b>${W.jobs.ran}</b><span>schedules run${W.jobs.failed ? ` · ${W.jobs.failed} failed` : ''}</span></div></div>
       <div class="card"><h3>🔗 Tailscale <span class="sp"></span><button class="btn sm" id="hChk">Check again</button></h3>
         ${t.running ? `<div class="muted">Signed in as <b>${esc(t.login)}</b>${t.tailnet ? ' · tailnet ' + esc(t.tailnet) : ''}</div>` : ''}
-        ${t.error ? `<div class="banner warn" style="margin-top:10px">⚠️ ${esc(t.error)}</div>` : ''}${st.error ? `<div class="banner warn" style="margin-top:10px">⚠️ ${esc(st.error)}</div>` : ''}${tsHelp(t)}
+        ${t.error ? `<div class="banner warn" style="margin-top:10px">⚠️ ${esc(t.error)}</div>${t.detail ? `<div class="muted" style="font-family:var(--mono);font-size:11.5px;overflow-wrap:anywhere">${esc(t.detail)}</div>` : ''}` : ''}${st.error ? `<div class="banner warn" style="margin-top:10px">⚠️ ${esc(st.error)}</div>` : ''}${tsHelp(t)}
         ${st.url ? `<div class="hubaddr"><img src="${st.qr || ''}" alt="" width="120" height="120"><div><div class="muted">Your hub's private address (only your tailnet can open it)</div><code id="hUrl">${esc(st.url)}</code>
           <div class="row" style="margin-top:8px"><button class="btn sm" id="hCopy">Copy</button></div>
           <p class="muted" style="margin:8px 0 0">On your phone: install Tailscale (same account), open the Apoji Admin website, go to <b>Mac hub</b> and turn on notifications. You don't need this address; the website finds it.</p></div></div>` : ''}</div>
