@@ -1,0 +1,32 @@
+{
+  "name": "apoji-admin",
+  "productName": "Apoji Admin",
+  "version": "1.0.0",
+  "description": "The admin app for Nexus '28 and N28C.",
+  "author": "Apoji Delegraphics",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac dmg zip --arm64 --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.3.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.apojidelegraphics.apojiadmin",
+    "productName": "Apoji Admin",
+    "artifactName": "Apoji-Admin-${version}-${arch}.${ext}",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["electron/**", "index.html", "admin.css", "admin.js", "crypto.js", "charts.js", "chat.js", "pages.js", "sw.js", "manifest.webmanifest", "icons/**", "package.json"],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "identity": null,
+      "target": ["dmg", "zip"]
+    },
+    "dmg": { "title": "Apoji Admin ${version}" }
+  }
+}

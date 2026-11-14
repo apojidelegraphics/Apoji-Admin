@@ -1,0 +1,49 @@
+# Pushing a tag like v1.0.0 builds Apoji Admin for Mac (Apple silicon + Intel) and publishes a GitHub Release with the
+# DMGs and zips. The app checks this release for updates.
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  mac:
+    runs-on: macos-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'   # no Apple Developer ID yet; see the install steps in the release notes
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Build
+        run: npx electron-builder --mac dmg zip --arm64 --x64 --publish never
+      - name: Release notes
+        run: |
+          cat > release-notes.md <<'NOTES'
+          ## Apoji Admin for Mac
+          The admin app for Nexus '28 and N28C: dashboard, end-to-end encrypted admin chat, feedback and bug inbox, beta requests, users, moderation, feature flags, announcements, maintenance and GitHub.
+
+          ## Install
+          1. Download **Apoji-Admin-…-arm64.dmg** (Apple silicon, M1 or newer) or **…-x64.dmg** (Intel).
+          2. Open it and drag **Apoji Admin** to Applications.
+          3. Run once in Terminal (the app isn't notarized by Apple yet):
+          ```
+          xattr -cr "/Applications/Apoji Admin.app"
+          codesign --force --deep --sign - "/Applications/Apoji Admin.app"
+          ```
+          4. Open it and sign in with your admin account.
+
+          Updating: download the new version, replace the app, and run the two commands again. You stay signed in; on a new Mac, unlock admin chat with the team passphrase.
+          NOTES
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Apoji Admin ${{ github.ref_name }}
+          files: |
+            dist/*.dmg
+            dist/*.zip
+          body_path: release-notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}

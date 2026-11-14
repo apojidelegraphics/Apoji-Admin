@@ -7,6 +7,15 @@ Live at **https://apojidelegraphics.github.io/Apoji-Admin/**. Install it like an
 
 Only accounts in `public.admin_roles` can use it. Everything goes through Supabase row-level security.
 
+## Mac app
+
+Download the latest **Apoji-Admin-…-arm64.dmg** (Apple silicon) or **…-x64.dmg** (Intel) from [Releases](https://github.com/apojidelegraphics/Apoji-Admin/releases/latest), drag it to Applications, then run once:
+```
+xattr -cr "/Applications/Apoji Admin.app"
+codesign --force --deep --sign - "/Applications/Apoji Admin.app"
+```
+It's the same portal with the files built in, plus a Dock badge for unread items, desktop notifications and an update check (Help → Check for Updates). To publish a new version, bump `version` in `package.json`, then push a tag like `v1.0.1`; GitHub Actions builds it and makes the release.
+
 ## What's inside
 
 - **Dashboard**: active people (Mac app vs N28C), new accounts, Shared Space posts, versions in use, top agents, who's online and a live activity feed.
@@ -51,5 +60,5 @@ It runs on a Supabase Edge Function (`supabase/functions/apoji-github`). The app
 
 ## Develop
 
-Static files, no build step. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` every other page, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications).
+Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`). `crypto.js` is the encryption, `chat.js` the chat, `pages.js` every other page, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications).
 Function tests: `deno test --allow-env supabase/functions/apoji-github/index.test.ts` (needs `TEST_PEM_PKCS1` / `TEST_PUB_SPKI`; see the test file).

@@ -8,7 +8,7 @@
 // Deploy with JWT verification OFF (GitHub can't send a Supabase token): supabase functions deploy apoji-github --no-verify-jwt
 // The app's private key + webhook secret are stored in public.github_app (no API access; only this function reads it).
 
-const SITE_ORIGINS = ['https://apojidelegraphics.github.io'];
+const SITE_ORIGINS = ['https://apojidelegraphics.github.io', 'apoji://admin'];   // the website + the Mac app
 const GH = 'https://api.github.com';
 const enc = new TextEncoder();
 

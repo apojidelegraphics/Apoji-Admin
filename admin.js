@@ -79,7 +79,8 @@
     if (!dnd) toast(body, { title, who, onClick: open });
     if (dnd) return;
     if (n.sound !== false) chime();
-    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+    if ((document.hidden || !document.hasFocus()) && 'Notification' in window && Notification.permission === 'granted') {
+      window.apojiDesktop?.attention();
       try { const note = new Notification(title, { body: String(body).slice(0, 180), icon: who?.avatar_url || 'icons/icon-192.png', tag: kind + ':' + (tab || ''), renotify: true }); note.onclick = () => { note.close(); open(); }; } catch {}
     }
   }
@@ -87,6 +88,7 @@
     const c = NX.A.counts, total = (c.chat || 0) + (c.requests || 0) + (c.feedback || 0) + (c.reports || 0);
     document.title = (total ? `(${total}) ` : '') + 'Apoji Admin';
     try { navigator.setAppBadge?.(total || undefined); if (!total) navigator.clearAppBadge?.(); } catch {}
+    window.apojiDesktop?.badge(total);   // the Mac app's Dock badge
     document.querySelectorAll('[data-badge]').forEach(el => { const v = c[el.dataset.badge] || 0; el.textContent = v > 99 ? '99+' : v; el.hidden = !v; });
   }
 
@@ -269,6 +271,8 @@
     beat(); setInterval(beat, 45e3);
     setInterval(() => emit('presence', null), 30e3);
     sb.rpc('log_activity', { p_source: 'portal', p_version: 'portal' }).then(() => {}, () => {});
+    // Mac app: a new version on GitHub Releases
+    window.apojiDesktop?.onUpdate(u => u.latest ? toast(`Apoji Admin ${u.latest} is out. Click to download.`, { title: '⬆ Update available', ms: 15000, onClick: () => window.open(u.url, '_blank') }) : toast(`You're on the latest version (${u.current}).`));
   }
 
   const NX = window.NX = {

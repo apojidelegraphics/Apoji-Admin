@@ -197,6 +197,8 @@
     return j || { ok: false, error: /Failed to send|FunctionsFetchError|404/.test(error?.message || '') ? 'The apoji-github function isn\'t deployed yet (see the README).' : error?.message || 'Something went wrong.' };
   }
   function createApp() {
+    // The Mac app can't carry GitHub's sign-up form; finish this one step in your browser
+    if (window.apojiDesktop) { window.open(SITE + '#github', '_blank'); return toast('Opened the web portal in your browser. Create the GitHub App there.', { ms: 8000 }); }
     const state = crypto.randomUUID(); NX.store.set('ghState', state);
     const manifest = { name: 'Apoji Admin', url: SITE, description: 'Apoji Admin for Nexus \'28: turns feedback into issues, closes the loop when they\'re fixed, drafts release announcements and keeps the admin team posted.',
       hook_attributes: { url: `${NX.SB_URL}/functions/v1/${NX.FN}/webhook`, active: true }, redirect_url: SITE, setup_url: SITE + '#github', setup_on_update: true, public: false,
