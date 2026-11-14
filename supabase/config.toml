@@ -1,6 +1,0 @@
-# Supabase CLI settings for this repo (only the edge function lives here).
-project_id = "yzbnxpkuhlxsuwzbjifx"
-
-[functions.apoji-github]
-# GitHub webhooks can't carry a Supabase token; the function checks GitHub's signature and admin logins itself.
-verify_jwt = false

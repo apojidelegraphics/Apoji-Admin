@@ -93,7 +93,7 @@
     await reveal([m]);
     if (p.eventType === 'UPDATE') {
       const list = C.msgs[m.room]; const i = list ? list.findIndex(x => x.id === m.id) : -1;
-      if (i >= 0) { list[i] = m; if (A.tab === 'chat' && C.room === m.room) repaintMsg(m); }
+      if (i >= 0) { const was = list[i].pinned_at; list[i] = m; if (A.tab === 'chat' && C.room === m.room) { repaintMsg(m); if (!was !== !m.pinned_at) paintPinCount(); } }
       return;
     }
     if (p.eventType !== 'INSERT') return;
@@ -148,7 +148,7 @@
             <div class="replying" id="replying" hidden></div><div class="pend" id="pend" hidden></div>
             <div class="box"><button class="ib" id="cAttach" title="Attach images or files (or paste / drop them)">📎</button><input type="file" id="cFile" multiple hidden>
               <textarea class="field" id="ct" placeholder="Encrypted message…" maxlength="4000" rows="1"></textarea>
-              <button class="ib" id="cEmoji" title="Emoji">🙂</button><button class="btn primary" id="cSend" style="height:42px">Send</button></div>
+              <button class="ib" id="cSaved" title="Saved replies">⚡</button><button class="ib" id="cEmoji" title="Emoji">🙂</button><button class="btn primary" id="cSend" style="height:42px">Send</button></div>
           </div>
         </div>
       </div>`, { cards: false });
@@ -186,7 +186,7 @@
     else if (isDm(r)) { const o = dmOther(r); const p = presence(o); sub = `<span class="prtxt ${p}">${PRES[p]}</span>${o?.status_text ? ' · ' + esc(o.status_text) : ''}${p === 'offline' && o?.last_seen && new Date(o.last_seen) > Date.now() - 30 * 864e5 ? ' · last seen ' + NX.ago(o.last_seen) : ''}`; }
     else sub = `${people.length} members · ${people.filter(a => presence(a) !== 'offline').length} online`;
     t.innerHTML = `<button class="btn sm back" id="tBack">‹</button>${roomIcon(r, '')}<div class="ti"><b>${esc(roomName(r))}<span class="e2ee" title="End-to-end encrypted: only admins with the team passphrase can read this. Supabase only stores scrambled text.">🔒 E2EE</span></b><small>${sub}</small></div>
-      <button class="btn sm ghost" id="tFind" title="Search">🔍</button><button class="btn sm ghost" id="tMute" title="${muted(r) ? 'Unmute' : 'Mute'} notifications">${muted(r) ? '🔕' : '🔔'}</button>
+      <button class="btn sm ghost" id="tPins" title="Pinned messages">📌<span id="tPinN"></span></button><button class="btn sm ghost" id="tFind" title="Search">🔍</button><button class="btn sm ghost" id="tMute" title="${muted(r) ? 'Unmute' : 'Mute'} notifications">${muted(r) ? '🔕' : '🔔'}</button>
       ${isGroup(r) ? '<button class="btn sm ghost" id="tInfo" title="Group settings">ⓘ</button>' : r === 'all' ? '<button class="btn sm ghost" id="tInfo" title="Who\'s here">👥</button>' : ''}`;
   }
 
@@ -196,7 +196,7 @@
     C.room = r; NX.store.set('room', r);
     if (user) C.open = true;
     $('chat')?.classList.toggle('open', C.open);
-    paintRooms(); paintTop(); paintReply();
+    paintRooms(); paintTop(); paintReply(); paintPinCount();
     if (!$('msgs')) return;
     if (!C.msgs[r]) {
       $('msgs').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -228,9 +228,9 @@
     return `<div class="m ${cont ? 'cont' : ''} ${m.deleted ? 'del' : ''} ${mentionsMe(m) ? 'mentioned' : ''}" data-id="${m.id}">${av(who)}
       <div class="mb"><div class="by"><b style="color:${colorOf(m.sender)}">${esc(mine ? nameOf(A.me) : m.sender_name || nameOf(who))}</b><time title="${esc(d.toLocaleString())}">${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time></div>
         ${reply ? `<div class="rq" data-jump="${reply.id}">↪ ${esc(reply.sender_name || 'Admin')}: ${esc(reply.deleted ? 'deleted message' : txt(reply) || '📎 attachment')}</div>` : m.reply_to ? '<div class="rq">↪ an earlier message</div>' : ''}
-        <div class="tx">${m.deleted ? 'This message was deleted.' : linkify(txt(m))}${m.edited_at && !m.deleted ? '<span class="ed">(edited)</span>' : ''}</div>
+        ${m.pinned_at && !m.deleted ? `<div class="pinmark">📌 Pinned by ${esc(m.pinned_by === me() ? 'you' : nameOf(adminById(m.pinned_by)))}</div>` : ''}<div class="tx">${m.deleted ? 'This message was deleted.' : linkify(txt(m))}${m.edited_at && !m.deleted ? '<span class="ed">(edited)</span>' : ''}</div>
         ${!m.deleted && atts ? `<div class="atts">${atts}</div>` : ''}${rx ? `<div class="rx">${rx}</div>` : ''}</div>
-      ${m.deleted ? '' : `<div class="tools">${QUICK.slice(0, 3).map(e => `<button data-rx="${e}" title="React">${e}</button>`).join('')}<button data-act="react" title="More reactions">😀</button><button data-act="reply" title="Reply">↩︎</button>${mine && plain.get(m.id)?.t ? '<button data-act="edit" title="Edit">✎</button>' : ''}${txt(m) ? '<button data-act="copy" title="Copy">⧉</button>' : ''}${mine || A.level === 'high-admin' ? '<button data-act="del" title="Delete">🗑</button>' : ''}</div>`}</div>`;
+      ${m.deleted ? '' : `<div class="tools">${QUICK.slice(0, 3).map(e => `<button data-rx="${e}" title="React">${e}</button>`).join('')}<button data-act="react" title="More reactions">😀</button><button data-act="reply" title="Reply">↩︎</button><button data-act="pin" title="${m.pinned_at ? 'Unpin' : 'Pin'}">${m.pinned_at ? '📍' : '📌'}</button>${mine && plain.get(m.id)?.t ? '<button data-act="edit" title="Edit">✎</button>' : ''}${txt(m) ? '<button data-act="copy" title="Copy">⧉</button>' : ''}${mine || A.level === 'high-admin' ? '<button data-act="del" title="Delete">🗑</button>' : ''}</div>`}</div>`;
   }
   function paintMsgs(scroll) {
     const el = $('msgs'); if (!el) return;
@@ -432,6 +432,7 @@
       if (b.id === 'tBack') { C.open = false; $('chat').classList.remove('open'); paintRooms(); }
       if (b.id === 'tFind') { const f = $('tfind'); f.hidden = !f.hidden; if (!f.hidden) $('tfq').focus(); else { C.find = ''; $('tfq').value = ''; paintMsgs(true); } }
       if (b.id === 'tMute') { const list = new Set(A.prefs.muted_rooms || []); list.has(C.room) ? list.delete(C.room) : list.add(C.room); await NX.savePrefs({ muted_rooms: [...list] }); paintTop(); paintRooms(); recount(); toast(list.has(C.room) ? '🔕 Muted (you still get @mentions)' : '🔔 Notifications on'); }
+      if (b.id === 'tPins') return pinsModal();
       if (b.id === 'tInfo') { if (isGroup(C.room)) groupModal(groupOf(C.room)); else peopleModal(); }
     });
     $('tfq').addEventListener('input', e => { C.find = e.target.value; paintMsgs(true); });
@@ -458,6 +459,8 @@
       const rx = e.target.closest('[data-rx]'); if (rx) { NX.rpc('admin_react', { p_message: m.id, p_emoji: rx.dataset.rx }).catch(err => toast(err.message, true)); return; }
       const act = e.target.closest('[data-act]')?.dataset.act; if (!act) return;
       if (act === 'react') emojiPicker(e.target.closest('button'), em => NX.rpc('admin_react', { p_message: m.id, p_emoji: em }).catch(err => toast(err.message, true)));
+      if (act === 'pin') { const pin = !m.pinned_at; NX.rpc('admin_pin_message', { p_message: m.id, p_pin: pin }).then(() => { Object.assign(m, { pinned_at: pin ? new Date().toISOString() : null, pinned_by: pin ? me() : null }); repaintMsg(m); paintPinCount(); toast(pin ? '📌 Pinned for everyone in this chat' : 'Unpinned'); })
+        .catch(err => toast(NX.needSql(err.message) || /admin_pin_message/.test(err.message) ? 'Run supabase/apoji-admin-1.1.sql to pin messages.' : err.message, true)); return; }
       if (act === 'reply') { C.replyTo = m; paintReply(); $('ct').focus(); }
       if (act === 'copy') { navigator.clipboard?.writeText(txt(m)); toast('Copied'); }
       if (act === 'del') { if (confirm('Delete this message for everyone?')) NX.rpc('admin_delete_message', { p_message: m.id }).then(() => { Object.assign(m, { deleted: true, body: '', attachments: [] }); repaintMsg(m); }).catch(err => toast(err.message, true)); }
@@ -494,12 +497,31 @@
     $('cSend').onclick = send;
     $('cAttach').onclick = () => $('cFile').click();
     $('cFile').onchange = e => { addFiles([...e.target.files]); e.target.value = ''; };
+    $('cSaved').onclick = e => NX.replies?.picker(e.currentTarget, t);
     $('cEmoji').onclick = e => emojiPicker(e.currentTarget, em => { const s = t.selectionStart; t.value = t.value.slice(0, s) + em + t.value.slice(t.selectionEnd); t.setSelectionRange(s + em.length, s + em.length); t.focus(); });
     const th = $('thread'); let depth = 0;
     th.addEventListener('dragenter', e => { if (![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); if (depth++ === 0) th.insertAdjacentHTML('beforeend', '<div class="drop">Drop to attach</div>'); });
     th.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
     th.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; th.querySelector('.drop')?.remove(); } });
     th.addEventListener('drop', e => { e.preventDefault(); depth = 0; th.querySelector('.drop')?.remove(); addFiles([...e.dataTransfer.files]); });
+  }
+
+  // Pinned messages: everything pinned in this chat (even ones older than what's loaded)
+  async function paintPinCount() {
+    const el = $('tPinN'); if (!el) return;
+    const { count } = await sb.from('admin_messages').select('id', { count: 'exact', head: true }).eq('room', C.room).not('pinned_at', 'is', null).eq('deleted', false);
+    if ($('tPinN')) { $('tPinN').textContent = count ? ' ' + count : ''; $('tPins').hidden = !count; }
+  }
+  async function pinsModal() {
+    const { data, error } = await sb.from('admin_messages').select('*').eq('room', C.room).not('pinned_at', 'is', null).eq('deleted', false).order('pinned_at', { ascending: false }).limit(50);
+    if (error) return toast(error.message, true);
+    await reveal(data || []);
+    const { el, close } = NX.modal(`<h3>📌 Pinned in ${esc(roomName(C.room))}</h3><div class="pins">${(data || []).map(m => `<div class="pin" data-pin="${m.id}">${av(adminById(m.sender) || { id: m.sender, nickname: m.sender_name }, 'sm')}<div style="flex:1;min-width:0"><b>${esc(m.sender_name)}</b> <small class="muted">${NX.when(m.created_at)}</small><div class="tx">${linkify(txt(m) || '📎 attachment')}</div></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><button class="btn sm" data-jumpto="${m.id}">Show</button><button class="btn sm ghost" data-unpin="${m.id}">Unpin</button></div></div>`).join('') || '<p class="muted">Nothing pinned yet. Hover a message and press 📌.</p>'}</div>`);
+    el.onclick = async e => {
+      const j = e.target.closest('[data-jumpto]'); if (j) { close(); const node = document.querySelector(`.m[data-id="${j.dataset.jumpto}"]`); if (node) { node.scrollIntoView({ block: 'center', behavior: 'smooth' }); node.classList.add('flash'); setTimeout(() => node.classList.remove('flash'), 1600); } else toast('That one is further back. Scroll up and press "Load older messages".'); return; }
+      const u = e.target.closest('[data-unpin]'); if (u) { await NX.rpc('admin_pin_message', { p_message: +u.dataset.unpin, p_pin: false }).catch(err => toast(err.message, true)); u.closest('.pin').remove(); const m = (C.msgs[C.room] || []).find(x => x.id === +u.dataset.unpin); if (m) { m.pinned_at = null; repaintMsg(m); } paintPinCount(); }
+    };
   }
 
   // Unlock / first-time setup of the team passphrase

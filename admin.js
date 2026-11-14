@@ -94,11 +94,11 @@
 
   // ---------- layout
   const TABS = [
-    ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat', 'chat']]],
+    ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat', 'chat'], ['tasks', '✅', 'Tasks', 'tasks']]],
     ['INBOX', [['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation']]],
     ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['maint', '🛠', 'Maintenance']]],
-    ['', [['github', '⑂', 'GitHub'], ['audit', '📜', 'Audit log'], ['me', '⚙︎', 'My settings']]]
+    ['', [['audit', '📜', 'Audit log'], ['me', '⚙︎', 'My settings']]]
   ];
   const ALL_TABS = TABS.flatMap(g => g[1].map(t => t[0]));
   function shell() {
@@ -110,9 +110,11 @@
   function paintHeader() {
     const me = NX.A.me || { id: NX.A.user.id, email: NX.A.user.email };
     $('hdr').innerHTML = `<span class="live ${NX.A.live ? '' : 'off'}" id="liveDot" title="${NX.A.live ? 'Updates arrive instantly' : 'Checking for updates every few seconds'}">${NX.A.live ? '● LIVE' : '○ POLLING'}</span>
+      <button class="hbtn search" id="hFind" title="Search and jump (⌘K)">⌕<span class="kb">⌘K</span></button>
       <button class="hbtn" id="hBell" title="Notifications">🔔<span class="n" data-badge="inbox" hidden></span></button>
       <button class="me-chip" id="hMe" title="My settings">${av(me, 'sm', true)}<span>${esc(nameOf(me))}<small>${esc((NX.A.level || '').toUpperCase())} · ${PRES[presence(me)]}</small></span></button>`;
     $('hMe').onclick = () => NX.go('me');
+    $('hFind').onclick = () => NX.palette?.();
     $('hBell').onclick = () => NX.go(NX.A.counts.requests ? 'requests' : NX.A.counts.feedback ? 'feedback' : NX.A.counts.reports ? 'reports' : NX.A.counts.chat ? 'chat' : 'dashboard');
     NX.A.counts.inbox = (NX.A.counts.requests || 0) + (NX.A.counts.feedback || 0) + (NX.A.counts.reports || 0);
     updateTitle();
@@ -142,7 +144,7 @@
       t.querySelectorAll('tr').forEach(r => [...r.children].forEach((c, i) => { if (c.tagName === 'TD' && hs[i] && !c.hasAttribute('colspan')) c.dataset.l = hs[i]; }));
     });
   }
-  function closeOverlays() { document.querySelectorAll('.scrim,.drawer,.modal').forEach(e => e.remove()); }
+  function closeOverlays() { document.querySelectorAll('.scrim,.drawer,.modal,.rpick,.mentions,.emojis,.lightbox').forEach(e => e.remove()); }
   function overlay(kind, html) {
     closeOverlays();
     const scrim = document.createElement('div'); scrim.className = 'scrim';
@@ -161,7 +163,7 @@
   const listeners = {};
   const on = (table, fn) => { (listeners[table] = listeners[table] || []).push(fn); return () => { listeners[table] = listeners[table].filter(f => f !== fn); }; };
   const emit = (table, payload) => (listeners[table] || []).slice().forEach(fn => { try { fn(payload); } catch (e) { console.error(e); } });
-  const LIVE_TABLES = ['admin_messages', 'admin_reads', 'admin_prefs', 'admin_groups', 'admin_group_members', 'beta_requests', 'feedback_reports', 'feedback_replies', 'content_reports', 'maintenance_config', 'github_events', 'github_links', 'github_installations'];
+  const LIVE_TABLES = ['admin_messages', 'admin_reads', 'admin_prefs', 'admin_groups', 'admin_group_members', 'beta_requests', 'feedback_reports', 'feedback_replies', 'content_reports', 'maintenance_config', 'admin_tasks'];
   function realtime() {
     let ch = sb.channel('admin-live');
     for (const t of LIVE_TABLES) ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, p => emit(t, p));
@@ -190,12 +192,6 @@
       refreshCounts();
     });
     on('feedback_replies', p => { if (p.eventType === 'INSERT' && !p.new.is_staff) notify({ kind: 'feedback', title: '📮 They replied', body: p.new.body, onClick: () => go('feedback', { arg: p.new.report_id }) }); });
-    on('github_events', p => {
-      if (p.eventType !== 'INSERT') return; const e = p.new;
-      const icon = { issues: '🐞', issue_comment: '💬', pull_request: '⑂', release: '🚀', push: '⬆', workflow_run: e.title?.endsWith('failure') ? '❌' : '✅', installation: '🔌', installation_repositories: '🔌' }[e.event] || '•';
-      if (e.event === 'workflow_run' && !/failure|cancelled/.test(e.title)) return;   // only failed builds are worth a ping
-      NX.notify({ kind: 'github', title: `${icon} ${e.repo || 'GitHub'} · ${String(e.event).replace('_', ' ')}${e.action ? ' ' + e.action : ''}`, body: `${e.actor ? e.actor + ': ' : ''}${e.title}`, tab: 'github' });
-    });
     on('content_reports', p => { if (p.eventType === 'INSERT') notify({ kind: 'reports', title: '🚩 New content report', body: `${p.new.kind} · ${p.new.reason}${p.new.target_label ? ' · ' + p.new.target_label : ''}`, tab: 'reports' }); refreshCounts(); });
     on('admin_prefs', p => {
       const r = p.new; if (!r?.user_id) return;
@@ -259,9 +255,6 @@
     NX.A.profile = prof || {}; if (prof?.theme) applyTheme(prof.theme);
     if (prefs) NX.A.prefs = { ...NX.A.prefs, ...prefs, notify: { ...NX.A.prefs.notify, ...(prefs.notify || {}) } };
     await loadAdmins();
-    const q = new URLSearchParams(location.search);
-    if (q.get('code') && q.get('state')) { NX.A.ghSetup = { code: q.get('code'), state: q.get('state') }; history.replaceState(null, '', location.pathname + '#github'); }
-    else if (q.get('installation_id')) history.replaceState(null, '', location.pathname + '#github');
     const [tab, arg] = location.hash.slice(1).split('/');
     NX.A.tab = ALL_TABS.includes(tab) ? tab : 'dashboard'; NX.A.arg = arg ? decodeURIComponent(arg) : null;
     shell();
@@ -277,10 +270,10 @@
 
   const NX = window.NX = {
     sb, $, esc, when, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, PRES, adminById, applyTheme,
-    FN: 'apoji-github', main, labelTables, drawer, modal, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
+    main, labelTables, drawer, modal, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
     pages: {},
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
-      counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0 },
-      prefs: { read_receipts: true, status: 'auto', status_text: '', muted_rooms: [], notify: { chat: true, requests: true, feedback: true, reports: true, github: true, sound: true } } }
+      counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0 },
+      prefs: { read_receipts: true, status: 'auto', status_text: '', muted_rooms: [], notify: { chat: true, requests: true, feedback: true, reports: true, tasks: true, sound: true } } }
   };
 })();

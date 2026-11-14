@@ -20,6 +20,7 @@
     const tableOn = NX.store.get('dashTable', false);
     $('dash').innerHTML = `
       ${t.maintenance_on ? `<div class="banner warn">🛠 <span style="flex:1">${t.maintenance_on} maintenance switch${t.maintenance_on === 1 ? ' is' : 'es are'} on right now.</span><button class="btn sm" data-go="maint">Manage</button></div>` : ''}
+      <div class="card" id="myDay"><span class="spinner"></span></div>
       <div class="grid">${tile(t.users, 'accounts', 'users')}${tile(t.new_7d, 'new this week', 'users')}${tile(t.active_today, 'active today')}${tile(t.active_7d, 'active this week')}
         ${tile(t.online_now, 'using Nexus now')}${tile(t.pending_requests, 'beta requests waiting', 'requests', 1)}${tile(t.new_feedback, 'new feedback & bugs', 'feedback', 1)}${tile(t.open_reports, 'open reports', 'reports', 1)}
         ${tile(t.beta_testers, 'beta testers', 'users')}${tile(t.moderated, 'suspended / banned', 'users')}${tile(t.spaces, 'Shared Spaces', 'moderation')}${tile(t.shared_agents, 'shared agents', 'moderation')}</div>
@@ -50,6 +51,7 @@
     const vers = src => (d.versions || []).filter(v => v.source === src).slice(0, 6).map(v => ({ label: 'v' + (v.version || '?'), value: v.users }));
     NXCharts.hbars($('vDesk'), vers('desktop')); NXCharts.hbars($('vPhone'), vers('phone'));
     NXCharts.hbars($('cAgents'), (d.agents || []).map(a => ({ label: a.name, value: +a.chats, sub: `${a.people} people` })));
+    NX.tasks?.paintMyDay();
     $('dUpd').textContent = '· updated ' + new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
     $('main').onclick = e => {
       const g = e.target.closest('[data-go]'); if (g) return NX.go(g.dataset.go);
@@ -138,15 +140,13 @@
       <div class="row" style="margin:12px 0"><select class="field" id="fbSt">${FB_STATUS.map(([k, l]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <select class="field" id="fbPr">${['low', 'normal', 'high', 'urgent'].map(p => `<option value="${p}" ${r.priority === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)} priority</option>`).join('')}</select>
         <select class="field" id="fbAs"><option value="">Unassigned</option>${A.admins.map(a => `<option value="${esc(a.id)}" ${r.assignee === a.id ? 'selected' : ''}>${esc(nameOf(a))}${a.id === A.user.id ? ' (me)' : ''}</option>`).join('')}</select>
-        <span class="sp"></span><button class="btn sm danger" id="fbDel">Delete</button></div>
-      <div class="row" id="ghRow" style="margin-bottom:10px"></div>
+        <span class="sp"></span><button class="btn sm" id="fbTask" title="Make a task for this">✅ Task</button><button class="btn sm danger" id="fbDel">Delete</button></div>
       <div class="quote" style="margin-bottom:10px">${esc(r.body || '(no details)')}</div>
       ${r.info ? `<details><summary class="muted" style="cursor:pointer">App details</summary><pre class="info">${esc(r.info)}</pre></details>` : ''}
       <div class="thread-r">${(replies || []).map(x => `<div class="r ${x.is_staff ? 'staff' : ''} ${x.internal ? 'internal' : ''}"><small>${x.internal ? '🔒 Internal note · ' : ''}${esc(x.author_name || (x.is_staff ? 'Admin' : r.username || 'Them'))} · ${when(x.created_at)}</small>${esc(x.body)}</div>`).join('') || '<div class="muted">No replies yet.</div>'}</div>
-      <textarea class="field" id="fbTxt" rows="3" placeholder="Reply to ${esc(r.username || 'them')} (they see it in the app)…"></textarea>
+      <textarea class="field" id="fbTxt" rows="3" data-name="${esc(r.username || 'there')}" placeholder="Reply to ${esc(r.username || 'them')} (they see it in the app)…"></textarea>
       <div class="row" style="margin-top:8px"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="fbInt"> Internal note (admins only)</label><span class="sp"></span>
-        <button class="btn" data-quick="Thanks! We've got it and we're looking into it.">Quick: got it</button><button class="btn" data-quick="This is fixed in the next update. Thanks for reporting it!">Quick: fixed</button><button class="btn primary" id="fbSend">Send</button></div></div>`;
-    paintGhRow(id);
+        <button class="btn" id="fbSaved" title="Saved replies">⚡</button><button class="btn" data-quick="Thanks! We've got it and we're looking into it.">Quick: got it</button><button class="btn" data-quick="This is fixed in the next update. Thanks for reporting it!">Quick: fixed</button><button class="btn primary" id="fbSend">Send</button></div></div>`;
     const save = async patch => { const { error: er } = await sb.from('feedback_reports').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id); toast(er ? er.message : '✓ Saved', !!er); NX.refreshCounts(); };
     $('fbSt').onchange = e => save({ status: e.target.value });
     $('fbPr').onchange = e => save({ priority: e.target.value });
@@ -155,6 +155,8 @@
       const u = e.target.closest('[data-user]'); if (u) { e.preventDefault(); if (u.dataset.user) userDrawer(u.dataset.user); return; }
       if (e.target.id === 'fbBack') { $('inbox').classList.remove('open'); A.arg = null; return; }
       if (e.target.dataset.quick) { $('fbTxt').value = e.target.dataset.quick; $('fbTxt').focus(); return; }
+      if (e.target.id === 'fbSaved') return NX.replies.picker(e.target, $('fbTxt'));
+      if (e.target.id === 'fbTask') return NX.tasks.modal({ title: r.title.slice(0, 200), link_kind: 'feedback', link_id: String(id), link_label: r.title.slice(0, 200), priority: r.priority === 'urgent' || r.priority === 'high' ? r.priority : 'normal', assignee: r.assignee || A.user.id });
       if (e.target.id === 'fbDel') { if (!confirm('Delete this report and its replies?')) return; const { error: er } = await sb.from('feedback_reports').delete().eq('id', id); if (er) return toast(er.message, true); A.arg = null; NX.refreshCounts(); return P.feedback(); }
       if (e.target.id === 'fbSend') {
         const body = $('fbTxt').value.trim(); if (!body) return;
@@ -166,82 +168,6 @@
       }
     };
   }
-
-  // Feedback ↔ GitHub issue (through the Apoji Admin GitHub App)
-  async function paintGhRow(id) {
-    const el = $('ghRow'); if (!el) return;
-    const [{ data: links }, st] = await Promise.all([sb.from('github_links').select('*').eq('feedback_id', id), rpc('admin_github_status').catch(() => null)]);
-    if (!$('ghRow')) return;
-    const repos = (st?.installations || []).flatMap(i => i.repos || []);
-    if (links?.length) { el.innerHTML = links.map(l => `<a class="repo-pill" href="${esc(l.issue_url)}" target="_blank" rel="noopener">⑂ ${esc(l.repo)}#${l.issue_number} <span class="pill p-${l.state === 'closed' ? 'fixed' : 'open'}">${esc(l.state.toUpperCase())}</span></a>`).join(''); return; }
-    if (!st?.configured) { el.innerHTML = '<span class="muted">Set up the GitHub App (GitHub tab) to send reports to GitHub as issues.</span>'; return; }
-    if (!repos.length) { el.innerHTML = `<span class="muted">Install Apoji Admin on a repository to send this there.</span>`; return; }
-    const pref = NX.store.get('ghRepo', repos.find(r => /Nexus-28$/i.test(r)) || repos[0]);
-    el.innerHTML = `<select class="field" id="ghRepo">${repos.map(r => `<option ${r === pref ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select><button class="btn" id="ghMake">⑂ Open a GitHub issue</button><span class="muted">Only the title and text go to GitHub. No email or device details.</span>`;
-    $('ghMake').onclick = async () => {
-      const repo = $('ghRepo').value; NX.store.set('ghRepo', repo); $('ghMake').disabled = true; $('ghMake').textContent = 'Opening…';
-      const { data, error } = await sb.functions.invoke(NX.FN, { body: { action: 'create_issue', feedback_id: id, repo } });
-      const res = data || (await error?.context?.json?.().catch(() => null)) || { error: error?.message };
-      if (!res?.ok) { toast(res?.error || 'GitHub didn\'t take it.', true); $('ghMake').disabled = false; $('ghMake').textContent = '⑂ Open a GitHub issue'; return; }
-      toast(`✓ Opened ${repo}#${res.number}`); fbDetail(id);
-    };
-  }
-
-  // =========================================================== GitHub (the Apoji Admin GitHub App)
-  const SITE = 'https://apojidelegraphics.github.io/Apoji-Admin/';
-  const GH_EVENTS = 'issues,issue_comment,pull_request,release,push,workflow_run';
-  async function invoke(body) {
-    const { data, error } = await sb.functions.invoke(NX.FN, { body });
-    if (data) return data;
-    const j = await error?.context?.json?.().catch(() => null);
-    return j || { ok: false, error: /Failed to send|FunctionsFetchError|404/.test(error?.message || '') ? 'The apoji-github function isn\'t deployed yet (see the README).' : error?.message || 'Something went wrong.' };
-  }
-  function createApp() {
-    // The Mac app can't carry GitHub's sign-up form; finish this one step in your browser
-    if (window.apojiDesktop) { window.open(SITE + '#github', '_blank'); return toast('Opened the web portal in your browser. Create the GitHub App there.', { ms: 8000 }); }
-    const state = crypto.randomUUID(); NX.store.set('ghState', state);
-    const manifest = { name: 'Apoji Admin', url: SITE, description: 'Apoji Admin for Nexus \'28: turns feedback into issues, closes the loop when they\'re fixed, drafts release announcements and keeps the admin team posted.',
-      hook_attributes: { url: `${NX.SB_URL}/functions/v1/${NX.FN}/webhook`, active: true }, redirect_url: SITE, setup_url: SITE + '#github', setup_on_update: true, public: false,
-      default_permissions: { issues: 'write', contents: 'read', metadata: 'read', pull_requests: 'read', actions: 'read' }, default_events: GH_EVENTS.split(',') };
-    const f = document.createElement('form'); f.method = 'post'; f.action = `https://github.com/settings/apps/new?state=${state}`;
-    const i = document.createElement('input'); i.type = 'hidden'; i.name = 'manifest'; i.value = JSON.stringify(manifest); f.appendChild(i); document.body.appendChild(f); f.submit();
-  }
-  P.github = async () => {
-    main('<h1>⑂ GitHub</h1><p>Loading…</p>');
-    if (A.ghSetup) {
-      const { code, state } = A.ghSetup; A.ghSetup = null;
-      if (state !== NX.store.get('ghState', '')) toast('That GitHub link didn\'t come from this browser. Start again.', true);
-      else { main('<h1>⑂ GitHub</h1><div class="card"><span class="spinner"></span> Finishing the GitHub App…</div>'); const r = await invoke({ action: 'setup', code });
-        if (!r.ok) toast(r.error, true); else { toast('✓ Apoji Admin is on GitHub. Now install it on your repositories.'); NX.store.set('ghState', ''); } }
-    }
-    let st; try { st = await rpc('admin_github_status'); } catch (e) { return main(`<h1>⑂ GitHub</h1><div class="card err">${esc(e.message)}${/admin_github_status/.test(e.message) ? ' Run supabase/apoji-admin.sql first.' : ''}</div>`); }
-    const high = A.level === 'high-admin';
-    if (!st.configured) return main(`<h1>⑂ GitHub</h1><p>Apoji Admin works as a GitHub App on your repositories.</p>
-      <div class="cols"><div class="card"><h3>What it does</h3><ul class="steps"><li>Turns a feedback report into a GitHub issue in one click (only the text, never emails or device info).</li><li>When that issue is closed, the report is marked fixed and the person sees it in the app.</li>
-        <li>Publishing a release drafts an announcement you can switch on in Announcements.</li><li>Issues, pull requests, pushes, releases and failed builds show up here, with notifications.</li></ul></div>
-      <div class="card"><h3>Set it up</h3><ol class="steps"><li>Deploy the <code>apoji-github</code> edge function (README, one command).</li><li>${high ? 'Press the button below. GitHub asks you to confirm and creates the app.' : 'A high-admin presses "Create the GitHub App" here.'}</li><li>Install it on Nexus-28 (and any other repos).</li><li>Optional: upload <a href="icons/github-app-logo.png" download>the logo</a> in the app's GitHub settings.</li></ol>
-        ${high ? '<button class="btn primary" id="ghCreate" style="margin-top:12px">⑂ Create the GitHub App</button>' : ''}</div></div>`);
-    const repos = (st.installations || []).flatMap(i => i.repos || []);
-    const sel = A.ghRepo && repos.includes(A.ghRepo) ? A.ghRepo : repos.find(r => /Nexus-28$/i.test(r)) || repos[0];
-    const { data: events } = await sb.from('github_events').select('*').order('created_at', { ascending: false }).limit(60);
-    const { data: links } = await sb.from('github_links').select('*').order('created_at', { ascending: false }).limit(20);
-    const ic = e => ({ issues: '🐞', issue_comment: '💬', pull_request: '⑂', release: '🚀', push: '⬆', workflow_run: /failure|cancelled/.test(e.title) ? '❌' : '✅', installation: '🔌', installation_repositories: '🔌' }[e.event] || '•');
-    main(`<h1>⑂ GitHub <a class="btn sm" href="${esc(st.html_url || '#')}" target="_blank" rel="noopener">App settings ↗</a></h1><p>Apoji Admin on GitHub${st.owner ? ' · ' + esc(st.owner) : ''}. Feedback → issues, closed issues → fixed, releases → announcements.</p>
-      <div class="cols3"><div class="card"><h3>Activity <span class="sp"></span><span class="muted">live</span></h3><div class="feed" style="max-height:520px">${(events || []).map(e => `<div class="gh-ev"><span class="fi">${ic(e)}</span><span class="ft"><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title || e.event)}</a><small>${esc(e.repo)}${e.actor ? ' · ' + esc(e.actor) : ''} · ${esc(String(e.event).replace(/_/g, ' '))}${e.action ? ' ' + esc(e.action) : ''}</small></span><time class="muted">${ago(e.created_at)}</time></div>`).join('') || '<div class="muted" style="padding:10px">Nothing yet. Activity on installed repositories shows up here.</div>'}</div></div>
-        <div><div class="card"><h3>Repositories <span class="sp"></span><button class="btn sm" id="ghRefresh">Refresh</button></h3>${repos.map(r => `<button class="repo-pill ${r === sel ? 'on' : ''}" data-repo="${esc(r)}">${esc(r)}</button>`).join('') || '<p class="muted">Not installed anywhere yet.</p>'}
-          <div class="row" style="margin-top:10px"><a class="btn" href="https://github.com/apps/${esc(st.slug)}/installations/new" target="_blank" rel="noopener">＋ Install on more repos</a></div></div>
-          <div class="card"><h3>Reports sent to GitHub</h3>${(links || []).map(l => `<div class="row" style="padding:3px 0"><a href="${esc(l.issue_url)}" target="_blank" rel="noopener">${esc(l.repo.split('/')[1])}#${l.issue_number}</a><span class="pill p-${l.state === 'closed' ? 'fixed' : 'open'}">${esc(l.state.toUpperCase())}</span><span class="sp"></span><a href="#" data-fb="${l.feedback_id}">report #${l.feedback_id}</a></div>`).join('') || '<p class="muted" style="margin:0">Open a report in Feedback & bugs and press "Open a GitHub issue".</p>'}</div></div></div>
-      ${sel ? `<div class="card"><h3>Open issues in ${esc(sel)}</h3><div id="ghIssues"><span class="spinner"></span></div></div>` : ''}`);
-    if (sel) invoke({ action: 'issues', repo: sel }).then(r => { const el = $('ghIssues'); if (!el) return;
-      el.innerHTML = !r.ok ? `<div class="err">${esc(r.error)}</div>` : (r.issues || []).map(i => `<div class="gh-ev"><span class="fi">🐞</span><span class="ft"><a href="${esc(i.url)}" target="_blank" rel="noopener">#${i.number} ${esc(i.title)}</a><small>${esc(i.user || '')}${i.labels.length ? ' · ' + i.labels.map(esc).join(', ') : ''}${i.comments ? ` · 💬 ${i.comments}` : ''}</small></span><time class="muted">${ago(i.updated_at)}</time></div>`).join('') || '<div class="muted">No open issues. 🎉</div>'; });
-    $('main').onclick = async e => {
-      const rp = e.target.closest('[data-repo]'); if (rp) { A.ghRepo = rp.dataset.repo; return P.github(); }
-      const fb = e.target.closest('[data-fb]'); if (fb) { e.preventDefault(); return NX.go('feedback', { arg: fb.dataset.fb }); }
-      if (e.target.id === 'ghRefresh') { e.target.disabled = true; const r = await invoke({ action: 'status' }); if (!r.ok) toast(r.error, true); return P.github(); }
-    };
-    live(['github_events', 'github_links', 'github_installations'], P.github, 2500);
-  };
-  document.addEventListener('click', e => { if (e.target.id === 'ghCreate') createApp(); });
 
   // =========================================================== Content reports
   const REASON = { spam: 'Spam', harassment: 'Harassment', inappropriate: 'Inappropriate', cheating: 'Cheating', other: 'Other' };
@@ -410,6 +336,7 @@
         <p class="muted" style="margin:8px 0 0">Suspended or banned accounts can't use the free Nexus key, Shared Spaces or N28C until it's lifted. Their own API keys still work.</p></div>
       ${high ? `<div class="card"><h3>Admin role</h3><div class="row"><select class="field" id="rl"><option value="mod">Mod</option><option value="admin">Admin</option><option value="high-admin">High-admin</option></select>
         <button class="btn" id="rgo">Grant</button>${lk?.admin_level ? '<button class="btn danger" id="rrv">Revoke role</button>' : ''}</div></div>` : ''}
+      <div class="row" style="margin-bottom:10px"><button class="btn" data-mktask>✅ Make a task about ${esc(base.nickname || base.username || 'them')}</button></div>
       <div class="card"><h3>Private notes <span class="muted">(admins only)</span></h3><div class="thread-r" id="notes">${(d.notes || []).map(n => `<div class="r internal"><small>${esc(n.author_email || 'admin')} · ${when(n.created_at)}${n.mine || high ? ` · <a href="#" data-delnote="${n.id}">delete</a>` : ''}</small>${esc(n.body)}</div>`).join('') || '<div class="muted">No notes yet.</div>'}</div>
         <div class="row"><input class="field" id="nt" placeholder="Add a note, e.g. sent great bug reports" style="flex:1"><button class="btn primary" id="nadd">Add</button></div></div>
       ${(d.feedback || []).length ? `<div class="card"><h3>Feedback they sent</h3>${d.feedback.map(f => `<div class="row" style="padding:4px 0"><span class="pill p-${esc(f.status)}">${esc(f.status.toUpperCase())}</span><a href="#" data-fb="${f.id}">${esc(f.title)}</a><span class="sp"></span><span class="muted">${ago(f.created_at)}</span></div>`).join('')}</div>` : ''}
@@ -419,6 +346,7 @@
       const b = e.target.closest('button,a'); if (!b) return;
       try {
         if (b.dataset.space) { e.preventDefault(); return spaceDrawer(b.dataset.space); }
+        if (b.hasAttribute('data-mktask')) return NX.tasks.modal({ title: '', link_kind: 'user', link_id: uid, link_label: `${base.nickname || base.username || ''} (${email})`.trim() });
         if (b.dataset.fb) { e.preventDefault(); close(); return NX.go('feedback', { arg: b.dataset.fb }); }
         if (b.dataset.delnote) { e.preventDefault(); if (!confirm('Delete this note?')) return; const { error } = await sb.from('admin_user_notes').delete().eq('id', b.dataset.delnote); if (error) throw error; return userDrawer(uid); }
         if (b.id === 'nadd') { const body = $('nt').value.trim(); if (!body) return; const { error } = await sb.from('admin_user_notes').insert({ user_id: uid, body }); if (error) throw error; toast('✓ Note added'); return userDrawer(uid); }
@@ -562,8 +490,7 @@
         <div class="card"><h3>Notifications</h3>
           <div class="row" style="margin-bottom:6px">${perm === 'granted' ? '<span class="ok">✓ Desktop notifications are on for this browser.</span>' : perm === 'denied' ? '<span class="err">Notifications are blocked for this site. Allow them in your browser\'s site settings.</span>' : perm === 'unsupported' ? '<span class="muted">This browser can\'t show notifications. You\'ll still get pop-ups in the portal.</span>' : '<button class="btn primary" id="perm">Turn on desktop notifications</button>'}<span class="sp"></span><button class="btn sm" id="ntest">Test</button></div>
           ${tog('nChat', '💬 Admin chat', 'New messages (muted chats only for @mentions)', n.chat !== false)}${tog('nReq', '🧪 Beta requests', 'Someone asks to be a beta tester', n.requests !== false)}
-          ${tog('nFb', '📮 Feedback & bugs', 'New reports and replies from people', n.feedback !== false)}${tog('nRep', '🚩 Content reports', 'Something reported in Shared Spaces or a shared agent', n.reports !== false)}
-          ${tog('nGh', '⑂ GitHub', 'New issues, releases, failed builds on your repos', n.github !== false)}
+          ${tog('nFb', '📮 Feedback & bugs', 'New reports and replies from people', n.feedback !== false)}${tog('nTask', '✅ Tasks', 'Someone gives you a task', n.tasks !== false)}${tog('nRep', '🚩 Content reports', 'Something reported in Shared Spaces or a shared agent', n.reports !== false)}
           ${tog('nSound', '🔊 Sound', 'A soft chime with each notification', n.sound !== false)}
           <p class="muted" style="margin:6px 0 0">Notifications arrive while the portal is open in a tab (even in the background). On iPhone, add the portal to your Home Screen first.</p></div>
         <div class="card"><h3>🔒 Chat encryption</h3><p class="muted" style="margin-top:0">Admin chat messages and files are end-to-end encrypted with the team passphrase. Supabase only stores scrambled text.</p>
@@ -572,8 +499,9 @@
         <div class="card"><h3>Privacy</h3>${tog('rr', 'Read receipts', "Others see when you've read their messages. Turn it off and you won't see theirs either.", p.read_receipts !== false)}
           <h3 style="margin-top:14px">Theme</h3><p class="muted" style="margin:0">${t ? `<i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);margin-right:6px"></i>${esc(t.name || 'Your theme')} — ` : ''}The portal uses the theme you picked in the Mac app (Settings → General → Theme). Change it there and it shows up here next time you open the portal.</p>
           <div class="row" style="margin-top:14px"><span class="sp"></span><button class="btn danger" id="out">Sign out</button></div></div>
-      </div>`);
-    const N = { nChat: 'chat', nReq: 'requests', nFb: 'feedback', nRep: 'reports', nGh: 'github', nSound: 'sound' };
+      </div>
+      <div class="cols">${NX.replies.card()}<div class="card"><h3>⌨ Shortcuts</h3><p class="muted" style="margin:0 0 8px">Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>) to jump anywhere: pages, admins, users, feedback and tasks. <kbd>G</kbd> then a letter goes to a page, <kbd>N</kbd> makes a task.</p><button class="btn" id="keysHelp">See all shortcuts</button></div></div>`);
+    const N = { nChat: 'chat', nReq: 'requests', nFb: 'feedback', nRep: 'reports', nTask: 'tasks', nSound: 'sound' };
     $('main').onchange = async e => {
       const id = e.target.id;
       if (N[id]) { await NX.savePrefs({ notify: { ...A.prefs.notify, [N[id]]: e.target.checked } }); toast('✓ Saved'); }
@@ -584,6 +512,8 @@
     };
     $('main').onclick = async e => {
       const s = e.target.closest('[data-st]'); if (s) { await NX.savePrefs({ status: s.dataset.st }); return P.me(); }
+      if (await NX.replies.click(e)) return;
+      if (e.target.id === 'keysHelp') return NX.shortcutsHelp();
       if (e.target.id === 'pic') $('picF').click();
       if (e.target.id === 'eLock') { if (!confirm('Lock admin chat on this device? You\'ll need the team passphrase to read it again here.')) return; await NX.chat.lock(); toast('🔒 Locked'); return P.me(); }
       if (e.target.id === 'eOpen') return NX.go('chat');

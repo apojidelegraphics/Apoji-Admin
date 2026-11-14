@@ -1,7 +1,7 @@
 // Apoji Admin service worker: keeps the app shell so it opens instantly (and installs like an app). Your data and
 // chat always come live from Supabase; nothing from your account is cached here.
-const SHELL = 'apoji-admin-v1.0.0';
-const FILES = ['./', './index.html', './admin.css', './admin.js', './crypto.js', './charts.js', './chat.js', './pages.js', './manifest.webmanifest', './icons/icon-192.png', './icons/logo.svg'];
+const SHELL = 'apoji-admin-v1.1.0';
+const FILES = ['./', './index.html', './admin.css', './admin.js', './crypto.js', './charts.js', './chat.js', './pages.js', './extras.js', './manifest.webmanifest', './icons/icon-192.png', './icons/logo.svg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x.startsWith('apoji-admin-') && x !== SHELL).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
