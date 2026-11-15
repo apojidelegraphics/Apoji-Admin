@@ -174,7 +174,7 @@
 
   // =========================================================== Command palette (⌘K) + shortcuts
   const PAGES = [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat'], ['tasks', '✅', 'Tasks'], ['notes', '📓', 'Team notes'], ['requests', '🧪', 'Beta requests'], ['feedback', '📮', 'Feedback & bugs'], ['reports', '🚩', 'Reports'],
-    ['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['schedules', '⏰', 'Schedules'],
+    ['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules'],
     ['health', '🩺', 'Health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)'], ['audit', '📜', 'Audit log'], ['hub', '🖥', window.apojiDesktop ? 'This Mac' : 'Mac hub'], ['me', '⚙︎', 'My settings']];
   function actions() {
     return [

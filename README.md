@@ -33,6 +33,7 @@ It's the same portal with the files built in, plus a Dock badge for unread items
 - **Schedules**: turn announcements, maintenance and feature flags on or off at a set time.
 - **Health**: Supabase speed, live updates, the Mac hub, N28C requests waiting, failed schedules, free AI key credit, database and storage size.
 - **Releases**: downloads from GitHub, which versions people run and a one-click "please update" broadcast.
+- **Status page**: post incidents and updates to the public Nexus status page, and override any component.
 - **Axiom (Apex)**: high-admins only. Who can use Nexus '28 Axiom (BETA), weekly minutes, providers for the public, its prompt (stored only in Supabase) and who used how much.
 - **Audit alerts**: a notification when another admin changes roles, bans someone or removes content.
 

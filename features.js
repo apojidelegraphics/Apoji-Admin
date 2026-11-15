@@ -559,6 +559,63 @@
     if ($('rNudge')) $('rNudge').onclick = () => NX.broadcast({ title: `Nexus ${lv} is out`, body: 'Update from the menu: Nexus → Check for Updates. Here’s what’s new.', url: latest.html_url, audience: 'outdated', max_version: lv });
   };
 
+  // =========================================================== Public status page (Nexus 2.5)
+  const PUBLIC_STATUS = 'https://apojidelegraphics.github.io/Nexus-28/status/';
+  const SEV = [['minor', '🟡 Minor'], ['major', '🟠 Major'], ['critical', '🔴 Critical'], ['maintenance', '🔵 Maintenance']];
+  const IST = [['investigating', 'Investigating'], ['identified', 'Identified'], ['monitoring', 'Monitoring'], ['resolved', 'Resolved']];
+  const OVR = [['', 'Automatic'], ['operational', 'Operational'], ['degraded', 'Degraded'], ['partial', 'Partial outage'], ['outage', 'Major outage'], ['maintenance', 'Maintenance']];
+  P.status = async () => {
+    const [{ data: comps, error }, { data: incs }, pub] = await Promise.all([sb.from('status_components').select('*').order('position'), sb.from('status_incidents').select('*').order('started_at', { ascending: false }).limit(40), sb.rpc('public_status')]);
+    if (error) return NX.main(`<h1>🟢 Status page</h1><div class="card err">${esc(NX.needSql(error.message) ? 'Run supabase/nexus-v2.5.sql (in the Nexus repo) in Supabase → SQL Editor to turn on the status page.' : error.message)}</div>`);
+    const now = Object.fromEntries((pub.data?.components || []).map(c => [c.key, c.status]));
+    const open = (incs || []).filter(i => !i.resolved_at), done = (incs || []).filter(i => i.resolved_at);
+    const cname = k => (comps.find(c => c.key === k) || {}).label || k;
+    const dot = st => `<span class="pill ${st === 'operational' ? 'p-approved' : st === 'maintenance' ? '' : st === 'degraded' ? 'p-pending' : 'p-declined'}">${esc((OVR.find(o => o[0] === st) || [, st])[1])}</span>`;
+    NX.main(`<h1>🟢 Status page <span class="sp" style="flex:1"></span><a class="btn" href="${PUBLIC_STATUS}" target="_blank" rel="noopener">Open public page ↗</a></h1>
+      <p>What everyone sees at the public Nexus status page. Maintenance switches show up there automatically; post an incident when something breaks.</p>
+      <div class="card"><h3>New incident</h3>
+        <input class="field" id="siT" maxlength="120" placeholder="What's wrong, e.g. Free AI key is failing" style="width:100%">
+        <textarea class="field" id="siB" rows="2" maxlength="1000" placeholder="First update people see, e.g. We're looking into errors when chatting on the free key." style="width:100%;margin-top:8px"></textarea>
+        <div class="tabsub" id="siSev" style="margin-top:8px">${SEV.map(([k, l], i) => `<button data-sev="${k}" class="${i === 0 ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <div class="chips" id="siComp">${comps.map(c => `<label class="chip"><input type="checkbox" value="${esc(c.key)}"> ${esc(c.label)}</label>`).join('')}</div>
+        <div class="row" style="margin-top:10px"><span class="sp"></span><button class="btn primary" id="siGo">Post incident</button></div></div>
+      <h2>Open incidents</h2>
+      ${open.map(i => `<div class="card"><div class="row"><b>${esc(i.title)}</b><span class="pill">${esc(i.severity)}</span><span class="pill p-pending">${esc(i.status)}</span><span class="muted">since ${when(i.started_at)} · ${i.components.map(cname).map(esc).join(', ') || 'Nexus'}</span></div>
+        <div class="feed" style="margin-top:8px">${(i.updates || []).map(u => `<div><span class="muted">${when(u.at)}</span> <b>${esc(u.status)}</b> ${esc(u.body)}</div>`).join('')}</div>
+        <div class="row" style="margin-top:8px"><select class="field" data-ust="${i.id}">${IST.map(([k, l]) => `<option value="${k}" ${i.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select><input class="field" data-ub="${i.id}" placeholder="Update for everyone" style="flex:1;min-width:200px"><button class="btn" data-upd="${i.id}">Post update</button><button class="btn primary" data-resolve="${i.id}">Resolve</button></div></div>`).join('') || '<div class="empty">No open incidents. 🎉</div>'}
+      <h2>Components</h2>
+      <div class="card"><table class="cards"><tr><th>Component</th><th>Public page shows</th><th>Override</th><th>Note</th></tr>${comps.map(c => `<tr><td><b>${esc(c.label)}</b><div class="muted">${esc(c.description)}</div></td><td>${dot(now[c.key] || 'operational')}</td>
+        <td><select class="field" data-ovr="${esc(c.key)}">${OVR.map(([k, l]) => `<option value="${k}" ${(c.override || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td><td><input class="field" data-note="${esc(c.key)}" value="${esc(c.note || '')}" placeholder="Shown when overridden"></td></tr>`).join('')}</table>
+        <p class="muted" style="margin-bottom:0">Automatic = from open incidents and maintenance switches. Overrides stay until you set them back to Automatic.</p></div>
+      <h2>Resolved (last 40)</h2>
+      ${done.length ? `<div class="card">${done.map(i => `<div class="row" style="padding:6px 0"><b>${esc(i.title)}</b><span class="muted">${when(i.started_at)} → ${when(i.resolved_at)} · ${esc(i.severity)}</span><span class="sp"></span>${A.level === 'high-admin' ? `<button class="btn sm ghost" data-del="${i.id}">Delete</button>` : ''}</div>`).join('')}</div>` : '<div class="empty">Nothing yet.</div>'}`);
+    let sev = 'minor';
+    $('siSev').onclick = e => { const b = e.target.closest('[data-sev]'); if (!b) return; sev = b.dataset.sev; document.querySelectorAll('#siSev button').forEach(x => x.classList.toggle('on', x === b)); };
+    $('main').onclick = async e => {
+      const b = e.target.closest('button'); if (!b) return; let er;
+      if (b.id === 'siGo') {
+        const title = $('siT').value.trim(), body = $('siB').value.trim(), cs = [...document.querySelectorAll('#siComp input:checked')].map(i => i.value);
+        if (title.length < 3) return toast('Say what’s wrong.', true); if (!cs.length) return toast('Pick what’s affected.', true);
+        if (!confirm(`Post "${title}" on the public status page?`)) return;
+        ({ error: er } = await sb.from('status_incidents').insert({ title, severity: sev, components: cs, status: sev === 'maintenance' ? 'identified' : 'investigating', updates: [{ at: new Date().toISOString(), status: sev === 'maintenance' ? 'identified' : 'investigating', body: body || title }] }));
+        if (!er) NX.notify({ kind: 'audit', title: '🟢 Incident posted', body: title, tab: 'status' });
+      } else if (b.dataset.upd || b.dataset.resolve) {
+        const id = +(b.dataset.upd || b.dataset.resolve), st = b.dataset.resolve ? 'resolved' : document.querySelector(`[data-ust="${id}"]`).value, body = document.querySelector(`[data-ub="${id}"]`).value.trim() || (st === 'resolved' ? 'This is fixed. Thanks for your patience.' : '');
+        if (!body) return toast('Write the update.', true);
+        const r = await sb.rpc('admin_status_update', { p_id: id, p_status: st, p_body: body }); er = r.error || (r.data?.success === false ? { message: r.data.error } : null);
+      } else if (b.dataset.del) { if (!confirm('Delete this incident from the history?')) return; ({ error: er } = await sb.from('status_incidents').delete().eq('id', b.dataset.del)); }
+      else return;
+      toast(er ? er.message : '✓ Live on the status page', !!er); if (!er) P.status();
+    };
+    $('main').onchange = async e => {
+      const k = e.target.dataset.ovr || e.target.dataset.note; if (!k) return;
+      const patch = e.target.dataset.ovr ? { override: e.target.value || null } : { note: e.target.value.trim() };
+      const { error: er } = await sb.from('status_components').update({ ...patch, updated_at: new Date().toISOString() }).eq('key', k);
+      toast(er ? er.message : '✓ Saved', !!er); if (!er && e.target.dataset.ovr) P.status();
+    };
+    live(['status_incidents'], () => { if (!document.activeElement?.matches('input,textarea,select')) P.status(); }, 2000);
+  };
+
   // =========================================================== Axiom (Apex tier, BETA): who gets it, weekly minutes, providers, prompt
   const STAGES = [['off', '⛔ Off', 'Nobody, not even you'], ['owner', '👤 Only unlimited', 'Just the accounts in apex_unlimited'], ['high-admin', '🛡 High-admins', '90-ish minutes a week each'],
     ['admin', '🛡 Admins', 'Every admin'], ['beta', '🧪 Beta testers', 'Beta testers and admins'], ['all', '🌍 Everyone', 'The public (own key, allowed providers only)']];
