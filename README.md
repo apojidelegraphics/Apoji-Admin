@@ -32,7 +32,7 @@ It's the same portal with the files built in, plus a Dock badge for unread items
 - **Broadcasts**: a notification in everyone's Nexus Mac app and N28C (everyone, beta testers, admins or people on older versions), now or later.
 - **Schedules**: turn announcements, maintenance and feature flags on or off at a set time.
 - **Health**: Supabase speed, live updates, the Mac hub, N28C requests waiting, failed schedules, free AI key credit, database and storage size.
-- **Releases**: downloads from GitHub, which versions people run and a one-click "please update" broadcast.
+- **Releases**: downloads from GitHub, which versions people run and a one-click "please update" broadcast, plus **✉ Email the changelog**: send each release's notes to everyone who opted in, with EmailJS (high-admins; needs `supabase/nexus-v2.7.sql` from the Nexus repo). Setup is in the Nexus repo under `docs/EMAILJS.md`.
 - **Status page**: post incidents and updates to the public Nexus status page, and override any component.
 - **Axiom (Apex)**: high-admins only. Who can use Nexus '28 Axiom (BETA), weekly minutes, providers for the public, its prompt (stored only in Supabase) and who used how much.
 - **Audit alerts**: a notification when another admin changes roles, bans someone or removes content.

@@ -526,6 +526,87 @@
     $('hRe').onclick = () => P.health();
   };
 
+  // =========================================================== Changelog email (v1.6, EmailJS)
+  // People opt in from Nexus (Settings → Personal) or N28C (You). A high-admin picks a release here and sends it with
+  // EmailJS: one email per subscriber, throttled, each with its own one-click unsubscribe link. The EmailJS ids live in
+  // Supabase (admin_settings, high-admins only), never in the repo.
+  const SITE = 'https://apojidelegraphics.github.io/Nexus-28';
+  const EJS = 'https://api.emailjs.com/api/v1.0/email/send';
+  const MAIL = { cfg: null, changes: null, sending: false, stop: false };
+  const escMail = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // What goes into the template's {{{highlights_html}}}: email-safe inline styles only
+  NX.mailHighlights = rel => (rel.highlights || []).map(h => `<tr><td style="padding:0 0 12px 0;"><div style="border-left:3px solid #00ffc0;background:#121212;padding:12px 14px;border-radius:0 8px 8px 0;font-family:'Roboto Mono',Menlo,monospace;font-size:13px;line-height:1.6;color:#d9d9d9;">${escMail(h)}</div></td></tr>`).join('');
+  NX.mailParams = (rel, who) => ({
+    to_email: who.email, to_name: who.name || 'there', email: who.email,
+    version: rel.version, title: rel.title, date: new Date(rel.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    highlights_html: NX.mailHighlights(rel), highlights_text: (rel.highlights || []).map(h => '• ' + h).join('\n'),
+    release_url: `https://github.com/apojidelegraphics/Nexus-28/releases/tag/v${rel.version}`, whats_new_url: `${SITE}/whats-new/#v${rel.version}`,
+    unsubscribe_url: `${SITE}/unsubscribe/?t=${who.token}`, logo_url: `${SITE}/companion/icon-192.png`
+  });
+  async function mailCard(latest) {
+    const el = $('rMail'); if (!el) return;
+    const [cfg, rec, ch] = await Promise.all([
+      sb.from('admin_settings').select('value').eq('key', 'emailjs').maybeSingle(),
+      MAIL.changes ? null : fetch(SITE + '/whats-new/changes.json', { cache: 'no-cache' }).then(r => r.json()).catch(() => null),
+      null]);
+    if (A.tab !== 'releases' || !$('rMail')) return;
+    if (cfg.error) { el.innerHTML = `<h3>✉ Email the changelog</h3><div class="err">${esc(NX.needSql(cfg.error.message) ? 'Run supabase/nexus-v2.7.sql (in the Nexus repo) in Supabase → SQL Editor to turn this on.' : cfg.error.message)}</div>`; return; }
+    MAIL.cfg = cfg.data?.value || {}; if (rec) MAIL.changes = rec;
+    const list = MAIL.changes || [], v = MAIL.pick || list[0]?.version || latest;
+    const r = await sb.rpc('admin_changelog_recipients', { p_version: v });
+    const R = r.data?.success ? r.data : { total: 0, recipients: [], error: r.error?.message || r.data?.error };
+    const c = MAIL.cfg, ready = c.service_id && c.template_id && c.public_key;
+    el.innerHTML = `<h3>✉ Email the changelog <span class="muted">${R.total} subscriber${R.total === 1 ? '' : 's'}</span></h3>
+      <p class="muted" style="margin-top:0">Sends the release notes from <a href="${SITE}/whats-new/" target="_blank" rel="noopener">What's new</a> to everyone who opted in, one email each, with EmailJS. Each person gets a release once.</p>
+      ${R.error ? `<div class="err">${esc(R.error)}</div>` : ''}
+      <div class="row" style="flex-wrap:wrap;gap:8px"><select class="field" id="mVer">${list.slice(0, 12).map(x => `<option value="${esc(x.version)}" ${x.version === v ? 'selected' : ''}>v${esc(x.version)} · ${esc(x.title.slice(0, 50))}</option>`).join('') || `<option>${esc(v || '—')}</option>`}</select>
+        <span class="muted"><b>${R.recipients.length}</b> haven't had v${esc(v)} yet</span><span class="sp" style="flex:1"></span>
+        <button class="btn sm" id="mPrev" ${list.length ? '' : 'disabled'}>Preview</button><button class="btn sm" id="mTest" ${ready ? '' : 'disabled'}>Send me a test</button>
+        <button class="btn sm primary" id="mSend" ${ready && R.recipients.length && !MAIL.sending ? '' : 'disabled'}>${MAIL.sending ? 'Sending…' : `Send to ${R.recipients.length}`}</button></div>
+      <div id="mProg" class="muted" style="margin-top:8px"></div><div id="mPreview"></div>
+      <details style="margin-top:10px" ${ready ? '' : 'open'}><summary class="muted" style="cursor:pointer">EmailJS settings ${ready ? '✓' : '(not set up yet)'}</summary>
+        <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:8px">
+          <input class="field" id="mSvc" placeholder="Service ID (service_…)" value="${esc(c.service_id || '')}" style="flex:1;min-width:160px">
+          <input class="field" id="mTpl" placeholder="Template ID (template_…)" value="${esc(c.template_id || '')}" style="flex:1;min-width:160px">
+          <input class="field" id="mKey" placeholder="Public key" value="${esc(c.public_key || '')}" style="flex:1;min-width:160px">
+          <input class="field" id="mPriv" type="password" placeholder="Private key (only if strict mode is on)" value="${esc(c.private_key || '')}" style="flex:1;min-width:200px">
+          <button class="btn sm primary" id="mSave">Save</button></div>
+        <p class="muted" style="margin:6px 0 0">From emailjs.com → Email Services, Email Templates and Account. Free plan: 200 emails a month. Saved in Supabase for high-admins only.</p></details>`;
+    const rel = () => list.find(x => x.version === $('mVer').value) || list[0];
+    $('mVer').onchange = () => { MAIL.pick = $('mVer').value; mailCard(latest); };
+    $('mPrev').onclick = () => { const p = NX.mailParams(rel(), { email: 'you@example.com', name: 'Luke', token: '00000000-0000-0000-0000-000000000000' });
+      $('mPreview').innerHTML = `<div style="margin-top:10px;border-radius:12px;overflow:hidden;border:1px solid rgba(var(--rgb),.2)"><div style="background:#0f0f0f;padding:18px"><div style="max-width:560px;margin:0 auto;background:#1a1a1a;border:1px solid #00ffc0;border-radius:12px;padding:22px;box-shadow:0 0 24px rgba(0,255,192,.25)"><div style="font:700 11px 'Roboto Mono',monospace;letter-spacing:.2em;color:#00ffc0">NEXUS '28 · v${esc(p.version)}</div><h2 style="color:#fff;font:700 19px 'Roboto Mono',monospace;margin:8px 0 14px">${esc(p.title)}</h2><table style="width:100%;border-collapse:collapse">${p.highlights_html}</table></div></div></div>`; };
+    $('mSave').onclick = async () => {
+      const value = { service_id: $('mSvc').value.trim(), template_id: $('mTpl').value.trim(), public_key: $('mKey').value.trim(), private_key: $('mPriv').value.trim() };
+      const { error } = await sb.from('admin_settings').upsert({ key: 'emailjs', value, updated_by: A.user?.id, updated_at: new Date().toISOString() });
+      if (error) return toast(error.message, 'err'); toast('✓ EmailJS settings saved'); mailCard(latest);
+    };
+    const send = who => fetch(EJS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ service_id: c.service_id, template_id: c.template_id, user_id: c.public_key, ...(c.private_key ? { accessToken: c.private_key } : {}), template_params: NX.mailParams(rel(), who) }) })
+      .then(async res => res.ok ? true : Promise.reject(new Error((await res.text()).slice(0, 160) || 'EmailJS said ' + res.status)));
+    $('mTest').onclick = async () => {
+      const me = A.user?.email; if (!me) return toast('Sign in first', 'err');
+      $('mTest').disabled = true;
+      try { await send({ email: me, name: nameOf(A.me), token: '00000000-0000-0000-0000-000000000000' }); toast('✓ Test sent to ' + me); }
+      catch (e) { toast('EmailJS: ' + e.message, 'err'); } finally { if ($('mTest')) $('mTest').disabled = false; }
+    };
+    $('mSend').onclick = async () => {
+      const ver = rel().version, people = R.recipients;
+      if (!confirm(`Email the v${ver} changelog to ${people.length} subscriber${people.length === 1 ? '' : 's'}? Each counts toward your EmailJS monthly limit.`)) return;
+      MAIL.sending = true; MAIL.stop = false; let sent = [], failed = 0, lastErr = '';
+      const prog = () => { if ($('mProg')) $('mProg').innerHTML = `Sent ${sent.length} of ${people.length}${failed ? ` · ${failed} failed (${esc(lastErr)})` : ''} <button class="btn sm ghost" id="mStop">Stop</button>`; if ($('mStop')) $('mStop').onclick = () => { MAIL.stop = true; }; };
+      prog(); if ($('mSend')) { $('mSend').disabled = true; $('mSend').textContent = 'Sending…'; }
+      for (const who of people) {
+        if (MAIL.stop) break;
+        try { await send(who); sent.push(who.user_id); } catch (e) { failed++; lastErr = e.message; if (/limit|quota|429/i.test(e.message)) break; }
+        prog(); await new Promise(r => setTimeout(r, 1100));   // EmailJS allows about 1 request a second
+        if (sent.length && sent.length % 20 === 0) await rpc('admin_changelog_mark_sent', { p_version: ver, p_users: sent.splice(0) }).catch(() => {});
+      }
+      if (sent.length) await rpc('admin_changelog_mark_sent', { p_version: ver, p_users: sent }).catch(() => {});
+      MAIL.sending = false; toast(failed ? `Done with ${failed} failed. Check EmailJS → History.` : '✓ Changelog emailed', failed ? 'err' : undefined);
+      if (A.tab === 'releases') mailCard(latest);
+    };
+  }
+
   // =========================================================== Releases
   const gh = repo => fetch(`https://api.github.com/repos/apojidelegraphics/${repo}/releases?per_page=8`, { headers: { Accept: 'application/vnd.github+json' } }).then(r => r.ok ? r.json() : Promise.reject(new Error('GitHub said ' + r.status)));
   P.releases = async () => {
@@ -546,6 +627,7 @@
       ${lv && total > onLatest ? `<div class="banner">⬆ ${total - onLatest} Mac app${total - onLatest === 1 ? ' is' : 's are'} on an older version.<span class="sp" style="flex:1"></span><button class="btn sm primary" id="rNudge">Nudge them to update</button></div>` : ''}
       ${stats.error ? `<div class="card err">${esc(stats.error)}</div>` : `<div class="two"><div class="card"><h3>💻 Mac app versions</h3><div id="rDesk"></div></div><div class="card"><h3>📱 N28C versions</h3><div id="rPhone"></div></div></div>
       <div class="card"><h3>📈 People on ${esc(lv || 'the latest version')} vs older (Mac app, 30 days)</h3><div id="rLine"></div></div>`}
+      ${A.level === 'high-admin' ? '<div class="card" id="rMail"><h3>✉ Email the changelog</h3><p class="muted"><span class="spinner"></span> Loading…</p></div>' : ''}
       <div class="card"><h3>Nexus '28 on GitHub</h3>${relTable(nx)}</div>
       <div class="card"><h3>Apoji Admin on GitHub</h3>${relTable(aa)}</div>`, { cards: false });
     if (!stats.error) {
@@ -556,6 +638,7 @@
       if (rows.length) NXCharts.line($('rLine'), rows, [{ key: 'latest', label: lv || 'latest', color: 'var(--s1)' }, { key: 'older', label: 'older', color: 'var(--s2)' }]); else $('rLine').innerHTML = '<div class="muted">No check-ins yet.</div>';
     }
     NX.labelTables();
+    if ($('rMail')) mailCard(lv);
     if ($('rNudge')) $('rNudge').onclick = () => NX.broadcast({ title: `Nexus ${lv} is out`, body: 'Update from the menu: Nexus → Check for Updates. Here’s what’s new.', url: latest.html_url, audience: 'outdated', max_version: lv });
   };
 
