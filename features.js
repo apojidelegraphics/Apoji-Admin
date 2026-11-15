@@ -619,11 +619,11 @@
   // =========================================================== Axiom (Apex tier, BETA): who gets it, weekly minutes, providers, prompt
   const STAGES = [['off', '⛔ Off', 'Nobody, not even you'], ['owner', '👤 Only unlimited', 'Just the accounts in apex_unlimited'], ['high-admin', '🛡 High-admins', '90-ish minutes a week each'],
     ['admin', '🛡 Admins', 'Every admin'], ['beta', '🧪 Beta testers', 'Beta testers and admins'], ['all', '🌍 Everyone', 'The public (own key, allowed providers only)']];
-  const PROV = [['anthropic', 'Claude'], ['openrouter', 'OpenRouter'], ['openai', 'ChatGPT'], ['gemini', 'Gemini'], ['groq', 'Groq'], ['mistral', 'Mistral'], ['xai', 'xAI'], ['deepseek', 'DeepSeek'], ['ollama', 'Ollama (local)'], ['lmstudio', 'LM Studio (local)']];
+  const PROV = [['anthropic', 'Claude'], ['openrouter', 'OpenRouter'], ['openai', 'ChatGPT'], ['gemini', 'Gemini'], ['groq', 'Groq'], ['mistral', 'Mistral'], ['xai', 'xAI (Grok)'], ['deepseek', 'DeepSeek'], ['together', 'Together AI'], ['fireworks', 'Fireworks'], ['cerebras', 'Cerebras'], ['perplexity', 'Perplexity'], ['cohere', 'Cohere'], ['ollama', 'Ollama (local)'], ['lmstudio', 'LM Studio (local)']];
   P.axiom = async () => {
     if (A.level !== 'high-admin') return NX.main('<h1>🔺 Axiom</h1><div class="card"><h3>High-admins only</h3><p class="muted" style="margin:0">Axiom is the Apex tier. Only high-admins can see or change its settings.</p></div>');
     const { data: r, error } = await sb.rpc('admin_apex_overview');
-    if (error || r?.success === false) return NX.main(`<h1>🔺 Axiom</h1><div class="card err">${esc(NX.needSql(error?.message) ? 'Run supabase/nexus-v2.4.sql (in the Nexus repo) in Supabase → SQL Editor to turn on the Apex tier.' : error?.message || r.error)}</div>`);
+    if (error || r?.success === false) return NX.main(`<h1>🔺 Axiom</h1><div class="card err">${esc(NX.needSql(error?.message) ? 'Run supabase/nexus-v2.4.sql (and later) from the Nexus repo in Supabase → SQL Editor to turn on the Apex tier.' : error?.message || r.error)}</div>`);
     const c = r.config || {}, week = r.week || [], total = week.reduce((a, x) => a + +x.minutes, 0);
     NX.main(`<h1>🔺 Nexus '28 Axiom <span class="pill" style="color:#ff6b7a">APEX</span> <span class="pill p-pending">BETA</span></h1>
       <p>"An AI too advanced for its use." Supabase decides who gets it and for how long: the Mac app only becomes Axiom after the database says yes, and its prompt never ships in the app.</p>
