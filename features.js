@@ -559,6 +559,49 @@
     if ($('rNudge')) $('rNudge').onclick = () => NX.broadcast({ title: `Nexus ${lv} is out`, body: 'Update from the menu: Nexus → Check for Updates. Here’s what’s new.', url: latest.html_url, audience: 'outdated', max_version: lv });
   };
 
+  // =========================================================== Axiom (Apex tier, BETA): who gets it, weekly minutes, providers, prompt
+  const STAGES = [['off', '⛔ Off', 'Nobody, not even you'], ['owner', '👤 Only unlimited', 'Just the accounts in apex_unlimited'], ['high-admin', '🛡 High-admins', '90-ish minutes a week each'],
+    ['admin', '🛡 Admins', 'Every admin'], ['beta', '🧪 Beta testers', 'Beta testers and admins'], ['all', '🌍 Everyone', 'The public (own key, allowed providers only)']];
+  const PROV = [['anthropic', 'Claude'], ['openrouter', 'OpenRouter'], ['openai', 'ChatGPT'], ['gemini', 'Gemini'], ['groq', 'Groq'], ['mistral', 'Mistral'], ['xai', 'xAI'], ['deepseek', 'DeepSeek'], ['ollama', 'Ollama (local)'], ['lmstudio', 'LM Studio (local)']];
+  P.axiom = async () => {
+    if (A.level !== 'high-admin') return NX.main('<h1>🔺 Axiom</h1><div class="card"><h3>High-admins only</h3><p class="muted" style="margin:0">Axiom is the Apex tier. Only high-admins can see or change its settings.</p></div>');
+    const { data: r, error } = await sb.rpc('admin_apex_overview');
+    if (error || r?.success === false) return NX.main(`<h1>🔺 Axiom</h1><div class="card err">${esc(NX.needSql(error?.message) ? 'Run supabase/nexus-v2.4.sql (in the Nexus repo) in Supabase → SQL Editor to turn on the Apex tier.' : error?.message || r.error)}</div>`);
+    const c = r.config || {}, week = r.week || [], total = week.reduce((a, x) => a + +x.minutes, 0);
+    NX.main(`<h1>🔺 Nexus '28 Axiom <span class="pill" style="color:#ff6b7a">APEX</span> <span class="pill p-pending">BETA</span></h1>
+      <p>"An AI too advanced for its use." Supabase decides who gets it and for how long: the Mac app only becomes Axiom after the database says yes, and its prompt never ships in the app.</p>
+      <div class="grid">
+        <div class="stat"><b>${esc((STAGES.find(x => x[0] === c.stage) || [, c.stage])[1])}</b><span>who can use it</span></div>
+        <div class="stat"><b>${c.weekly_minutes}</b><span>minutes a week each</span></div>
+        <div class="stat"><b>${Math.round(total)}</b><span>minutes used this week · ${week.length} ${week.length === 1 ? 'person' : 'people'}</span></div>
+        <div class="stat"><b>${(r.unlimited || []).length}</b><span>unlimited account${(r.unlimited || []).length === 1 ? '' : 's'}</span></div></div>
+      <div class="card"><h3>Who can use it</h3><div class="tabsub" id="axStage" style="flex-wrap:wrap">${STAGES.map(([k, l, d]) => `<button data-st="${k}" class="${c.stage === k ? 'on' : ''}" title="${esc(d)}">${l}</button>`).join('')}</div>
+        <p class="muted" style="margin:0" id="axStageHelp">${esc((STAGES.find(x => x[0] === c.stage) || [])[2] || '')}. Minutes reset every Monday at 00:00 UTC (next: ${when(r.resets_at)}).</p></div>
+      <div class="two"><div class="card"><h3>Weekly minutes</h3><p class="muted" style="margin-top:0">Time Axiom spends answering, checking (Proof mode) and working. Unlimited accounts don't count.</p>
+          <div class="row"><input class="field" type="number" min="0" max="10080" id="axMin" value="${c.weekly_minutes}" style="width:110px"><span class="muted">minutes per person per week</span><span class="sp"></span><button class="btn" id="axMinSave">Save</button></div></div>
+        <div class="card"><h3>Providers for the public</h3><p class="muted" style="margin-top:0">Admins can use any provider. Everyone else, only these (with high-usage warnings).</p>
+          <div class="chips" id="axProv">${PROV.map(([k, l]) => `<label class="chip"><input type="checkbox" value="${k}" ${(c.public_providers || []).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+          <div class="row" style="margin-top:8px"><span class="sp"></span><button class="btn" id="axProvSave">Save</button></div></div></div>
+      <div class="card"><h3>🔒 Axiom's prompt <span class="sp"></span><span class="muted" id="axCnt">${(c.prompt || '').length} / 40,000</span></h3>
+        <p class="muted" style="margin-top:0">Stored only in Supabase and handed out only to someone allowed with minutes left. ${c.prompt ? '' : '<b class="err">Empty: Axiom has no personality until you paste it here.</b>'}</p>
+        <textarea class="field" id="axPrompt" rows="10" style="width:100%;font:13px/1.5 var(--mono)" maxlength="40000">${esc(c.prompt || '')}</textarea>
+        <div class="row" style="margin-top:8px"><span class="muted">Last changed ${ago(c.updated_at)}</span><span class="sp"></span><button class="btn primary" id="axPromptSave">Save prompt</button></div></div>
+      <div class="card"><h3>This week</h3>${week.length ? `<table class="cards"><tr><th>Who</th><th>Level</th><th class="num">Minutes</th><th class="num">Turns</th><th>Last used</th></tr>${week.map(w => `<tr><td>${esc(w.email)}${w.unlimited ? ' <span class="pill p-approved">∞</span>' : ''}</td><td class="muted">${esc(w.level || 'user')}</td><td class="num">${w.minutes}${w.unlimited ? '' : ` / ${c.weekly_minutes}`}</td><td class="num">${w.turns}</td><td class="muted">${ago(w.last)}</td></tr>`).join('')}</table>` : '<div class="empty">Nobody has used Axiom this week.</div>'}</div>
+      <div class="card"><h3>Last 8 weeks</h3><div id="axWeeks"></div></div>
+      <div class="card"><h3>Unlimited accounts</h3>${(r.unlimited || []).map(u => `<div class="row"><b>${esc(u.email)}</b><span class="muted">${esc(u.note || '')}</span></div>`).join('') || '<p class="muted" style="margin:0">None yet.</p>'}
+        <p class="muted" style="margin-bottom:0">For safety this can't be changed from the app. In Supabase → SQL Editor: <code>insert into public.apex_unlimited (user_id, note) select id, 'owner' from auth.users where email = 'you@example.com';</code></p></div>`);
+    if ((r.weeks || []).length) NXCharts.bars($('axWeeks'), r.weeks.map(x => ({ day: x.week, minutes: +x.minutes })), 'minutes', 'minutes'); else $('axWeeks').innerHTML = '<div class="muted">No usage yet.</div>';
+    const save = async (args, msg) => { const { data, error: er } = await sb.rpc('admin_apex_set', { p_stage: null, p_weekly_minutes: null, p_providers: null, p_prompt: null, ...args }); if (er || data?.success === false) return toast(er?.message || data.error, true); toast(msg); P.axiom(); };
+    $('axPrompt').oninput = e => { $('axCnt').textContent = `${e.target.value.length.toLocaleString()} / 40,000`; };
+    $('main').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.st) { const st = STAGES.find(x => x[0] === b.dataset.st); if (STAGES.findIndex(x => x[0] === b.dataset.st) > STAGES.findIndex(x => x[0] === c.stage) && !confirm(`Open Axiom to: ${st[1].replace(/^\S+ /, '')}?\n\n${st[2]}.`)) return; return save({ p_stage: b.dataset.st }, `✓ Axiom: ${st[1].replace(/^\S+ /, '')}`); }
+      if (b.id === 'axMinSave') return save({ p_weekly_minutes: Math.max(0, Math.min(10080, +$('axMin').value || 0)) }, '✓ Weekly minutes saved');
+      if (b.id === 'axProvSave') { const v = [...document.querySelectorAll('#axProv input:checked')].map(i => i.value); if (!v.length) return toast('Pick at least one.', true); return save({ p_providers: v }, '✓ Providers saved'); }
+      if (b.id === 'axPromptSave') { if (!confirm("Replace Axiom's prompt for everyone?")) return; return save({ p_prompt: $('axPrompt').value }, '✓ Prompt saved. Apps pick it up within 2 minutes.'); }
+    };
+  };
+
   // Start once signed in
   const wait = setInterval(() => { if (A.user && A.admins.length) { clearInterval(wait); startWorker().catch(e => console.warn('hub', e)); } }, 300);
   NX.hub = { load: loadHubRow, probe, runJobs, runNow, beat, fetch: hubFetch, state: H, worker: W, md };

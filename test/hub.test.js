@@ -52,6 +52,8 @@ exit 0
 
   assert.strictEqual((await call('/api/ping', { login: '' })).status, 403, 'only through Tailscale');
   assert.strictEqual((await call('/api/ping')).body.app, 'apoji-hub');
+  const page = await new Promise(r => http.get({ host: '127.0.0.1', port: P, path: '/', headers: { 'Tailscale-User-Login': 'luke@example.com' } }, s => { let d = ''; s.on('data', c => d += c); s.on('end', () => r([s.statusCode, d])); }));
+  assert.ok(page[0] === 200 && page[1].includes('Open Apoji Admin') && !page[1].includes('privateKey'), 'a friendly page in a browser');
   assert.strictEqual((await call('/api/hub', { token: '' })).status, 401);
   assert.strictEqual((await call('/api/hub', { token: 'user' })).status, 401, 'a regular Nexus account is not enough');
   const st = await call('/api/hub');

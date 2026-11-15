@@ -410,7 +410,7 @@
 
   // =========================================================== Maintenance
   const SCOPES = [['global', '🌐 Everything', 'The Mac app and N28C: no chats at all'], ['desktop', '💻 Mac app', 'All chats in the Mac app (and asks from N28C)'], ['phone', '📱 N28C', 'The phone app'],
-    ['spaces', '👥 Shared Spaces', 'Shared Spaces and live sessions'], ['paragon', '@paragon', 'Only this agent'], ['neodela', '@neodela', 'Only this agent'], ['lyte', '@lyte', 'Only this agent'], ['flash', '@flash', 'Only this agent']];
+    ['spaces', '👥 Shared Spaces', 'Shared Spaces and live sessions'], ['paragon', '@paragon', 'Only this agent'], ['neodela', '@neodela', 'Only this agent'], ['lyte', '@lyte', 'Only this agent'], ['flash', '@flash', 'Only this agent'], ['axiom', '@axiom', 'Only Axiom (Apex)']];
   const isOn = m => m.enabled === true || m.enabled === 'true' || m.enabled?.enabled === true;
   P.maint = async () => {
     const { data, error } = await sb.from('maintenance_config').select('*').order('scope');

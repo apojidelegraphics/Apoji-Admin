@@ -145,6 +145,16 @@ function createHub(opts) {
     if (!login) return send(res, 403, { error: 'tailnet_only' });          // only requests that came through Tailscale
     if (!loginOk(login)) return send(res, 403, { error: 'not_allowed', login });
     if (p === '/api/ping') return send(res, 200, { ok: true, app: 'apoji-hub', id: cfg.id, name, version });
+    // Opened in a browser: a friendly page instead of an error (the API itself still needs an admin sign-in)
+    if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
+      const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" });
+      return res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Apoji Admin hub</title>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0817;color:#efe6ff;font:16px/1.5 -apple-system,system-ui,sans-serif;text-align:center;padding:24px">
+<div><div style="font-size:44px">🛰</div><h1 style="margin:.2em 0;font-size:22px">${esc(name)} is your Apoji Admin hub</h1>
+<p style="color:#a89cc8;max-width:420px">It's running and this device reaches it over Tailscale (signed in as ${esc(login)}). This address is for the app, not for browsing.</p>
+<p><a href="https://apojidelegraphics.github.io/Apoji-Admin/#hub" style="display:inline-block;background:#9a80ff;color:#120a24;font-weight:700;padding:10px 18px;border-radius:12px;text-decoration:none">Open Apoji Admin → Mac hub</a></p></div>`);
+    }
     const who = await verify(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
     if (!who) return send(res, 401, { error: 'sign_in' });
     try {

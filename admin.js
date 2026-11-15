@@ -100,7 +100,7 @@
     ['INBOX', [['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation']]],
     ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['schedules', '⏰', 'Schedules']]],
-    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['audit', '📜', 'Audit log']]],
+    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)'], ['audit', '📜', 'Audit log']]],
     ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['me', '⚙︎', 'My settings']]]
   ];
   const ALL_TABS = TABS.flatMap(g => g[1].map(t => t[0]));
