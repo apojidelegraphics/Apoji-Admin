@@ -10,7 +10,8 @@
   const ago = t => { if (!t) return 'never'; const s = (Date.now() - new Date(t)) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; if (s < 7 * 86400) return Math.floor(s / 86400) + ' d ago'; return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
   const store = { get(k, d) { try { const v = localStorage.getItem('nx-admin-' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('nx-admin-' + k, JSON.stringify(v)); } catch {} } };
   const ERR = { not_admin: 'Admins only.', not_high_admin: 'Only admins and high-admins can do that.', user_not_found: 'No account with that email.', invalid_level: 'Pick a valid level.',
-    not_found: 'Not found (or you no longer have access).', conflict: 'Someone else saved this first. Reload to see their version.', name_required: 'Give it a name.', too_many: 'Too many at once (500 max).', bad_action: 'Unknown action.' };
+    not_found: 'Not found (or you no longer have access).', conflict: 'Someone else saved this first. Reload to see their version.', name_required: 'Give it a name.', too_many: 'Too many at once (500 max).', bad_action: 'Unknown action.',
+    not_allowed: "You can't do that (Editors, the Owner or Axiom managers only).", not_manager: 'Only the Owner and Axiom managers can do that.', owner_only: 'Only the Owner can do that.', already_reviewed: 'Someone already answered this request.' };
   const needSql = m => /does not exist|schema cache|Could not find the function|PGRST20[02]/i.test(m || '');
   async function rpc(fn, args) {
     const { data, error } = await sb.rpc(fn, args);
@@ -30,6 +31,19 @@
     store.set('theme', t);
   }
   applyTheme(store.get('theme', null));
+
+  // 1.8: on an iPhone home screen the page can come up shorter than the screen, leaving a blank strip under the tab
+  // bar (N28C had the same). Measure the real screen and pin the layout to it.
+  function fitStandalone() {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!ios || !(navigator.standalone || matchMedia('(display-mode: standalone)').matches)) return;
+    const portrait = matchMedia('(orientation: portrait)').matches, full = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+    const h = Math.max(innerHeight, full);
+    document.documentElement.classList.add('standalone');
+    document.documentElement.style.setProperty('--app-h', h + 'px');
+    document.documentElement.style.setProperty('--gap', Math.max(0, h - innerHeight) + 'px');
+  }
+  fitStandalone(); addEventListener('resize', fitStandalone); addEventListener('orientationchange', () => setTimeout(fitStandalone, 300));
 
   // ---------- people, avatars, presence
   const COLORS = ['#3dffa0', '#5ce1ff', '#ffd36b', '#ff8fd0', '#b69cff', '#ff9f6b', '#9bd65c', '#9fe7ff'];
@@ -86,7 +100,7 @@
     }
   }
   function updateTitle() {
-    const c = NX.A.counts, total = (c.chat || 0) + (c.requests || 0) + (c.feedback || 0) + (c.reports || 0);
+    const c = NX.A.counts, total = (c.chat || 0) + (c.requests || 0) + (c.feedback || 0) + (c.reports || 0) + (c.access || 0);
     document.title = (total ? `(${total}) ` : '') + 'Apoji Admin';
     try { navigator.setAppBadge?.(total || undefined); if (!total) navigator.clearAppBadge?.(); } catch {}
     window.apojiDesktop?.badge(total);   // the Mac app's Dock badge
@@ -96,8 +110,8 @@
   // ---------- layout
   const HUB_LABEL = window.apojiDesktop ? 'This Mac' : 'Mac hub';
   const TABS = [
-    ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat', 'chat'], ['tasks', '✅', 'Tasks', 'tasks'], ['notes', '📓', 'Team notes']]],
-    ['INBOX', [['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
+    ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat', 'chat'], ['nexus', '◆', 'Nexus chat'], ['tasks', '✅', 'Tasks', 'tasks'], ['notes', '📓', 'Team notes']]],
+    ['INBOX', [['access', '🔑', 'Access requests', 'access'], ['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation']]],
     ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
     ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)'], ['audit', '📜', 'Audit log']]],
@@ -112,14 +126,14 @@
   }
   function paintHeader() {
     const me = NX.A.me || { id: NX.A.user.id, email: NX.A.user.email };
-    $('hdr').innerHTML = `<span class="live ${NX.A.live ? '' : 'off'}" id="liveDot" title="${NX.A.live ? 'Updates arrive instantly' : 'Checking for updates every few seconds'}">${NX.A.live ? '● LIVE' : '○ POLLING'}</span>
+    $('hdr').innerHTML = `<span class="live ${NX.A.live ? '' : 'off'}" id="liveDot" title="${NX.A.live ? 'Updates arrive instantly' : 'Checking for updates every few seconds'}">${NX.A.live ? '● <b>LIVE</b>' : '○ <b>POLLING</b>'}</span>
       <button class="hbtn search" id="hFind" title="Search and jump (⌘K)">⌕<span class="kb">⌘K</span></button>
       <button class="hbtn" id="hBell" title="Notifications">🔔<span class="n" data-badge="inbox" hidden></span></button>
       <button class="me-chip" id="hMe" title="My settings">${av(me, 'sm', true)}<span>${esc(nameOf(me))}<small>${esc(NX.levelLabel(NX.A.level, NX.A.user.id))} · ${PRES[presence(me)]}</small></span></button>`;
     $('hMe').onclick = () => NX.go('me');
     $('hFind').onclick = () => NX.palette?.();
-    $('hBell').onclick = () => NX.go(NX.A.counts.requests ? 'requests' : NX.A.counts.feedback ? 'feedback' : NX.A.counts.reports ? 'reports' : NX.A.counts.chat ? 'chat' : 'dashboard');
-    NX.A.counts.inbox = (NX.A.counts.requests || 0) + (NX.A.counts.feedback || 0) + (NX.A.counts.reports || 0);
+    $('hBell').onclick = () => NX.go(NX.A.counts.access ? 'access' : NX.A.counts.requests ? 'requests' : NX.A.counts.feedback ? 'feedback' : NX.A.counts.reports ? 'reports' : NX.A.counts.chat ? 'chat' : NX.A.counts.health ? 'health' : 'dashboard');
+    NX.A.counts.inbox = (NX.A.counts.access || 0) + (NX.A.counts.requests || 0) + (NX.A.counts.feedback || 0) + (NX.A.counts.reports || 0);
     updateTitle();
   }
   let renderSeq = 0;
@@ -128,7 +142,7 @@
     document.querySelectorAll('#nav [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     if (innerWidth <= 760) document.querySelector('#nav .on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
     closeOverlays();
-    $('main').className = tab === 'chat' ? 'wide' : '';
+    $('main').className = tab === 'chat' || tab === 'nexus' ? 'wide' : '';
     $('main').onclick = null; $('main').onchange = null; $('main').oninput = null;
     try { await (NX.pages[tab] || NX.pages.dashboard)(); }
     catch (e) { if (seq === renderSeq) $('main').innerHTML = `<h1>Something went wrong</h1><div class="card err">${esc(e.message)}</div>`; }
@@ -177,13 +191,13 @@
   const on = (table, fn) => { (listeners[table] = listeners[table] || []).push(fn); return () => { listeners[table] = listeners[table].filter(f => f !== fn); }; };
   const emit = (table, payload) => (listeners[table] || []).slice().forEach(fn => { try { fn(payload); } catch (e) { console.error(e); } });
   const LIVE_TABLES = ['admin_messages', 'admin_reads', 'admin_prefs', 'admin_groups', 'admin_group_members', 'beta_requests', 'feedback_reports', 'feedback_replies', 'content_reports', 'maintenance_config', 'admin_tasks',
-    'broadcasts', 'admin_schedules', 'admin_hub', 'admin_team_notes', 'moderation_log', 'status_incidents'];
+    'broadcasts', 'admin_schedules', 'admin_hub', 'admin_team_notes', 'moderation_log', 'status_incidents', 'access_requests'];
   function realtime() {
     let ch = sb.channel('admin-live');
     for (const t of LIVE_TABLES) ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, p => emit(t, p));
     ch.subscribe(st => {
       const live = st === 'SUBSCRIBED';
-      if (live !== NX.A.live) { NX.A.live = live; const d = $('liveDot'); if (d) { d.className = 'live' + (live ? '' : ' off'); d.textContent = live ? '● LIVE' : '○ POLLING'; } }
+      if (live !== NX.A.live) { NX.A.live = live; const d = $('liveDot'); if (d) { d.className = 'live' + (live ? '' : ' off'); d.innerHTML = live ? '● <b>LIVE</b>' : '○ <b>POLLING</b>'; } }
       if (live) refreshCounts();
     });
     setInterval(() => { if (!NX.A.live) { refreshCounts(); emit('poll', {}); } }, 8000);
@@ -194,9 +208,10 @@
     const { count: n } = await q; return n || 0;
   }
   async function refreshCounts() {
-    const [requests, feedback, reports] = await Promise.all([
-      count('beta_requests', { status: 'pending' }).catch(() => 0), count('feedback_reports', { status: 'new' }).catch(() => 0), count('content_reports', { status: 'open' }).catch(() => 0)]);
-    Object.assign(NX.A.counts, { requests, feedback, reports }); paintHeader();
+    const [requests, feedback, reports, access] = await Promise.all([
+      count('beta_requests', { status: 'pending' }).catch(() => 0), count('feedback_reports', { status: 'new' }).catch(() => 0), count('content_reports', { status: 'open' }).catch(() => 0),
+      NX.A.manage ? count('access_requests', { status: 'pending' }).catch(() => 0) : 0]);
+    Object.assign(NX.A.counts, { requests, feedback, reports, access }); paintHeader();
   }
   // New things arriving → notifications
   function watchInbox() {
@@ -206,6 +221,7 @@
       refreshCounts();
     });
     on('feedback_replies', p => { if (p.eventType === 'INSERT' && !p.new.is_staff) notify({ kind: 'feedback', title: '📮 They replied', body: p.new.body, onClick: () => go('feedback', { arg: p.new.report_id }) }); });
+    on('access_requests', p => { if (p.eventType === 'INSERT' && NX.A.manage) notify({ kind: 'requests', title: '🔑 New access request', body: `Someone asked for ${p.new.kind === 'feature' ? 'the ' + p.new.target + ' feature' : p.new.kind === 'axiom' ? 'Axiom' : p.new.kind === 'beta' ? 'beta' : p.new.target || 'access'}${p.new.note ? ': ' + p.new.note : ''}`, tab: 'access' }); refreshCounts(); });
     on('content_reports', p => { if (p.eventType === 'INSERT') notify({ kind: 'reports', title: '🚩 New content report', body: `${p.new.kind} · ${p.new.reason}${p.new.target_label ? ' · ' + p.new.target_label : ''}`, tab: 'reports' }); refreshCounts(); });
     // Audit alerts: another admin changed roles, banned someone, removed content…
     on('moderation_log', p => {
@@ -264,6 +280,8 @@
     try { const { data } = await sb.rpc('admin_tiers'); NX.A.tiers = data || {}; } catch { NX.A.tiers = {}; }
     NX.A.tier = NX.A.level === 'high-admin' ? NX.A.tiers[NX.A.user.id] || 'editor' : '';
     NX.A.owner = NX.A.tier === 'owner'; NX.A.viewer = NX.A.tier === 'viewer';
+    // 1.8: Axiom managers (picked by the Owner) change Axiom and review access requests
+    try { const { data } = await sb.rpc('apex_can_manage'); NX.A.manage = data === true; } catch { NX.A.manage = NX.A.owner; }
   }
   // The tag next to someone's name: 👑 OWNER, HIGH-ADMIN · VIEWER, ADMIN, MOD
   const levelLabel = (level, id) => { const t = level === 'high-admin' ? (window.NX?.A.tiers || {})[id] : ''; return t === 'owner' ? '👑 OWNER' : !level ? '' : level.toUpperCase() + (t === 'viewer' ? ' · VIEWER' : ''); };
@@ -300,7 +318,8 @@
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
     pages: {},
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
-      counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0 },
+      counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
+      manage: false,
       prefs: { read_receipts: true, status: 'auto', status_text: '', muted_rooms: [], notify: { chat: true, requests: true, feedback: true, reports: true, tasks: true, audit: true, schedules: true, sound: true } } }
   };
 })();

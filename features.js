@@ -142,6 +142,13 @@
     const state = !on ? pill('p-closed', 'OFF') : st.serving ? pill('p-approved', 'ONLINE') : pill('p-pending', 'NOT ON TAILNET');
     NX.main(`<h1>🖥 This Mac ${state}</h1><p>Make this Mac your team's hub. Over <b>Tailscale</b> (only your tailnet can reach it) it sends notifications to admins' phones, runs schedules on time and stays awake. The website and Supabase keep working everywhere either way.</p>
       <div class="card">${tog('hOn', '🛰 Use this Mac as the hub', 'Runs in the menu bar when you close the window. ⌘Q quits.', on)}</div>
+      <div class="card"><h3>☕ Keep this Mac awake <span class="sp"></span>${st.keepAwake ? `<span class="pill ${st.awake?.on && st.awake?.verified !== false ? 'p-approved' : 'p-pending'}">${st.awake?.on ? (st.awake?.verified ? 'MACOS CONFIRMS' : st.awake?.verified === false ? 'NOT WORKING' : 'ON') : 'NOT RIGHT NOW'}</span>` : ''}</h3>
+        <p class="muted" style="margin-top:-4px">Works with or without the hub. ${st.keepAwake ? esc(st.awake?.reason || '') : 'Off: this Mac sleeps like normal.'}</p>
+        ${tog('hAwake', 'Keep this Mac awake', 'Stops idle sleep and system sleep while Apoji Admin is running (it stays in the menu bar when you close the window).', st.keepAwake)}
+        ${tog('hDisp', 'Keep the screen on too', 'Otherwise the screen can still turn off and lock while the Mac stays awake.', st.keepDisplay, !st.keepAwake)}
+        ${tog('hPlug', 'Only while plugged in', 'On battery it sleeps normally.', st.pluggedOnly, !st.keepAwake)}
+        ${tog('hLogin', 'Open at login', 'Starts quietly in the menu bar when you log in.', st.openAtLogin)}
+        <p class="muted" style="margin:6px 0 0">A MacBook still sleeps when you close the lid, unless it's plugged in with an external display.</p></div>
       ${on ? `<div class="grid">
         <div class="stat ${st.serving ? '' : 'hot'}"><b>${st.serving ? '🛰' : '○'}</b><span>${st.serving ? 'On your tailnet' : 'Not reachable yet'}</span></div>
         <div class="stat ${st.awake?.on ? '' : 'hot'}"><b>${st.awake?.on ? '☕' : '💤'}</b><span>${esc(st.awake?.reason || '')}</span></div>
@@ -153,10 +160,6 @@
         ${st.url ? `<div class="hubaddr"><img src="${st.qr || ''}" alt="" width="120" height="120"><div><div class="muted">Your hub's private address (only your tailnet can open it)</div><code id="hUrl">${esc(st.url)}</code>
           <div class="row" style="margin-top:8px"><button class="btn sm" id="hCopy">Copy</button></div>
           <p class="muted" style="margin:8px 0 0">On your phone: install Tailscale (same account), open the Apoji Admin website, go to <b>Mac hub</b> and turn on notifications. You don't need this address; the website finds it.</p></div></div>` : ''}</div>
-      <div class="card"><h3>☕ Keep this Mac awake</h3>
-        ${tog('hAwake', 'Keep this Mac awake', 'So schedules and notifications don’t wait for you to wake it. The screen can still turn off.', st.keepAwake)}
-        ${tog('hPlug', 'Only while plugged in', 'On battery it sleeps normally.', st.pluggedOnly, !st.keepAwake)}
-        ${tog('hLogin', 'Open at login', 'Starts quietly in the menu bar when you log in.', st.openAtLogin)}</div>
       <div class="card"><h3>📱 Phone notifications</h3>
         ${tog('hChat', 'Include chat text', 'Off: phones only see “New message in #room”. Admin chat is end-to-end encrypted, so this is off by default.', st.chatText)}
         ${(st.subs || []).length ? `<table class="cards" style="margin-top:8px"><tr><th>Device</th><th>Admin</th><th>Gets</th><th>Last sent</th><th></th></tr>${st.subs.map(s => `<tr><td>${esc(s.label)}</td><td>${esc(s.email || s.login)}</td><td class="muted">${esc(s.kinds.join(', '))}</td><td class="muted">${s.lastOk ? ago(s.lastOk) : 'never'}</td><td><button class="btn sm ghost" data-rmdev="${esc(s.id)}">Remove</button></td></tr>`).join('')}</table>` : '<p class="muted">No phones yet. Each admin turns notifications on from the website (Mac hub page) on their phone.</p>'}
@@ -170,7 +173,7 @@
     const set = async patch => { const s = await D.hub.set(patch); W.on = !!s.enabled; paintDeskHub(s); beat(); };
     $('main').onchange = e => {
       const id = e.target.id, v = e.target.checked;
-      const map = { hOn: 'enabled', hAwake: 'keepAwake', hPlug: 'pluggedOnly', hLogin: 'openAtLogin', hChat: 'chatText', hRestrict: 'restrict' };
+      const map = { hOn: 'enabled', hAwake: 'keepAwake', hDisp: 'keepDisplay', hPlug: 'pluggedOnly', hLogin: 'openAtLogin', hChat: 'chatText', hRestrict: 'restrict' };
       if (map[id]) set({ [map[id]]: v }).then(() => { if (id === 'hOn' && v) toast('🛰 Hub on. Look for it in the menu bar.'); });
     };
     $('main').onclick = async e => {
@@ -487,35 +490,65 @@
       const j = (await r.json()).data || {}; return { usage: j.usage, limit: j.limit, remaining: j.limit_remaining ?? (j.limit != null ? j.limit - j.usage : null), free: j.is_free_tier, rate: j.rate_limit };
     } catch (e) { return { error: e.message }; }
   }
-  function problems(c) {
-    const out = [];
-    if (c.ping == null) out.push(['bad', 'Supabase isn’t answering']); else if (c.ping > 1500) out.push(['warn', `Supabase is slow (${c.ping} ms)`]);
-    if (!A.live) out.push(['warn', 'Live updates are off (polling)']);
-    if (c.h.error) out.push(['warn', c.h.error]);
-    if (c.h.relay_backlog > 0) out.push(['warn', `${c.h.relay_backlog} N28C request${c.h.relay_backlog === 1 ? '' : 's'} waiting over 2 minutes (is someone’s Mac asleep?)`]);
-    if (c.h.schedules_failed > 0) out.push(['warn', `${c.h.schedules_failed} schedule${c.h.schedules_failed === 1 ? '' : 's'} failed this week`]);
-    if (c.h.maintenance_on > 0) out.push(['info', `${c.h.maintenance_on} maintenance switch${c.h.maintenance_on === 1 ? ' is' : 'es are'} on`]);
-    if (c.hub && !fresh(c.hub)) out.push(['warn', `Mac hub ${c.hub.name} is offline (last seen ${ago(c.hub.updated_at)})`]);
-    if (c.hub?.status?.tailscale?.error) out.push(['warn', 'Hub: ' + c.hub.status.tailscale.error]);
-    if (c.key?.remaining != null && c.key.limit && c.key.remaining / c.key.limit < .1) out.push(['bad', 'The free AI key is almost out of credit']);
-    if (c.key?.error) out.push(['warn', 'Free AI key: ' + c.key.error]);
-    return out;
+  // 1.8: every alert has an id (so you can dismiss it until it changes) and somewhere to go for the details
+  function problems(c, all = false) {
+    const out = [], add = (lv, id, text, open) => out.push([lv, text, id, open]);
+    if (c.ping == null) add('bad', 'ping', 'Supabase isn’t answering', 'status'); else if (c.ping > 1500) add('warn', 'slow', `Supabase is slow (${c.ping} ms)`);
+    if (!A.live) add('warn', 'live', 'Live updates are off (polling)');
+    if (c.h.error) add('warn', 'sql', c.h.error);
+    if (c.h.relay_backlog > 0) add('warn', 'relay:' + c.h.relay_backlog, `${c.h.relay_backlog} N28C request${c.h.relay_backlog === 1 ? '' : 's'} waiting over 2 minutes (is someone’s Mac asleep?)`, 'relay');
+    if (c.h.schedules_failed > 0) add('warn', 'sched:' + c.h.schedules_failed, `${c.h.schedules_failed} schedule${c.h.schedules_failed === 1 ? '' : 's'} failed this week`, 'schedules');
+    if (c.h.maintenance_on > 0) add('info', 'maint:' + c.h.maintenance_on, `${c.h.maintenance_on} maintenance switch${c.h.maintenance_on === 1 ? ' is' : 'es are'} on`, 'maint');
+    if (c.hub && !fresh(c.hub)) add('warn', 'hub:' + c.hub.id, `Mac hub ${c.hub.name} is offline (last seen ${ago(c.hub.updated_at)})`, 'hub');
+    if (c.hub?.status?.tailscale?.error) add('warn', 'ts', 'Hub: ' + c.hub.status.tailscale.error, 'hub');
+    if (c.key?.remaining != null && c.key.limit && c.key.remaining / c.key.limit < .1) add('bad', 'key:low', 'The free AI key is almost out of credit', 'key');
+    if (c.key?.error) add('warn', 'key:err', 'Free AI key: ' + c.key.error, 'key');
+    if (all) return out;
+    const hid = NX.store.get('health-dismissed', {});
+    return out.filter(p => !hid[p[2]]);
   }
+  const dismiss = id => { const d = NX.store.get('health-dismissed', {}); d[id] = Date.now(); for (const k of Object.keys(d)) if (Date.now() - d[k] > 7 * 864e5) delete d[k]; NX.store.set('health-dismissed', d); };
   async function healthBadge() { try { const c = await checks(); A.counts.health = problems(c).filter(p => p[0] !== 'info').length; NX.updateTitle(); } catch {} }
+  // What's behind an alert
+  async function healthDetail(kind, c) {
+    if (['status', 'schedules', 'maint', 'hub'].includes(kind)) return NX.go(kind);
+    if (kind === 'key') { const k = c.key || {}; return NX.modal(`<h3>🔑 Free AI key</h3><div class="kv"><span>Credit left</span><span>${k.remaining == null ? (k.limit == null ? 'No limit' : '—') : '$' + (+k.remaining).toFixed(2)}</span><span>Used</span><span>${k.usage != null ? '$' + (+k.usage).toFixed(2) : '—'}</span><span>Limit</span><span>${k.limit != null ? '$' + (+k.limit).toFixed(2) : 'none'}</span>${k.error ? `<span>Error</span><span class="err">${esc(k.error)}</span>` : ''}</div>
+      <p class="muted">The free key is the OpenRouter key in app_content → openrouter_api_key. Top it up or change its limit at openrouter.ai → Keys.</p><a class="btn" href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">Open OpenRouter ↗</a>`); }
+    if (kind !== 'relay') return;
+    const { el, close } = NX.modal('<h3>📱 N28C requests waiting</h3><p><span class="spinner"></span> Loading…</p>');
+    const paint = async () => {
+      const { data, error } = await sb.rpc('admin_relay_stuck');
+      if (error) { el.innerHTML = `<button class="btn sm x" data-x>✕</button><h3>📱 N28C requests waiting</h3><div class="err">${esc(NX.needSql(error.message) ? 'Run supabase/nexus-v3.1.sql (Nexus repo) in Supabase → SQL Editor to see these.' : error.message)}</div>`; return; }
+      const rows = data || [];
+      el.innerHTML = `<button class="btn sm x" data-x>✕</button><h3>📱 N28C requests waiting</h3>
+        <p class="muted" style="margin-top:0">Things people sent from N28C that their Mac hasn't picked up for over 2 minutes. Usually the Mac is asleep, Nexus is closed, or the phone link is off on that Mac. What they asked stays private: only who and when shows here.</p>
+        ${rows.length ? `<div class="plist">${rows.map(x => `<div><span><b>${esc(x.username ? '@' + x.username : x.email)}</b> <small>${esc(x.kind === 'request' ? (x.op || 'request').replace(/_/g, ' ') : 'question' + (x.agent ? ' to ' + x.agent : ''))} · ${ago(x.created_at)} · Mac last seen ${x.mac_seen ? ago(x.mac_seen) : 'never'}</small></span><input type="checkbox" data-rid="${x.id}" checked></div>`).join('')}</div>
+        <p class="muted">Clearing marks them handled and tells their phone the Mac didn't answer, so N28C stops waiting. They can send it again.</p>
+        <div class="row"><span class="sp"></span><button class="btn" data-x>Close</button><button class="btn primary" id="rClear" ${A.viewer ? 'disabled' : ''}>Clear selected</button></div>` : '<div class="empty">🟢 Nothing waiting any more.</div>'}`;
+      const b = el.querySelector('#rClear'); if (b) b.onclick = async () => {
+        const ids = [...el.querySelectorAll('[data-rid]:checked')].map(i => +i.dataset.rid); if (!ids.length) return;
+        b.disabled = true; const { data: res, error: er } = await sb.rpc('admin_relay_clear', { p_ids: ids });
+        if (er || res?.success === false) { b.disabled = false; return toast(er?.message || 'Editors and the Owner can clear these.', true); }
+        toast(`✓ Cleared ${res.cleared}`); close(); P.health();
+      };
+    };
+    paint();
+  }
   P.health = async () => {
     NX.main('<h1>🩺 Health</h1><p><span class="spinner"></span> Checking everything…</p>', { cards: false });
-    const c = await checks(), pr = problems(c), h = c.h;
+    const c = await checks(), pr = problems(c), h = c.h, hidden = problems(c, true).length - pr.length;
     A.counts.health = pr.filter(p => p[0] !== 'info').length; NX.updateTitle();
     if (A.tab !== 'health') return;
     const k = c.key || {};
     NX.main(`<h1>🩺 Health <span class="sp" style="flex:1"></span><button class="btn" id="hRe">↻ Check again</button></h1><p>Is everything working? Checked ${when(new Date())}.</p>
-      ${pr.length ? pr.map(([lv, t]) => `<div class="banner ${lv === 'info' ? '' : 'warn'}">${lv === 'bad' ? '🔴' : lv === 'warn' ? '🟠' : 'ℹ️'} ${esc(t)}</div>`).join('') : '<div class="banner">🟢 All good.</div>'}
+      ${pr.length ? pr.map(([lv, t, id, open]) => `<div class="alert ${lv} ${open ? 'click' : ''}">${lv === 'bad' ? '🔴' : lv === 'warn' ? '🟠' : 'ℹ️'} <span ${open ? `data-open="${open}" title="See what’s wrong"` : ''}>${esc(t)}</span>${open ? `<button class="btn sm" data-open="${open}">Details</button>` : ''}<button class="btn sm ghost" data-dismiss="${esc(id)}" title="Hide until it changes">Dismiss</button></div>`).join('') : '<div class="banner">🟢 All good.</div>'}
+      ${hidden ? `<p class="muted" style="margin:-2px 0 12px">${hidden} dismissed alert${hidden === 1 ? '' : 's'} hidden. <a href="#" id="hShow">Show again</a></p>` : ''}
       <div class="grid">
         <div class="stat ${c.ping == null || c.ping > 1500 ? 'hot' : ''}"><b>${c.ping == null ? '—' : c.ping + ' ms'}</b><span>Supabase response</span></div>
         <div class="stat ${A.live ? '' : 'hot'}"><b>${A.live ? '● Live' : '○ Polling'}</b><span>Realtime updates</span></div>
         <div class="stat ${c.hub && !fresh(c.hub) ? 'hot' : ''}"><b>${!c.hub ? '—' : fresh(c.hub) ? '🛰 Online' : '💤 Offline'}</b><span>Mac hub${c.hub ? ' · ' + esc(c.hub.name) : ''}</span></div>
         <div class="stat"><b>${h.active_today ?? '—'}</b><span>active today</span></div>
-        <div class="stat ${h.relay_backlog ? 'hot' : ''}"><b>${h.relay_backlog ?? '—'}</b><span>N28C requests waiting</span></div>
+        <button class="stat ${h.relay_backlog ? 'hot' : ''}" data-open="relay"><b>${h.relay_backlog ?? '—'}</b><span>N28C requests waiting</span></button>
         <div class="stat ${h.schedules_failed ? 'hot' : ''}"><b>${h.schedules_pending ?? '—'}</b><span>schedules pending${h.schedules_failed ? ` · ${h.schedules_failed} failed` : ''}</span></div>
         <div class="stat"><b>${h.db_bytes ? bytes(h.db_bytes) : '—'}</b><span>database size</span></div>
         <div class="stat ${k.remaining != null && k.limit && k.remaining / k.limit < .1 ? 'hot' : ''}"><b>${k.none ? 'none' : k.error ? '—' : k.limit == null ? '∞' : '$' + (+k.remaining).toFixed(2)}</b><span>free AI key ${k.none ? 'not set' : k.limit == null && !k.error ? 'has no limit' : 'credit left'}${k.usage != null ? ` · used $${(+k.usage).toFixed(2)}` : ''}</span></div></div>
@@ -524,6 +557,11 @@
     if (h.tables) NXCharts.hbars($('hTables'), h.tables.slice(0, 10).map(t => ({ label: t.name, value: Math.round(t.bytes / 1024), sub: `${bytes(t.bytes)} · ~${Math.max(0, t.rows).toLocaleString()} rows` })));
     NX.labelTables();
     $('hRe').onclick = () => P.health();
+    $('main').onclick = e => {
+      const d = e.target.closest('[data-dismiss]'); if (d) { dismiss(d.dataset.dismiss); return P.health(); }
+      if (e.target.id === 'hShow') { e.preventDefault(); NX.store.set('health-dismissed', {}); return P.health(); }
+      const o = e.target.closest('[data-open]'); if (o) healthDetail(o.dataset.open, c);
+    };
   };
 
   // =========================================================== Changelog email (v1.6, EmailJS)
@@ -708,80 +746,109 @@
     live(['status_incidents'], () => { if (!document.activeElement?.matches('input,textarea,select')) P.status(); }, 2000);
   };
 
-  // =========================================================== Axiom (Apex tier, BETA): who gets it, weekly minutes, providers, prompt
-  const STAGES = [['off', '⛔ Off', 'Nobody, not even you'], ['owner', '👤 Only unlimited', 'Just the accounts in apex_unlimited'], ['high-admin', '🛡 High-admins', '90-ish minutes a week each'],
-    ['admin', '🛡 Admins', 'Every admin'], ['beta', '🧪 Beta testers', 'Beta testers and admins'], ['all', '🌍 Everyone', 'The public (own key, allowed providers only)']];
-  const PROV = [['anthropic', 'Claude'], ['openrouter', 'OpenRouter'], ['openai', 'ChatGPT'], ['gemini', 'Gemini'], ['groq', 'Groq'], ['mistral', 'Mistral'], ['xai', 'xAI (Grok)'], ['deepseek', 'DeepSeek'], ['together', 'Together AI'], ['fireworks', 'Fireworks'], ['cerebras', 'Cerebras'], ['perplexity', 'Perplexity'], ['cohere', 'Cohere'], ['ollama', 'Ollama (local)'], ['lmstudio', 'LM Studio (local)']];
+  // =========================================================== Axiom (Apex tier, BETA)
+  // 1.8: only "select people" use Axiom (the Owner picks them, or approves their requests), and only the Owner and the
+  // Axiom managers the Owner picked can change anything here. Order: online switch, who can use it, then the rest.
+  const STAGES = [['off', '⛔ Off', 'Nobody, not even you'], ['owner', '👤 Only unlimited', 'Just the accounts in apex_unlimited'], ['select', '✋ Select people', 'Only the people you pick below (plus unlimited accounts)']];
+  const PROV = [['anthropic', 'Claude'], ['openrouter', 'OpenRouter'], ['openai', 'ChatGPT'], ['gemini', 'Gemini'], ['groq', 'Groq'], ['mistral', 'Mistral'], ['xai', 'xAI (Grok)'], ['deepseek', 'DeepSeek'], ['together', 'Together AI'], ['fireworks', 'Fireworks'], ['cerebras', 'Cerebras'], ['perplexity', 'Perplexity'], ['cohere', 'Cohere'], ['huggingface', 'Hugging Face'], ['nvidia', 'NVIDIA NIM'], ['ollama', 'Ollama (local)'], ['lmstudio', 'LM Studio (local)']];
+  const AXERR = { not_manager: 'Only the Owner and Axiom managers can change Axiom.', owner_only: 'Only the Owner can do that.', owner: 'Only the Owner can change the Owner.', viewer: 'Only the Owner and Axiom managers can change Axiom.', bad_stage: 'That stage isn’t available any more.' };
   P.axiom = async () => {
-    if (A.level !== 'high-admin') return NX.main('<h1>🔺 Axiom</h1><div class="card"><h3>High-admins only</h3><p class="muted" style="margin:0">Axiom is the Apex tier. Only high-admins can see or change its settings.</p></div>');
+    if (A.level !== 'high-admin' && !A.manage) return NX.main('<h1>🔺 Axiom</h1><div class="card"><h3>Owner and Axiom managers only</h3><p class="muted" style="margin:0">Axiom is the Apex tier. Only the Owner, the Axiom managers the Owner picked, and high-admins (to look) can open this page.</p></div>');
     const { data: r, error } = await sb.rpc('admin_apex_overview');
-    if (error || r?.success === false) return NX.main(`<h1>🔺 Axiom</h1><div class="card err">${esc(NX.needSql(error?.message) ? 'Run supabase/nexus-v2.4.sql (and later) from the Nexus repo in Supabase → SQL Editor to turn on the Apex tier.' : error?.message || r.error)}</div>`);
+    if (error || r?.success === false) return NX.main(`<h1>🔺 Axiom</h1><div class="card err">${esc(NX.needSql(error?.message) ? 'Run supabase/nexus-v3.1.sql (Nexus repo) in Supabase → SQL Editor.' : error?.message || r.error)}</div>`);
     const c = r.config || {}, week = r.week || [], total = week.reduce((a, x) => a + +x.minutes, 0);
-    const ro = r.tier === 'viewer', dis = ro ? 'disabled' : '', off = !!c.offline, kitsOff = c.kits_off || [];
+    const manage = r.manage ?? r.tier === 'owner', owner = !!r.owner, dis = manage ? '' : 'disabled', odis = owner ? '' : 'disabled';
+    const off = !!c.offline, kitsOff = c.kits_off || [], allowed = r.allowed || [], managers = r.managers || [];
+    const stage = STAGES.find(x => x[0] === c.stage) ? c.stage : 'select';
     const until = c.offline_until && !String(c.offline_until).startsWith('infinity') && new Date(c.offline_until).getFullYear() < 9999 ? new Date(c.offline_until) : null;
     const KITS = [['mac', '🖥 Mac power tools', 'Notes, Mail drafts, iMessage, Finder, AppleScript'], ['dev', '⌨ Dev tools', 'GitHub, git status, running code'], ['web', '🔎 Web & research', 'Deep browsing, comparing sources, Dossier notes'], ['nexus', '◆ Nexus internals', 'Owner account only: feedback, status page, usage']];
     const prompts = (await sb.rpc('admin_apex_prompts')).data || [];
-    NX.main(`<h1>🔺 Nexus '28 Axiom <span class="pill" style="color:#ff6b7a">APEX</span> <span class="pill p-pending">BETA</span></h1>
+    const pending = (await sb.from('access_requests').select('id', { count: 'exact', head: true }).eq('kind', 'axiom').eq('status', 'pending')).count || 0;
+    const person = u => `<span><b>${esc(u.username ? '@' + u.username : u.email)}</b>${u.username ? ` <small>${esc(u.email)}</small>` : ''}</span>`;
+    NX.main(`<div class="ax-page"><h1>🔺 Nexus '28 Axiom <span class="pill" style="color:#ff6b7a">APEX</span> <span class="pill p-pending">BETA</span></h1>
       <p>"An AI too advanced for its use." Supabase decides who gets it and for how long: the Mac app only becomes Axiom after the database says yes, and its prompt never ships in the app.</p>
-      ${ro ? '<div class="banner">👁 You\'re a Viewer: you can see everything here, but only Editors and the Owner can change it.</div>' : ''}
+      ${manage ? '' : `<div class="banner">👁 You can look, but only the Owner${managers.length ? ' and Axiom managers' : ''} can change Axiom.</div>`}
       <div class="card ax-power ${off || c.stage === 'off' ? 'is-off' : 'is-on'}"><div class="row" style="flex-wrap:wrap;gap:12px">
         <div style="flex:1;min-width:220px"><h3 style="margin:0">${off ? '🔴 Axiom is offline' : c.stage === 'off' ? '⛔ Axiom is switched off (stage: Off)' : '🟢 Axiom is online'}</h3>
           <p class="muted" style="margin:4px 0 0">${off ? (until ? `Back by itself ${when(until.toISOString())}.` : 'Until someone brings it back.') + (c.offline_message ? ` People see: “${esc(c.offline_message)}”` : '') : 'Taking it offline stops every turn right away, for everyone (including unlimited accounts). Apps check before every turn.'}</p></div>
-        ${off ? `<button class="btn primary" id="axOn" ${dis}>Bring Axiom back online</button>` : `<select class="field" id="axOffFor" ${dis}><option value="15">for 15 minutes</option><option value="60">for 1 hour</option><option value="1440">for 1 day</option><option value="0" selected>until I turn it back on</option></select>
-          <input class="field" id="axOffMsg" placeholder="Message people see (optional)" value="${esc(c.offline_message || '')}" maxlength="300" style="min-width:220px" ${dis}><button class="btn danger" id="axOff" ${dis}>⏻ Take Axiom offline</button>`}</div></div>
-      <div class="two"><div class="card"><h3>🧰 Tool kits <span class="muted">for everyone</span></h3><p class="muted" style="margin-top:0">Turn a kit off and no one's Axiom gets those tools, whatever their own settings say.</p>
-          ${KITS.map(([k, l, d]) => `<label class="toggle"><div>${l}<small>${d}</small></div><input type="checkbox" data-kit="${k}" ${kitsOff.includes(k) ? '' : 'checked'} ${dis}></label>`).join('')}</div>
-        <div class="card"><h3>🔒 Read-only mode</h3><p class="muted" style="margin-top:0">Axiom can still look things up, read and answer, but nothing that changes anything (sending, creating, moving, running, Operations) is even offered to it.</p>
-          <label class="toggle"><div>Read-only for everyone<small>${c.read_only ? 'On: Axiom can only look' : 'Off: changes still need each person\'s approval'}</small></div><input type="checkbox" id="axRO" ${c.read_only ? 'checked' : ''} ${dis}></label></div></div>
+        ${off ? `<button class="btn primary" id="axOn" ${dis}>Bring Axiom back online</button>` : `<div class="row" style="flex-wrap:wrap;gap:8px"><select class="field" id="axOffFor" ${dis}><option value="15">for 15 minutes</option><option value="60">for 1 hour</option><option value="1440">for 1 day</option><option value="0" selected>until I turn it back on</option></select>
+          <input class="field" id="axOffMsg" placeholder="Message people see (optional)" value="${esc(c.offline_message || '')}" maxlength="300" style="min-width:200px;flex:1" ${dis}><button class="btn danger" id="axOff" ${dis}>⏻ Take Axiom offline</button></div>`}</div></div>
       <div class="grid">
-        <div class="stat"><b>${esc((STAGES.find(x => x[0] === c.stage) || [, c.stage])[1])}</b><span>who can use it</span></div>
+        <div class="stat"><b style="font-size:19px;white-space:nowrap">${esc((STAGES.find(x => x[0] === stage) || [, stage])[1])}</b><span>who can use it</span></div>
+        <div class="stat"><b>${allowed.length}</b><span>select ${allowed.length === 1 ? 'person' : 'people'}</span></div>
         <div class="stat"><b>${c.weekly_minutes}</b><span>minutes a week each</span></div>
         <div class="stat"><b>${Math.round(total)}</b><span>minutes used this week · ${week.length} ${week.length === 1 ? 'person' : 'people'}</span></div>
-        <div class="stat"><b>${(r.unlimited || []).length}</b><span>unlimited account${(r.unlimited || []).length === 1 ? '' : 's'}</span></div></div>
-      <div class="card"><h3>Who can use it</h3><div class="tabsub" id="axStage" style="flex-wrap:wrap">${STAGES.map(([k, l, d]) => `<button data-st="${k}" class="${c.stage === k ? 'on' : ''}" title="${esc(d)}">${l}</button>`).join('')}</div>
-        <p class="muted" style="margin:0" id="axStageHelp">${esc((STAGES.find(x => x[0] === c.stage) || [])[2] || '')}. Minutes reset every Monday at 00:00 UTC (next: ${when(r.resets_at)}).</p></div>
-      <div class="two"><div class="card"><h3>Weekly minutes</h3><p class="muted" style="margin-top:0">Time Axiom spends answering, checking (Proof mode) and working. Unlimited accounts don't count.</p>
-          <div class="row"><input class="field" type="number" min="0" max="10080" id="axMin" value="${c.weekly_minutes}" style="width:110px"><span class="muted">minutes per person per week</span><span class="sp"></span><button class="btn" id="axMinSave">Save</button></div></div>
-        <div class="card"><h3>Providers for the public</h3><p class="muted" style="margin-top:0">Admins can use any provider. Everyone else, only these (with high-usage warnings).</p>
-          <div class="chips" id="axProv">${PROV.map(([k, l]) => `<label class="chip"><input type="checkbox" value="${k}" ${(c.public_providers || []).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div>
-          <div class="row" style="margin-top:8px"><span class="sp"></span><button class="btn" id="axProvSave">Save</button></div></div></div>
-      <div class="card"><h3>🔒 Axiom's prompt <span class="sp"></span><span class="muted" id="axCnt">${(c.prompt || '').length} / 40,000</span></h3>
-        <p class="muted" style="margin-top:0">Stored only in Supabase and handed out only to someone allowed with minutes left. ${c.prompt ? '' : '<b class="err">Empty: Axiom has no personality until you paste it here.</b>'}</p>
-        <textarea class="field" id="axPrompt" rows="10" style="width:100%;font:13px/1.5 var(--mono)" maxlength="40000">${esc(c.prompt || '')}</textarea>
-        <div class="row" style="margin-top:8px"><span class="muted">Last changed ${ago(c.updated_at)}</span><span class="sp"></span><button class="btn primary" id="axPromptSave">Save prompt</button></div></div>
-      <div class="card"><h3>This week</h3>${week.length ? `<table class="cards"><tr><th>Who</th><th>Level</th><th class="num">Minutes</th><th class="num">Turns</th><th>Last used</th></tr>${week.map(w => `<tr><td>${esc(w.email)}${w.unlimited ? ' <span class="pill p-approved">∞</span>' : ''}</td><td class="muted">${esc(w.level || 'user')}</td><td class="num">${w.minutes}${w.unlimited ? '' : ` / ${c.weekly_minutes}`}</td><td class="num">${w.turns}</td><td class="muted">${ago(w.last)}</td></tr>`).join('')}</table>` : '<div class="empty">Nobody has used Axiom this week.</div>'}</div>
-      <div class="card"><h3>👤 People</h3><p class="muted" style="margin-top:0">Block someone from Axiom, give them their own weekly minutes, or reset what they've used this week.</p>
+        <button class="stat ${pending ? 'hot' : ''}" id="axReq"><b>${pending}</b><span>waiting to get in →</span></button></div>
+      <div class="card"><h3>Who can use it</h3><div class="tabsub" id="axStage" style="flex-wrap:wrap">${STAGES.map(([k, l, d]) => `<button data-st="${k}" class="${stage === k ? 'on' : ''}" title="${esc(d)}" ${dis}>${l}</button>`).join('')}</div>
+        <p class="muted" style="margin:0">${esc((STAGES.find(x => x[0] === stage) || [])[2] || '')}. Minutes reset every Monday at 00:00 UTC (next: ${when(r.resets_at)}).</p></div>
+      <div class="two"><div class="card"><h3>Weekly minutes</h3><p class="muted">Time Axiom spends answering, checking (Proof mode) and working. Unlimited accounts don't count.</p>
+          <div class="row"><input class="field" type="number" min="0" max="10080" id="axMin" value="${c.weekly_minutes}" style="width:110px" ${dis}><span class="muted">minutes per person per week</span><span class="sp"></span><button class="btn" id="axMinSave" ${dis}>Save</button></div></div>
+        <div class="card"><h3>Providers for non-admins</h3><p class="muted">Admins can use any provider. Everyone else, only these (with high-usage warnings).</p>
+          <div class="chips" id="axProv">${PROV.map(([k, l]) => `<label class="chip"><input type="checkbox" value="${k}" ${(c.public_providers || []).includes(k) ? 'checked' : ''} ${dis}> ${l}</label>`).join('')}</div>
+          <div class="row" style="margin-top:8px"><span class="sp"></span><button class="btn" id="axProvSave" ${dis}>Save</button></div></div></div>
+
+      <div class="ax-sec">People</div>
+      <div class="two"><div class="card"><h3>✋ Select people <span class="muted">${allowed.length}</span></h3><p class="muted">Only these accounts (and unlimited ones) can use Axiom. ${owner ? 'Add someone, or approve their request in Access requests.' : 'Only the Owner adds or removes people; managers can approve requests.'}</p>
+          ${owner ? '<div class="row"><input class="field" id="axAddQ" placeholder="Email or username" style="flex:1;min-width:160px"><button class="btn" id="axAddGo">Find</button></div><div id="axAddRes"></div>' : ''}
+          <div class="plist">${allowed.map(u => `<div>${person(u)}<small>since ${when(u.since).split(',')[0]}</small>${owner ? `<button class="btn sm ghost" data-unallow="${esc(u.user_id)}">Remove</button>` : ''}</div>`).join('') || '<p class="muted" style="margin:0">Nobody yet.</p>'}</div></div>
+        <div class="card"><h3>🛡 Axiom managers <span class="muted">${managers.length}</span></h3><p class="muted">They can change everything on this page and accept or deny access requests. Only the Owner picks them${owner ? '' : ' (you can see who they are)'}.</p>
+          ${owner ? '<div class="row"><input class="field" id="axMgrQ" placeholder="Email or username" style="flex:1;min-width:160px"><button class="btn" id="axMgrGo">Find</button></div><div id="axMgrRes"></div>' : ''}
+          <div class="plist">${managers.map(u => `<div>${person(u)}${owner ? `<button class="btn sm ghost" data-unmgr="${esc(u.user_id)}">Remove</button>` : ''}</div>`).join('') || '<p class="muted" style="margin:0">Just the Owner.</p>'}</div></div></div>
+      <div class="card"><h3>👤 Limits for one person</h3><p class="muted">Block someone from Axiom, give them their own weekly minutes, or reset what they've used this week.</p>
         <div class="row" style="flex-wrap:wrap"><input class="field" id="axFind" placeholder="Email or username" style="flex:1;min-width:200px" ${dis}><button class="btn" id="axFindGo" ${dis}>Find</button></div><div id="axFound"></div>
         ${(r.overrides || []).length ? `<table class="cards" style="margin-top:10px"><tr><th>Who</th><th>Blocked</th><th class="num">Minutes</th><th>Reset</th><th></th></tr>${r.overrides.map(o => `<tr><td>${esc(o.email)}</td><td>${o.blocked ? '<b class="err">Blocked</b>' : '—'}</td><td class="num">${o.weekly_minutes ?? 'default'}</td><td class="muted">${o.reset_at ? when(o.reset_at) : '—'}</td>
           <td style="white-space:nowrap">${o.blocked ? `<button class="btn sm" data-unblock="${esc(o.user_id)}" ${dis}>Unblock</button>` : ''}${o.weekly_minutes != null ? `<button class="btn sm" data-clearmin="${esc(o.user_id)}" ${dis}>Default minutes</button>` : ''}</td></tr>`).join('')}</table>` : ''}</div>
+
+      <div class="ax-sec">Controls</div>
+      <div class="two"><div class="card"><h3>🧰 Tool kits <span class="muted">for everyone</span></h3><p class="muted">Turn a kit off and no one's Axiom gets those tools, whatever their own settings say.</p>
+          ${KITS.map(([k, l, d]) => `<label class="toggle"><div>${l}<small>${d}</small></div><input type="checkbox" data-kit="${k}" ${kitsOff.includes(k) ? '' : 'checked'} ${dis}></label>`).join('')}</div>
+        <div class="card"><h3>🔒 Read-only mode</h3><p class="muted">Axiom can still look things up, read and answer, but nothing that changes anything (sending, creating, moving, running, Operations) is even offered to it.</p>
+          <label class="toggle"><div>Read-only for everyone<small>${c.read_only ? 'On: Axiom can only look' : 'Off: changes still need each person\'s approval'}</small></div><input type="checkbox" id="axRO" ${c.read_only ? 'checked' : ''} ${dis}></label></div></div>
+      <div class="card"><h3>🔒 Axiom's prompt <span class="sp"></span><span class="muted" id="axCnt">${(c.prompt || '').length} / 40,000</span></h3>
+        <p class="muted">Stored only in Supabase and handed out only to someone allowed with minutes left. ${c.prompt ? '' : '<b class="err">Empty: Axiom has no personality until you paste it here.</b>'}</p>
+        <textarea class="field" id="axPrompt" rows="10" style="width:100%;font:13px/1.5 var(--mono)" maxlength="40000" ${manage ? '' : 'readonly'}>${esc(c.prompt || '')}</textarea>
+        <div class="row" style="margin-top:8px"><span class="muted">Last changed ${ago(c.updated_at)}</span><span class="sp"></span><button class="btn primary" id="axPromptSave" ${dis}>Save prompt</button></div></div>
+      <div class="card"><h3>🕘 Prompt history</h3><p class="muted">Every time the prompt changes, the old one is kept here.</p>${prompts.length ? prompts.map(h => `<div class="row" style="padding:6px 0;border-top:1px solid var(--line);flex-wrap:nowrap"><span class="muted" style="width:120px;flex:none">${when(h.saved_at)}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(h.preview)}">${esc(h.preview)}…</span><span class="muted hide-m">${(+h.length).toLocaleString()} chars</span><button class="btn sm" data-restore="${h.id}" ${dis}>Restore</button></div>`).join('') : '<p class="muted" style="margin:0">No earlier versions yet.</p>'}</div>
+
+      <div class="ax-sec">Usage</div>
+      <div class="card"><h3>This week</h3>${week.length ? `<table class="cards"><tr><th>Who</th><th>Level</th><th class="num">Minutes</th><th class="num">Turns</th><th>Last used</th></tr>${week.map(w => `<tr><td>${esc(w.email)}${w.unlimited ? ' <span class="pill p-approved">∞</span>' : ''}</td><td class="muted">${esc(w.level || 'user')}</td><td class="num">${w.minutes}${w.unlimited ? '' : ` / ${c.weekly_minutes}`}</td><td class="num">${w.turns}</td><td class="muted">${ago(w.last)}</td></tr>`).join('')}</table>` : '<div class="empty">Nobody has used Axiom this week.</div>'}</div>
       <div class="card"><h3>⏱ Latest turns</h3>${(r.recent || []).length ? `<table class="cards"><tr><th>When</th><th>Who</th><th>What</th><th>Model</th><th class="num">Seconds</th></tr>${r.recent.map(x => `<tr><td class="muted">${ago(x.at)}</td><td>${esc(x.email)}</td><td>${esc(x.kind)}</td><td class="muted">${esc([x.provider, x.model].filter(Boolean).join(' · ') || '—')}</td><td class="num">${x.seconds}</td></tr>`).join('')}</table>` : '<p class="muted" style="margin:0">Nothing yet.</p>'}</div>
       <div class="card"><h3>Last 8 weeks</h3><div id="axWeeks"></div></div>
-      <div class="card"><h3>🕘 Prompt history</h3><p class="muted" style="margin-top:0">Every time the prompt changes, the old one is kept here.</p>${prompts.length ? prompts.map(h => `<div class="row" style="padding:6px 0;border-top:1px solid var(--line)"><span class="muted" style="width:120px">${when(h.saved_at)}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(h.preview)}">${esc(h.preview)}…</span><span class="muted">${(+h.length).toLocaleString()} chars</span><button class="btn sm" data-restore="${h.id}" ${dis}>Restore</button></div>`).join('') : '<p class="muted" style="margin:0">No earlier versions yet.</p>'}</div>
       <div class="card"><h3>Unlimited accounts</h3>${(r.unlimited || []).map(u => `<div class="row"><b>${esc(u.email)}</b><span class="muted">${esc(u.note || '')}</span></div>`).join('') || '<p class="muted" style="margin:0">None yet.</p>'}
-        <p class="muted" style="margin-bottom:0">For safety this can't be changed from the app. In Supabase → SQL Editor: <code>insert into public.apex_unlimited (user_id, note) select id, 'owner' from auth.users where email = 'you@example.com';</code></p></div>`);
+        <p class="muted" style="margin-bottom:0">For safety this can't be changed from the app. In Supabase → SQL Editor: <code>insert into public.apex_unlimited (user_id, note) select id, 'owner' from auth.users where email = 'you@example.com';</code></p></div></div>`);
     if ((r.weeks || []).length) NXCharts.bars($('axWeeks'), r.weeks.map(x => ({ day: x.week, minutes: +x.minutes })), 'minutes', 'minutes'); else $('axWeeks').innerHTML = '<div class="muted">No usage yet.</div>';
-    const save = async (args, msg) => { const { data, error: er } = await sb.rpc('admin_apex_set', { p_stage: null, p_weekly_minutes: null, p_providers: null, p_prompt: null, ...args }); if (er || data?.success === false) return toast(er?.message || data.error, true); toast(msg); P.axiom(); };
+    const fail = (er, data) => toast(er?.message || AXERR[data?.error] || data?.error || 'Something went wrong.', true);
+    const save = async (args, msg) => { const { data, error: er } = await sb.rpc('admin_apex_set', { p_stage: null, p_weekly_minutes: null, p_providers: null, p_prompt: null, ...args }); if (er || data?.success === false) return fail(er, data); toast(msg); P.axiom(); };
+    const ctl = async (p, msg) => { const { data, error: er } = await sb.rpc('admin_apex_control', { p }); if (er || data?.success === false) { fail(er, data); return P.axiom(); } toast(msg); P.axiom(); };
+    const usr = async (args, msg) => { const { data, error: er } = await sb.rpc('admin_apex_user', { p_blocked: null, p_minutes: null, p_clear_minutes: false, p_reset: false, p_note: null, ...args }); if (er || data?.success === false) return fail(er, data); toast(msg); P.axiom(); };
+    const people = async (user, list, on, msg) => { const { data, error: er } = await sb.rpc('admin_apex_people', { p_user: user, p_list: list, p_on: on }); if (er || data?.success === false) return fail(er, data); toast(msg); P.axiom(); };
+    const find = async (q, box, btn) => { if (!q) return; const { data } = await sb.rpc('admin_apex_find', { p_q: q }); $(box).innerHTML = '<div class="plist">' + ((data || []).map(u => `<div>${person(u)}${btn(u)}</div>`).join('') || '<p class="muted" style="margin:0">Nobody found.</p>') + '</div>'; };
     $('axPrompt').oninput = e => { $('axCnt').textContent = `${e.target.value.length.toLocaleString()} / 40,000`; };
     $('main').onchange = async e => {
-      const t = e.target, call = async (p, msg) => { const { data, error: er } = await sb.rpc('admin_apex_control', { p }); if (er || data?.success === false) { toast(er?.message || 'Viewers can only look.', true); return P.axiom(); } toast(msg); P.axiom(); };
-      if (t.dataset.kit) return call({ kits_off: [...document.querySelectorAll('[data-kit]')].filter(i => !i.checked).map(i => i.dataset.kit) }, t.checked ? '✓ Kit on' : 'Kit off for everyone');
-      if (t.id === 'axRO') { if (t.checked && !confirm('Put Axiom in read-only mode for everyone?')) { t.checked = false; return; } return call({ read_only: t.checked }, t.checked ? '🔒 Read-only on' : 'Read-only off'); }
+      const t = e.target;
+      if (t.dataset.kit) return ctl({ kits_off: [...document.querySelectorAll('[data-kit]')].filter(i => !i.checked).map(i => i.dataset.kit) }, t.checked ? '✓ Kit on' : 'Kit off for everyone');
+      if (t.id === 'axRO') { if (t.checked && !confirm('Put Axiom in read-only mode for everyone?')) { t.checked = false; return; } return ctl({ read_only: t.checked }, t.checked ? '🔒 Read-only on' : 'Read-only off'); }
     };
     $('main').onclick = e => {
-      const b = e.target.closest('button'); if (!b) return;
-      if (b.dataset.st) { const st = STAGES.find(x => x[0] === b.dataset.st); if (STAGES.findIndex(x => x[0] === b.dataset.st) > STAGES.findIndex(x => x[0] === c.stage) && !confirm(`Open Axiom to: ${st[1].replace(/^\S+ /, '')}?\n\n${st[2]}.`)) return; return save({ p_stage: b.dataset.st }, `✓ Axiom: ${st[1].replace(/^\S+ /, '')}`); }
-      const ctl = async (p, msg) => { const { data, error: er } = await sb.rpc('admin_apex_control', { p }); if (er || data?.success === false) return toast(er?.message || (data.error === 'viewer' ? 'Viewers can only look.' : data.error), true); toast(msg); P.axiom(); };
-      const usr = async (args, msg) => { const { data, error: er } = await sb.rpc('admin_apex_user', { p_blocked: null, p_minutes: null, p_clear_minutes: false, p_reset: false, p_note: null, ...args }); if (er || data?.success === false) return toast(er?.message || ({ viewer: 'Viewers can only look.', owner: 'Only the Owner can change the Owner.' }[data.error] || data.error), true); toast(msg); P.axiom(); };
+      const b = e.target.closest('button'); if (!b || b.disabled) return;
+      if (b.id === 'axReq') return NX.go('access');
+      if (b.dataset.st) { const st = STAGES.find(x => x[0] === b.dataset.st); if (b.dataset.st === stage) return; if (!confirm(`Axiom: ${st[1].replace(/^\S+ /, '')}?\n\n${st[2]}.`)) return; return save({ p_stage: b.dataset.st }, `✓ Axiom: ${st[1].replace(/^\S+ /, '')}`); }
       if (b.id === 'axOff') { const mins = +$('axOffFor').value; if (!confirm(`Take Axiom offline for everyone${mins ? ' for ' + $('axOffFor').selectedOptions[0].text.replace('for ', '') : ' until you bring it back'}? Turns already running will finish.`)) return; return ctl({ offline: mins, message: $('axOffMsg').value.trim() }, '🔴 Axiom is offline'); }
       if (b.id === 'axOn') return ctl({ online: true }, '🟢 Axiom is back online');
-      if (b.id === 'axFindGo') { const q = $('axFind').value.trim(); if (!q) return; return sb.rpc('admin_apex_find', { p_q: q }).then(({ data }) => { $('axFound').innerHTML = (data || []).map(u => `<div class="row" style="padding:6px 0;flex-wrap:wrap"><b style="flex:1">${esc(u.email)}${u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : ''}</b>
+      if (b.id === 'axAddGo') return find($('axAddQ').value.trim(), 'axAddRes', u => allowed.some(x => x.user_id === u.user_id) ? '<small>already in</small>' : `<button class="btn sm primary" data-allow="${esc(u.user_id)}">Add</button>`);
+      if (b.id === 'axMgrGo') return find($('axMgrQ').value.trim(), 'axMgrRes', u => managers.some(x => x.user_id === u.user_id) ? '<small>already a manager</small>' : `<button class="btn sm primary" data-mgr="${esc(u.user_id)}">Make manager</button>`);
+      if (b.dataset.allow) { if (!confirm('Let this person use Axiom?')) return; return people(b.dataset.allow, 'allowed', true, '✓ They can use Axiom'); }
+      if (b.dataset.unallow) { if (!confirm('Take Axiom away from this person?')) return; return people(b.dataset.unallow, 'allowed', false, 'Removed'); }
+      if (b.dataset.mgr) { if (!confirm('Make this person an Axiom manager? They can change every Axiom setting and accept or deny access requests.')) return; return people(b.dataset.mgr, 'manager', true, '✓ Axiom manager added'); }
+      if (b.dataset.unmgr) { if (!confirm('Remove this Axiom manager?')) return; return people(b.dataset.unmgr, 'manager', false, 'Removed'); }
+      if (b.id === 'axFindGo') { const q = $('axFind').value.trim(); if (!q) return; return sb.rpc('admin_apex_find', { p_q: q }).then(({ data }) => { $('axFound').innerHTML = (data || []).map(u => `<div class="row" style="padding:6px 0;flex-wrap:wrap"><b style="flex:1;min-width:160px">${esc(u.email)}${u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : ''}</b>
           <button class="btn sm danger" data-block="${esc(u.user_id)}">Block</button><input class="field" type="number" min="0" max="10080" placeholder="min/week" style="width:100px" data-minin="${esc(u.user_id)}"><button class="btn sm" data-setmin="${esc(u.user_id)}">Set minutes</button><button class="btn sm" data-reset="${esc(u.user_id)}">Reset this week</button></div>`).join('') || '<p class="muted">Nobody found.</p>'; }); }
       if (b.dataset.block) { if (!confirm('Block this person from Axiom?')) return; return usr({ p_user: b.dataset.block, p_blocked: true }, '⛔ Blocked from Axiom'); }
       if (b.dataset.unblock) return usr({ p_user: b.dataset.unblock, p_blocked: false }, '✓ Unblocked');
       if (b.dataset.setmin) { const v = document.querySelector(`[data-minin="${b.dataset.setmin}"]`).value; if (v === '') return toast('Type the minutes first.', true); return usr({ p_user: b.dataset.setmin, p_minutes: +v }, '✓ Minutes set'); }
       if (b.dataset.clearmin) return usr({ p_user: b.dataset.clearmin, p_clear_minutes: true }, '✓ Back to the default');
       if (b.dataset.reset) { if (!confirm("Reset this person's Axiom minutes for this week?")) return; return usr({ p_user: b.dataset.reset, p_reset: true }, '✓ Minutes reset'); }
-      if (b.dataset.restore) { if (!confirm('Restore this earlier prompt? The current one is kept in history.')) return; return sb.rpc('admin_apex_restore_prompt', { p_id: +b.dataset.restore }).then(({ data, error: er }) => { if (er || data?.success === false) return toast(er?.message || data.error, true); toast('✓ Prompt restored. Apps pick it up within 2 minutes.'); P.axiom(); }); }
+      if (b.dataset.restore) { if (!confirm('Restore this earlier prompt? The current one is kept in history.')) return; return sb.rpc('admin_apex_restore_prompt', { p_id: +b.dataset.restore }).then(({ data, error: er }) => { if (er || data?.success === false) return fail(er, data); toast('✓ Prompt restored. Apps pick it up within 2 minutes.'); P.axiom(); }); }
       if (b.id === 'axMinSave') return save({ p_weekly_minutes: Math.max(0, Math.min(10080, +$('axMin').value || 0)) }, '✓ Weekly minutes saved');
       if (b.id === 'axProvSave') { const v = [...document.querySelectorAll('#axProv input:checked')].map(i => i.value); if (!v.length) return toast('Pick at least one.', true); return save({ p_providers: v }, '✓ Providers saved'); }
       if (b.id === 'axPromptSave') { if (!confirm("Replace Axiom's prompt for everyone?")) return; return save({ p_prompt: $('axPrompt').value }, '✓ Prompt saved. Apps pick it up within 2 minutes.'); }

@@ -26,23 +26,43 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
   // 1.7: powerSaveBlocker('prevent-app-suspension') only stopped App Nap; the Mac still went to sleep. Now it runs macOS's
   // own `caffeinate` (no idle sleep, no system sleep while on power), tied to this app so it ends if the app quits,
   // and keeps the Electron blocker as a backup. Closing the lid still sleeps a MacBook unless an external display is connected.
-  let blocker = null, caf = null;
+  // 1.8: it never worked unless the hub was on (the switch only showed up then, and applyAwake needed it). Now Keep awake
+  // stands on its own, can keep the screen on too, and the status comes from macOS itself (pmset -g assertions), so
+  // the app shows whether the Mac really is being kept awake.
+  let blocker = null, caf = null, cafArgs = '';
   const onBattery = () => { try { return typeof powerMonitor.isOnBatteryPower === 'function' ? powerMonitor.isOnBatteryPower() : !!powerMonitor.onBatteryPower; } catch { return false; } };
   function startCaffeinate() {
-    if (caf || process.platform !== 'darwin') return;
+    const args = ['-i', '-m', '-s', ...(hub.cfg.keepDisplay ? ['-d', '-u'] : []), '-w', String(process.pid)];
+    if (caf && cafArgs === args.join(' ')) return;
+    stopCaffeinate();
+    if (process.platform !== 'darwin') return;
     try {
-      caf = require('child_process').spawn('/usr/bin/caffeinate', ['-i', '-m', '-s', '-w', String(process.pid)], { stdio: 'ignore' });
+      cafArgs = args.join(' ');
+      caf = require('child_process').spawn('/usr/bin/caffeinate', args, { stdio: 'ignore' });
       caf.on('exit', () => { caf = null; setTimeout(() => { applyAwake(); hub.changed(); }, 1000); });
       caf.on('error', () => { caf = null; });
     } catch { caf = null; }
   }
-  function stopCaffeinate() { const c = caf; caf = null; try { c?.removeAllListeners('exit'); c?.kill(); } catch {} }
+  function stopCaffeinate() { const c = caf; caf = null; cafArgs = ''; try { c?.removeAllListeners('exit'); c?.kill(); } catch {} }
+  // What macOS says is keeping it awake right now
+  function verify() {
+    if (process.platform !== 'darwin') return Promise.resolve(null);
+    return new Promise(res => require('child_process').execFile('/usr/bin/pmset', ['-g', 'assertions'], { timeout: 4000 }, (err, out) => {
+      if (err) return res(null);
+      const mine = String(out).split('\n').filter(l => caf && l.includes(`pid ${caf.pid}(`));
+      res({ system: mine.some(l => /PreventUserIdleSystemSleep|PreventSystemSleep/.test(l)), display: mine.some(l => /PreventUserIdleDisplaySleep/.test(l)) });
+    }));
+  }
   function applyAwake() {
-    const bat = onBattery(), want = hub.cfg.enabled && hub.cfg.keepAwake && !(hub.cfg.pluggedOnly && bat);
-    if (want) { if (blocker == null) blocker = powerSaveBlocker.start('prevent-app-suspension'); startCaffeinate(); }
-    else { if (blocker != null) { powerSaveBlocker.stop(blocker); blocker = null; } stopCaffeinate(); }
-    const on = want && (caf != null || (blocker != null && powerSaveBlocker.isStarted(blocker)));
-    hub.state.awake = { on, onBattery: bat, reason: !hub.cfg.enabled ? 'Hub is off' : !hub.cfg.keepAwake ? 'Keep awake is off' : hub.cfg.pluggedOnly && bat ? 'On battery, so this Mac can sleep' : on ? 'Staying awake (closing a MacBook lid still sleeps unless a display is connected)' : "Couldn't keep this Mac awake" };
+    const bat = onBattery(), want = hub.cfg.keepAwake && !(hub.cfg.pluggedOnly && bat);
+    const blockType = hub.cfg.keepDisplay ? 'prevent-display-sleep' : 'prevent-app-suspension';
+    if (want) { if (blocker != null && blocker.type !== blockType) { powerSaveBlocker.stop(blocker.id); blocker = null; } if (blocker == null) blocker = { id: powerSaveBlocker.start(blockType), type: blockType }; startCaffeinate(); }
+    else { if (blocker != null) { powerSaveBlocker.stop(blocker.id); blocker = null; } stopCaffeinate(); }
+    const on = want && (caf != null || (blocker != null && powerSaveBlocker.isStarted(blocker.id)));
+    const prev = hub.state.awake || {};
+    hub.state.awake = { on, onBattery: bat, display: !!hub.cfg.keepDisplay && on, verified: on ? prev.verified ?? null : null,
+      reason: !hub.cfg.keepAwake ? 'Keep awake is off' : hub.cfg.pluggedOnly && bat ? 'On battery, so this Mac can sleep (turn off “Only while plugged in” to keep it awake on battery)' : on ? (hub.cfg.keepDisplay ? 'Staying awake with the screen on' : 'Staying awake (the screen can turn off)') + '. Closing a MacBook lid still sleeps unless a display is connected.' : "Couldn't keep this Mac awake" };
+    if (on) verify().then(v => { if (!v || !hub.state.awake.on) return; hub.state.awake.verified = v.system; if (!v.system) hub.state.awake.reason = "macOS isn't honoring keep awake (pmset shows no assertion). Try turning it off and on, or check System Settings → Battery → Options."; hub.changed(); });
   }
   app.on('before-quit', stopCaffeinate);
   powerMonitor.on('on-ac', () => { applyAwake(); hub.changed(); });
@@ -56,12 +76,12 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
   // ---------- menu bar icon
   let tray = null;
   function paintTray(st = hub.status()) {
-    if (!hub.cfg.enabled) { tray?.destroy(); tray = null; return; }
+    if (!hub.cfg.enabled && !hub.cfg.keepAwake) { tray?.destroy(); tray = null; return; }
     if (!tray) {
       const img = nativeImage.createFromPath(path.join(__dirname, 'trayTemplate.png')); img.setTemplateImage(true);
       tray = new Tray(img); tray.setToolTip('Apoji Admin hub');
     }
-    const line = st.serving ? `● Online at ${st.tailscale.dnsName?.split('.')[0] || 'tailnet'}` : st.tailscale?.error ? '○ ' + st.tailscale.error : '○ Not on your tailnet yet';
+    const line = !hub.cfg.enabled ? '○ Hub is off' : st.serving ? `● Online at ${st.tailscale.dnsName?.split('.')[0] || 'tailnet'}` : st.tailscale?.error ? '○ ' + st.tailscale.error : '○ Not on your tailnet yet';
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: line, enabled: false },
       { label: st.awake?.on ? '☕ Keeping this Mac awake' : '💤 ' + (st.awake?.reason || 'Can sleep'), enabled: false },
@@ -70,9 +90,10 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
       { label: 'Open Apoji Admin', click: () => showWin('hub') },
       { label: 'Keep this Mac awake', type: 'checkbox', checked: hub.cfg.keepAwake, click: m => setAndApply({ keepAwake: m.checked }) },
       { label: 'Only while plugged in', type: 'checkbox', checked: hub.cfg.pluggedOnly, enabled: hub.cfg.keepAwake, click: m => setAndApply({ pluggedOnly: m.checked }) },
+      { label: 'Keep the screen on too', type: 'checkbox', checked: !!hub.cfg.keepDisplay, enabled: hub.cfg.keepAwake, click: m => setAndApply({ keepDisplay: m.checked }) },
       { label: 'Run schedules now', click: () => getWin()?.webContents.send('hub:nudge', 'jobs') },
       { type: 'separator' },
-      { label: 'Turn the hub off', click: () => setAndApply({ enabled: false }) },
+      hub.cfg.enabled ? { label: 'Turn the hub off', click: () => setAndApply({ enabled: false }) } : { label: 'Turn the hub on', click: () => setAndApply({ enabled: true }) },
       { label: 'Quit Apoji Admin', click: () => { app.isQuitting = true; app.quit(); } }
     ]));
   }
@@ -82,8 +103,9 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
     hub.set(patch);
     if (hub.cfg.enabled && !was) await hub.start();
     else if (!hub.cfg.enabled && was) await hub.stop();
-    applyAwake(); applyLogin();
+    applyAwake(); applyLogin(); paintTray();
     hub.changed();
+    await new Promise(res => setTimeout(res, 600));     // let macOS confirm keep awake before answering
     return withQr(hub.status());
   }
   async function withQr(st) { if (st.url) try { st.qr = await QRCode.toDataURL(st.url, { margin: 1, width: 240, color: { dark: '#0a0817', light: '#ffffff' } }); } catch {} return st; }
@@ -102,7 +124,7 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
   });
   app.on('before-quit', () => { app.isQuitting = true; if (hub.state.serving) hub.serve(false); });
 
-  return { hub, keepRunning: () => hub.cfg.enabled, openedAtLogin: () => { try { return !!app.getLoginItemSettings().wasOpenedAtLogin; } catch { return false; } } };
+  return { hub, keepRunning: () => hub.cfg.enabled || (hub.cfg.keepAwake && hub.state.awake?.on), openedAtLogin: () => { try { return !!app.getLoginItemSettings().wasOpenedAtLogin; } catch { return false; } } };
 }
 
 module.exports = { setupHub };

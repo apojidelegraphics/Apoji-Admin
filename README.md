@@ -86,6 +86,17 @@ Both live in `supabase/functions/`. Deploy with the Supabase CLI, or in the dash
   3. EmailJS → Account → Security: turn on **Allow EmailJS API for non-browser applications** (and keep using the Private Key in Apoji Admin).
   4. Apoji Admin → Releases → Email the changelog → **⚡ Automatic**. From then on, each Nexus release emails subscribers by itself (Nexus' release workflow calls the function after publishing; it never fails the release).
 
+## Axiom managers, select people and access requests (1.8)
+Run `supabase/nexus-v3.1.sql` from the Nexus repo first (after `apoji-admin-1.7.sql`).
+- **Only select people use Axiom.** Axiom → Who can use it is now Off, Only unlimited, or Select people. The Owner adds people in Axiom → Select people (or approves their request).
+- **Axiom managers.** The Owner picks them in Axiom → Axiom managers. Only the Owner and managers change Axiom's settings, prompt and limits, and accept or deny access requests. High-admins can still look.
+- **Access requests** (Inbox): people ask from Nexus (Settings → Account → Request access) or N28C for Axiom, an early feature, beta testing, or something else. Approving Axiom adds them to Select people; a feature is turned on for just them; beta makes them a beta tester.
+- **Nexus chat:** chat with Nexus from the portal. When your Mac is on (phone link on), the Mac answers with every tool; otherwise the free Nexus key answers and you can hand a message off to the Mac.
+- **Users → Redeemed orders:** see each aARgon3 / Mexel order someone redeemed (with its system config) and remove it.
+- **Health:** alerts can be dismissed (until they change) and opened. "N28C requests waiting" shows who's stuck and lets Editors clear them.
+- **Feedback:** reports sent by GitHub or email (and from people who aren't signed in) land in Feedback & bugs too, marked GITHUB / EMAIL.
+- **This Mac → Keep awake** works without the hub, can keep the screen on, and shows whether macOS confirms it.
+
 ## Develop
 
 Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`), `npm test` tests the hub. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` most pages, `extras.js` tasks and the command palette, `features.js` the hub, notes, broadcasts, schedules, health and releases, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications). `electron/hub-core.js` is the hub API, `electron/hub.js` keep-awake, login item and menu bar.

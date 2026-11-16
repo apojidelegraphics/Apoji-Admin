@@ -1,0 +1,20 @@
+// 1.8 checks: files ship, Axiom is Owner/manager-only, keep awake stands alone, header stays one row.
+const assert = require('assert'), fs = require('fs'), path = require('path');
+const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+const pkg = JSON.parse(read('package.json'));
+assert.ok(pkg.build.files.includes('v18.js') && read('index.html').includes('src="v18.js"') && read('sw.js').includes("'./v18.js'"), 'v18.js ships everywhere');
+assert.ok(/copyright": "© \d{4} Apoji Delegraphics/.test(read('package.json')));
+const f = read('features.js');
+assert.ok(f.includes("['select', '✋ Select people'") && !f.includes("'90-ish minutes a week each'"), 'only Off / unlimited / select');
+assert.ok(f.includes("sb.rpc('admin_apex_people'") && f.includes('const manage = r.manage'), 'managers + select people');
+assert.ok(f.indexOf('ax-power') < f.indexOf('id="axStage"') && f.indexOf('id="axStage"') < f.indexOf('Tool kits <span'), 'online first, who-can-use second, kits after');
+assert.ok(f.includes('data-dismiss') && f.includes("sb.rpc('admin_relay_stuck')"), 'health alerts dismiss + details');
+const hub = read('electron/hub.js');
+assert.ok(/want = hub\.cfg\.keepAwake && !\(hub\.cfg\.pluggedOnly && bat\)/.test(hub) && !/want = hub\.cfg\.enabled/.test(hub), 'keep awake no longer needs the hub');
+assert.ok(hub.includes("'-d', '-u'") && hub.includes("'-g', 'assertions'"));
+const css = read('admin.css');
+assert.ok(css.includes('#hdr { flex-wrap: nowrap') && css.includes('.me-chip > span:not(.av)') && css.includes('html.standalone nav'));
+assert.ok(read('pages.js').includes("rpc('admin_remove_redemption'") && read('pages.js').includes('class="me-foot"'));
+const v = read('v18.js');
+assert.ok(v.includes("rpc('admin_review_access'") && v.includes("direction: 'to_desktop', kind: 'ask'") && v.includes("rpc('apex_log'"));
+console.log('v1.8: 11 checks passed');
