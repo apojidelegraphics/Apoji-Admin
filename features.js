@@ -559,6 +559,8 @@
     el.innerHTML = `<h3>✉ Email the changelog <span class="muted">${R.total} subscriber${R.total === 1 ? '' : 's'}</span></h3>
       <p class="muted" style="margin-top:0">Sends the release notes from <a href="${SITE}/whats-new/" target="_blank" rel="noopener">What's new</a> to everyone who opted in, one email each, with EmailJS. Each person gets a release once.</p>
       ${R.error ? `<div class="err">${esc(R.error)}</div>` : ''}
+      <div class="tabsub" id="mMode" style="margin-bottom:10px"><button data-mode="auto" class="${c.mode === 'auto' ? 'on' : ''}" ${A.viewer ? 'disabled' : ''}>⚡ Automatic</button><button data-mode="manual" class="${c.mode !== 'auto' ? 'on' : ''}" ${A.viewer ? 'disabled' : ''}>✋ Manual</button></div>
+      <p class="muted" style="margin-top:-4px">${c.mode === 'auto' ? 'Automatic: when a Nexus release is published on GitHub, subscribers get the email by themselves (the changelog-send function; see the README). You can still send by hand below.' : 'Manual: nothing goes out until you press Send below.'}</p>
       <div class="row" style="flex-wrap:wrap;gap:8px"><select class="field" id="mVer">${list.slice(0, 12).map(x => `<option value="${esc(x.version)}" ${x.version === v ? 'selected' : ''}>v${esc(x.version)} · ${esc(x.title.slice(0, 50))}</option>`).join('') || `<option>${esc(v || '—')}</option>`}</select>
         <span class="muted"><b>${R.recipients.length}</b> haven't had v${esc(v)} yet</span><span class="sp" style="flex:1"></span>
         <button class="btn sm" id="mPrev" ${list.length ? '' : 'disabled'}>Preview</button><button class="btn sm" id="mTest" ${ready ? '' : 'disabled'}>Send me a test</button>
@@ -574,10 +576,17 @@
         <p class="muted" style="margin:6px 0 0">From emailjs.com → Email Services, Email Templates and Account. Free plan: 200 emails a month. Saved in Supabase for high-admins only.</p></details>`;
     const rel = () => list.find(x => x.version === $('mVer').value) || list[0];
     $('mVer').onchange = () => { MAIL.pick = $('mVer').value; mailCard(latest); };
+    $('mMode').onclick = async e => {
+      const b = e.target.closest('[data-mode]'); if (!b || b.classList.contains('on')) return;
+      if (b.dataset.mode === 'auto' && !ready) return toast('Set up EmailJS below first.', true);
+      if (b.dataset.mode === 'auto' && !confirm('Email subscribers automatically every time a Nexus release is published?')) return;
+      const { error } = await sb.from('admin_settings').upsert({ key: 'emailjs', value: { ...MAIL.cfg, mode: b.dataset.mode }, updated_by: A.user?.id, updated_at: new Date().toISOString() });
+      if (error) return toast(/policy|row-level/i.test(error.message) ? 'Viewers can only look.' : error.message, true); toast(b.dataset.mode === 'auto' ? '⚡ Automatic' : '✋ Manual'); mailCard(latest);
+    };
     $('mPrev').onclick = () => { const p = NX.mailParams(rel(), { email: 'you@example.com', name: 'Luke', token: '00000000-0000-0000-0000-000000000000' });
       $('mPreview').innerHTML = `<div style="margin-top:10px;border-radius:12px;overflow:hidden;border:1px solid rgba(var(--rgb),.2)"><div style="background:#0f0f0f;padding:18px"><div style="max-width:560px;margin:0 auto;background:#1a1a1a;border:1px solid #00ffc0;border-radius:12px;padding:22px;box-shadow:0 0 24px rgba(0,255,192,.25)"><div style="font:700 11px 'Roboto Mono',monospace;letter-spacing:.2em;color:#00ffc0">NEXUS '28 · v${esc(p.version)}</div><h2 style="color:#fff;font:700 19px 'Roboto Mono',monospace;margin:8px 0 14px">${esc(p.title)}</h2><table style="width:100%;border-collapse:collapse">${p.highlights_html}</table></div></div></div>`; };
     $('mSave').onclick = async () => {
-      const value = { service_id: $('mSvc').value.trim(), template_id: $('mTpl').value.trim(), public_key: $('mKey').value.trim(), private_key: $('mPriv').value.trim() };
+      const value = { ...MAIL.cfg, service_id: $('mSvc').value.trim(), template_id: $('mTpl').value.trim(), public_key: $('mKey').value.trim(), private_key: $('mPriv').value.trim() };
       const { error } = await sb.from('admin_settings').upsert({ key: 'emailjs', value, updated_by: A.user?.id, updated_at: new Date().toISOString() });
       if (error) return toast(error.message, 'err'); toast('✓ EmailJS settings saved'); mailCard(latest);
     };
@@ -708,8 +717,22 @@
     const { data: r, error } = await sb.rpc('admin_apex_overview');
     if (error || r?.success === false) return NX.main(`<h1>🔺 Axiom</h1><div class="card err">${esc(NX.needSql(error?.message) ? 'Run supabase/nexus-v2.4.sql (and later) from the Nexus repo in Supabase → SQL Editor to turn on the Apex tier.' : error?.message || r.error)}</div>`);
     const c = r.config || {}, week = r.week || [], total = week.reduce((a, x) => a + +x.minutes, 0);
+    const ro = r.tier === 'viewer', dis = ro ? 'disabled' : '', off = !!c.offline, kitsOff = c.kits_off || [];
+    const until = c.offline_until && !String(c.offline_until).startsWith('infinity') && new Date(c.offline_until).getFullYear() < 9999 ? new Date(c.offline_until) : null;
+    const KITS = [['mac', '🖥 Mac power tools', 'Notes, Mail drafts, iMessage, Finder, AppleScript'], ['dev', '⌨ Dev tools', 'GitHub, git status, running code'], ['web', '🔎 Web & research', 'Deep browsing, comparing sources, Dossier notes'], ['nexus', '◆ Nexus internals', 'Owner account only: feedback, status page, usage']];
+    const prompts = (await sb.rpc('admin_apex_prompts')).data || [];
     NX.main(`<h1>🔺 Nexus '28 Axiom <span class="pill" style="color:#ff6b7a">APEX</span> <span class="pill p-pending">BETA</span></h1>
       <p>"An AI too advanced for its use." Supabase decides who gets it and for how long: the Mac app only becomes Axiom after the database says yes, and its prompt never ships in the app.</p>
+      ${ro ? '<div class="banner">👁 You\'re a Viewer: you can see everything here, but only Editors and the Owner can change it.</div>' : ''}
+      <div class="card ax-power ${off || c.stage === 'off' ? 'is-off' : 'is-on'}"><div class="row" style="flex-wrap:wrap;gap:12px">
+        <div style="flex:1;min-width:220px"><h3 style="margin:0">${off ? '🔴 Axiom is offline' : c.stage === 'off' ? '⛔ Axiom is switched off (stage: Off)' : '🟢 Axiom is online'}</h3>
+          <p class="muted" style="margin:4px 0 0">${off ? (until ? `Back by itself ${when(until.toISOString())}.` : 'Until someone brings it back.') + (c.offline_message ? ` People see: “${esc(c.offline_message)}”` : '') : 'Taking it offline stops every turn right away, for everyone (including unlimited accounts). Apps check before every turn.'}</p></div>
+        ${off ? `<button class="btn primary" id="axOn" ${dis}>Bring Axiom back online</button>` : `<select class="field" id="axOffFor" ${dis}><option value="15">for 15 minutes</option><option value="60">for 1 hour</option><option value="1440">for 1 day</option><option value="0" selected>until I turn it back on</option></select>
+          <input class="field" id="axOffMsg" placeholder="Message people see (optional)" value="${esc(c.offline_message || '')}" maxlength="300" style="min-width:220px" ${dis}><button class="btn danger" id="axOff" ${dis}>⏻ Take Axiom offline</button>`}</div></div>
+      <div class="two"><div class="card"><h3>🧰 Tool kits <span class="muted">for everyone</span></h3><p class="muted" style="margin-top:0">Turn a kit off and no one's Axiom gets those tools, whatever their own settings say.</p>
+          ${KITS.map(([k, l, d]) => `<label class="toggle"><div>${l}<small>${d}</small></div><input type="checkbox" data-kit="${k}" ${kitsOff.includes(k) ? '' : 'checked'} ${dis}></label>`).join('')}</div>
+        <div class="card"><h3>🔒 Read-only mode</h3><p class="muted" style="margin-top:0">Axiom can still look things up, read and answer, but nothing that changes anything (sending, creating, moving, running, Operations) is even offered to it.</p>
+          <label class="toggle"><div>Read-only for everyone<small>${c.read_only ? 'On: Axiom can only look' : 'Off: changes still need each person\'s approval'}</small></div><input type="checkbox" id="axRO" ${c.read_only ? 'checked' : ''} ${dis}></label></div></div>
       <div class="grid">
         <div class="stat"><b>${esc((STAGES.find(x => x[0] === c.stage) || [, c.stage])[1])}</b><span>who can use it</span></div>
         <div class="stat"><b>${c.weekly_minutes}</b><span>minutes a week each</span></div>
@@ -727,15 +750,38 @@
         <textarea class="field" id="axPrompt" rows="10" style="width:100%;font:13px/1.5 var(--mono)" maxlength="40000">${esc(c.prompt || '')}</textarea>
         <div class="row" style="margin-top:8px"><span class="muted">Last changed ${ago(c.updated_at)}</span><span class="sp"></span><button class="btn primary" id="axPromptSave">Save prompt</button></div></div>
       <div class="card"><h3>This week</h3>${week.length ? `<table class="cards"><tr><th>Who</th><th>Level</th><th class="num">Minutes</th><th class="num">Turns</th><th>Last used</th></tr>${week.map(w => `<tr><td>${esc(w.email)}${w.unlimited ? ' <span class="pill p-approved">∞</span>' : ''}</td><td class="muted">${esc(w.level || 'user')}</td><td class="num">${w.minutes}${w.unlimited ? '' : ` / ${c.weekly_minutes}`}</td><td class="num">${w.turns}</td><td class="muted">${ago(w.last)}</td></tr>`).join('')}</table>` : '<div class="empty">Nobody has used Axiom this week.</div>'}</div>
+      <div class="card"><h3>👤 People</h3><p class="muted" style="margin-top:0">Block someone from Axiom, give them their own weekly minutes, or reset what they've used this week.</p>
+        <div class="row" style="flex-wrap:wrap"><input class="field" id="axFind" placeholder="Email or username" style="flex:1;min-width:200px" ${dis}><button class="btn" id="axFindGo" ${dis}>Find</button></div><div id="axFound"></div>
+        ${(r.overrides || []).length ? `<table class="cards" style="margin-top:10px"><tr><th>Who</th><th>Blocked</th><th class="num">Minutes</th><th>Reset</th><th></th></tr>${r.overrides.map(o => `<tr><td>${esc(o.email)}</td><td>${o.blocked ? '<b class="err">Blocked</b>' : '—'}</td><td class="num">${o.weekly_minutes ?? 'default'}</td><td class="muted">${o.reset_at ? when(o.reset_at) : '—'}</td>
+          <td style="white-space:nowrap">${o.blocked ? `<button class="btn sm" data-unblock="${esc(o.user_id)}" ${dis}>Unblock</button>` : ''}${o.weekly_minutes != null ? `<button class="btn sm" data-clearmin="${esc(o.user_id)}" ${dis}>Default minutes</button>` : ''}</td></tr>`).join('')}</table>` : ''}</div>
+      <div class="card"><h3>⏱ Latest turns</h3>${(r.recent || []).length ? `<table class="cards"><tr><th>When</th><th>Who</th><th>What</th><th>Model</th><th class="num">Seconds</th></tr>${r.recent.map(x => `<tr><td class="muted">${ago(x.at)}</td><td>${esc(x.email)}</td><td>${esc(x.kind)}</td><td class="muted">${esc([x.provider, x.model].filter(Boolean).join(' · ') || '—')}</td><td class="num">${x.seconds}</td></tr>`).join('')}</table>` : '<p class="muted" style="margin:0">Nothing yet.</p>'}</div>
       <div class="card"><h3>Last 8 weeks</h3><div id="axWeeks"></div></div>
+      <div class="card"><h3>🕘 Prompt history</h3><p class="muted" style="margin-top:0">Every time the prompt changes, the old one is kept here.</p>${prompts.length ? prompts.map(h => `<div class="row" style="padding:6px 0;border-top:1px solid var(--line)"><span class="muted" style="width:120px">${when(h.saved_at)}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(h.preview)}">${esc(h.preview)}…</span><span class="muted">${(+h.length).toLocaleString()} chars</span><button class="btn sm" data-restore="${h.id}" ${dis}>Restore</button></div>`).join('') : '<p class="muted" style="margin:0">No earlier versions yet.</p>'}</div>
       <div class="card"><h3>Unlimited accounts</h3>${(r.unlimited || []).map(u => `<div class="row"><b>${esc(u.email)}</b><span class="muted">${esc(u.note || '')}</span></div>`).join('') || '<p class="muted" style="margin:0">None yet.</p>'}
         <p class="muted" style="margin-bottom:0">For safety this can't be changed from the app. In Supabase → SQL Editor: <code>insert into public.apex_unlimited (user_id, note) select id, 'owner' from auth.users where email = 'you@example.com';</code></p></div>`);
     if ((r.weeks || []).length) NXCharts.bars($('axWeeks'), r.weeks.map(x => ({ day: x.week, minutes: +x.minutes })), 'minutes', 'minutes'); else $('axWeeks').innerHTML = '<div class="muted">No usage yet.</div>';
     const save = async (args, msg) => { const { data, error: er } = await sb.rpc('admin_apex_set', { p_stage: null, p_weekly_minutes: null, p_providers: null, p_prompt: null, ...args }); if (er || data?.success === false) return toast(er?.message || data.error, true); toast(msg); P.axiom(); };
     $('axPrompt').oninput = e => { $('axCnt').textContent = `${e.target.value.length.toLocaleString()} / 40,000`; };
+    $('main').onchange = async e => {
+      const t = e.target, call = async (p, msg) => { const { data, error: er } = await sb.rpc('admin_apex_control', { p }); if (er || data?.success === false) { toast(er?.message || 'Viewers can only look.', true); return P.axiom(); } toast(msg); P.axiom(); };
+      if (t.dataset.kit) return call({ kits_off: [...document.querySelectorAll('[data-kit]')].filter(i => !i.checked).map(i => i.dataset.kit) }, t.checked ? '✓ Kit on' : 'Kit off for everyone');
+      if (t.id === 'axRO') { if (t.checked && !confirm('Put Axiom in read-only mode for everyone?')) { t.checked = false; return; } return call({ read_only: t.checked }, t.checked ? '🔒 Read-only on' : 'Read-only off'); }
+    };
     $('main').onclick = e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.st) { const st = STAGES.find(x => x[0] === b.dataset.st); if (STAGES.findIndex(x => x[0] === b.dataset.st) > STAGES.findIndex(x => x[0] === c.stage) && !confirm(`Open Axiom to: ${st[1].replace(/^\S+ /, '')}?\n\n${st[2]}.`)) return; return save({ p_stage: b.dataset.st }, `✓ Axiom: ${st[1].replace(/^\S+ /, '')}`); }
+      const ctl = async (p, msg) => { const { data, error: er } = await sb.rpc('admin_apex_control', { p }); if (er || data?.success === false) return toast(er?.message || (data.error === 'viewer' ? 'Viewers can only look.' : data.error), true); toast(msg); P.axiom(); };
+      const usr = async (args, msg) => { const { data, error: er } = await sb.rpc('admin_apex_user', { p_blocked: null, p_minutes: null, p_clear_minutes: false, p_reset: false, p_note: null, ...args }); if (er || data?.success === false) return toast(er?.message || ({ viewer: 'Viewers can only look.', owner: 'Only the Owner can change the Owner.' }[data.error] || data.error), true); toast(msg); P.axiom(); };
+      if (b.id === 'axOff') { const mins = +$('axOffFor').value; if (!confirm(`Take Axiom offline for everyone${mins ? ' for ' + $('axOffFor').selectedOptions[0].text.replace('for ', '') : ' until you bring it back'}? Turns already running will finish.`)) return; return ctl({ offline: mins, message: $('axOffMsg').value.trim() }, '🔴 Axiom is offline'); }
+      if (b.id === 'axOn') return ctl({ online: true }, '🟢 Axiom is back online');
+      if (b.id === 'axFindGo') { const q = $('axFind').value.trim(); if (!q) return; return sb.rpc('admin_apex_find', { p_q: q }).then(({ data }) => { $('axFound').innerHTML = (data || []).map(u => `<div class="row" style="padding:6px 0;flex-wrap:wrap"><b style="flex:1">${esc(u.email)}${u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : ''}</b>
+          <button class="btn sm danger" data-block="${esc(u.user_id)}">Block</button><input class="field" type="number" min="0" max="10080" placeholder="min/week" style="width:100px" data-minin="${esc(u.user_id)}"><button class="btn sm" data-setmin="${esc(u.user_id)}">Set minutes</button><button class="btn sm" data-reset="${esc(u.user_id)}">Reset this week</button></div>`).join('') || '<p class="muted">Nobody found.</p>'; }); }
+      if (b.dataset.block) { if (!confirm('Block this person from Axiom?')) return; return usr({ p_user: b.dataset.block, p_blocked: true }, '⛔ Blocked from Axiom'); }
+      if (b.dataset.unblock) return usr({ p_user: b.dataset.unblock, p_blocked: false }, '✓ Unblocked');
+      if (b.dataset.setmin) { const v = document.querySelector(`[data-minin="${b.dataset.setmin}"]`).value; if (v === '') return toast('Type the minutes first.', true); return usr({ p_user: b.dataset.setmin, p_minutes: +v }, '✓ Minutes set'); }
+      if (b.dataset.clearmin) return usr({ p_user: b.dataset.clearmin, p_clear_minutes: true }, '✓ Back to the default');
+      if (b.dataset.reset) { if (!confirm("Reset this person's Axiom minutes for this week?")) return; return usr({ p_user: b.dataset.reset, p_reset: true }, '✓ Minutes reset'); }
+      if (b.dataset.restore) { if (!confirm('Restore this earlier prompt? The current one is kept in history.')) return; return sb.rpc('admin_apex_restore_prompt', { p_id: +b.dataset.restore }).then(({ data, error: er }) => { if (er || data?.success === false) return toast(er?.message || data.error, true); toast('✓ Prompt restored. Apps pick it up within 2 minutes.'); P.axiom(); }); }
       if (b.id === 'axMinSave') return save({ p_weekly_minutes: Math.max(0, Math.min(10080, +$('axMin').value || 0)) }, '✓ Weekly minutes saved');
       if (b.id === 'axProvSave') { const v = [...document.querySelectorAll('#axProv input:checked')].map(i => i.value); if (!v.length) return toast('Pick at least one.', true); return save({ p_providers: v }, '✓ Providers saved'); }
       if (b.id === 'axPromptSave') { if (!confirm("Replace Axiom's prompt for everyone?")) return; return save({ p_prompt: $('axPrompt').value }, '✓ Prompt saved. Apps pick it up within 2 minutes.'); }

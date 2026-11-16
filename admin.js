@@ -115,7 +115,7 @@
     $('hdr').innerHTML = `<span class="live ${NX.A.live ? '' : 'off'}" id="liveDot" title="${NX.A.live ? 'Updates arrive instantly' : 'Checking for updates every few seconds'}">${NX.A.live ? '● LIVE' : '○ POLLING'}</span>
       <button class="hbtn search" id="hFind" title="Search and jump (⌘K)">⌕<span class="kb">⌘K</span></button>
       <button class="hbtn" id="hBell" title="Notifications">🔔<span class="n" data-badge="inbox" hidden></span></button>
-      <button class="me-chip" id="hMe" title="My settings">${av(me, 'sm', true)}<span>${esc(nameOf(me))}<small>${esc((NX.A.level || '').toUpperCase())} · ${PRES[presence(me)]}</small></span></button>`;
+      <button class="me-chip" id="hMe" title="My settings">${av(me, 'sm', true)}<span>${esc(nameOf(me))}<small>${esc(NX.levelLabel(NX.A.level, NX.A.user.id))} · ${PRES[presence(me)]}</small></span></button>`;
     $('hMe').onclick = () => NX.go('me');
     $('hFind').onclick = () => NX.palette?.();
     $('hBell').onclick = () => NX.go(NX.A.counts.requests ? 'requests' : NX.A.counts.feedback ? 'feedback' : NX.A.counts.reports ? 'reports' : NX.A.counts.chat ? 'chat' : 'dashboard');
@@ -158,6 +158,16 @@
     return { el, close };
   }
   const drawer = html => overlay('drawer', html), modal = html => overlay('modal', html);
+  // 1.7: a text prompt that works in the Mac app too (Electron has no window.prompt). Resolves with the text or null.
+  const ask = (title, { value = '', placeholder = '', ok = 'OK', danger = false, note = '' } = {}) => new Promise(res => {
+    const { el, close } = modal(`<h3>${esc(title)}</h3>${note ? `<p class="muted" style="margin-top:0">${esc(note)}</p>` : ''}<input class="field" id="askIn" style="width:100%" value="${esc(value)}" placeholder="${esc(placeholder)}">
+      <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn" data-no>Cancel</button><button class="btn ${danger ? 'danger' : 'primary'}" data-ok>${esc(ok)}</button></div>`);
+    let done = false; const fin = v => { if (done) return; done = true; close(); res(v); };
+    const i = el.querySelector('#askIn'); setTimeout(() => i.focus(), 30);
+    i.onkeydown = e => { if (e.key === 'Enter') fin(i.value); if (e.key === 'Escape') fin(null); };
+    el.onclick = e => { if (e.target.closest('[data-ok]')) fin(i.value); else if (e.target.closest('[data-no]')) fin(null); };
+    new MutationObserver((_, o) => { if (!el.isConnected) { o.disconnect(); fin(null); } }).observe(document.body, { childList: true });
+  });
   addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlays(); });
   // Links like #feedback/12 (and the browser's back button) switch pages
   addEventListener('hashchange', () => { if (!NX.A.user) return; const [t, a] = location.hash.slice(1).split('/'); const arg = a ? decodeURIComponent(a) : null; if (t !== NX.A.tab || arg !== NX.A.arg) { NX.A.tab = ALL_TABS.includes(t) ? t : 'dashboard'; NX.A.arg = arg; render(); } });
@@ -250,7 +260,14 @@
     try { const r = await rpc('admin_list_admins'); NX.A.admins = r.admins || []; }
     catch { NX.A.admins = [{ id: NX.A.user.id, email: NX.A.user.email, level: NX.A.level }]; }
     NX.A.me = adminById(NX.A.user.id) || { id: NX.A.user.id, email: NX.A.user.email };
+    // 1.7 high-admin tiers: Viewer · Editor · Owner
+    try { const { data } = await sb.rpc('admin_tiers'); NX.A.tiers = data || {}; } catch { NX.A.tiers = {}; }
+    NX.A.tier = NX.A.level === 'high-admin' ? NX.A.tiers[NX.A.user.id] || 'editor' : '';
+    NX.A.owner = NX.A.tier === 'owner'; NX.A.viewer = NX.A.tier === 'viewer';
   }
+  // The tag next to someone's name: 👑 OWNER, HIGH-ADMIN · VIEWER, ADMIN, MOD
+  const levelLabel = (level, id) => { const t = level === 'high-admin' ? (window.NX?.A.tiers || {})[id] : ''; return t === 'owner' ? '👑 OWNER' : !level ? '' : level.toUpperCase() + (t === 'viewer' ? ' · VIEWER' : ''); };
+  const levelPill = (level, id) => { const l = levelLabel(level, id); return !l ? '' : l.startsWith('👑') ? `<span class="pill owner-pill">${l}</span>` : `<span class="pill p-approved">${esc(l)}</span>`; };
   async function start() {
     const { data } = await sb.auth.getSession();
     NX.A.session = data.session; NX.A.user = data.session?.user || null;
@@ -280,7 +297,7 @@
 
   const NX = window.NX = {
     sb, $, esc, when, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, PRES, adminById, applyTheme,
-    main, labelTables, drawer, modal, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
+    main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
     pages: {},
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0 },

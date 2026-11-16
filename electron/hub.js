@@ -23,14 +23,28 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
   });
 
   // ---------- keep this Mac awake (the screen can still turn off). "Only while plugged in" lets it sleep on battery.
-  let blocker = null;
+  // 1.7: powerSaveBlocker('prevent-app-suspension') only stopped App Nap; the Mac still went to sleep. Now it runs macOS's
+  // own `caffeinate` (no idle sleep, no system sleep while on power), tied to this app so it ends if the app quits,
+  // and keeps the Electron blocker as a backup. Closing the lid still sleeps a MacBook unless an external display is connected.
+  let blocker = null, caf = null;
   const onBattery = () => { try { return typeof powerMonitor.isOnBatteryPower === 'function' ? powerMonitor.isOnBatteryPower() : !!powerMonitor.onBatteryPower; } catch { return false; } };
+  function startCaffeinate() {
+    if (caf || process.platform !== 'darwin') return;
+    try {
+      caf = require('child_process').spawn('/usr/bin/caffeinate', ['-i', '-m', '-s', '-w', String(process.pid)], { stdio: 'ignore' });
+      caf.on('exit', () => { caf = null; setTimeout(() => { applyAwake(); hub.changed(); }, 1000); });
+      caf.on('error', () => { caf = null; });
+    } catch { caf = null; }
+  }
+  function stopCaffeinate() { const c = caf; caf = null; try { c?.removeAllListeners('exit'); c?.kill(); } catch {} }
   function applyAwake() {
     const bat = onBattery(), want = hub.cfg.enabled && hub.cfg.keepAwake && !(hub.cfg.pluggedOnly && bat);
-    if (want && blocker == null) blocker = powerSaveBlocker.start('prevent-app-suspension');
-    if (!want && blocker != null) { powerSaveBlocker.stop(blocker); blocker = null; }
-    hub.state.awake = { on: blocker != null, onBattery: bat, reason: !hub.cfg.enabled ? 'Hub is off' : !hub.cfg.keepAwake ? 'Keep awake is off' : hub.cfg.pluggedOnly && bat ? 'On battery, so this Mac can sleep' : 'Staying awake' };
+    if (want) { if (blocker == null) blocker = powerSaveBlocker.start('prevent-app-suspension'); startCaffeinate(); }
+    else { if (blocker != null) { powerSaveBlocker.stop(blocker); blocker = null; } stopCaffeinate(); }
+    const on = want && (caf != null || (blocker != null && powerSaveBlocker.isStarted(blocker)));
+    hub.state.awake = { on, onBattery: bat, reason: !hub.cfg.enabled ? 'Hub is off' : !hub.cfg.keepAwake ? 'Keep awake is off' : hub.cfg.pluggedOnly && bat ? 'On battery, so this Mac can sleep' : on ? 'Staying awake (closing a MacBook lid still sleeps unless a display is connected)' : "Couldn't keep this Mac awake" };
   }
+  app.on('before-quit', stopCaffeinate);
   powerMonitor.on('on-ac', () => { applyAwake(); hub.changed(); });
   powerMonitor.on('on-battery', () => { applyAwake(); hub.changed(); });
   powerMonitor.on('resume', () => hub.refresh());

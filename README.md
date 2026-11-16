@@ -34,7 +34,7 @@ It's the same portal with the files built in, plus a Dock badge for unread items
 - **Health**: Supabase speed, live updates, the Mac hub, N28C requests waiting, failed schedules, free AI key credit, database and storage size.
 - **Releases**: downloads from GitHub, which versions people run and a one-click "please update" broadcast, plus **✉ Email the changelog**: send each release's notes to everyone who opted in, with EmailJS (high-admins; needs `supabase/nexus-v2.7.sql` from the Nexus repo). Setup is in the Nexus repo under `docs/EMAILJS.md`.
 - **Status page**: post incidents and updates to the public Nexus status page, and override any component.
-- **Axiom (Apex)**: high-admins only. Who can use Nexus '28 Axiom (BETA), weekly minutes, providers for the public, its prompt (stored only in Supabase) and who used how much.
+- **Axiom (Apex)**: high-admins only. Take Axiom offline (now, for a while or until you bring it back, with a message), switch tool kits off for everyone, read-only mode, block people or give them their own minutes, reset minutes, latest turns, prompt history with restore, who can use it, weekly minutes, providers and its prompt (stored only in Supabase).
 - **Audit alerts**: a notification when another admin changes roles, bans someone or removes content.
 
 ## Mac hub (Tailscale)
@@ -65,6 +65,26 @@ Messages and files are encrypted in your browser before they're sent (AES-256-GC
 2. **Encryption**: open **Admin chat** as a high-admin and set the team passphrase.
 3. **Website**: Settings → Pages → Deploy from a branch → `main` / `(root)`.
 4. **Hub** (optional): see above.
+5. **1.7**: run `supabase/apoji-admin-1.7.sql`, then deploy the two Supabase functions below.
+
+## High-admin tiers (1.7)
+
+- **👑 Owner** (Apoji_Delegraphics): everything. Only the Owner can change the Owner account or anyone's tier, and the Owner tag can only be given in the Supabase SQL editor.
+- **Editor**: what high-admins could always do, plus changing people's accounts.
+- **Viewer**: sees every high-admin page but can't change roles, accounts, Axiom or email settings.
+
+The database enforces this (a guard on `admin_roles`, `user_moderation` and every new function), not just the buttons.
+
+## Supabase functions (1.7)
+
+Both live in `supabase/functions/`. Deploy with the Supabase CLI, or in the dashboard: **Edge Functions → Deploy a new function → Via editor**, name it exactly as below, paste the file and deploy.
+
+- **`admin-users`** (`supabase/functions/admin-users/index.ts`): change someone's email, nickname, username or picture, send a password reset email, set a new password without knowing the old one, or delete the account. Editors and the Owner only; every change goes in the audit log. Keep **Verify JWT** on.
+- **`changelog-send`** (`supabase/functions/changelog-send/index.ts`): the automatic changelog email. Turn **Verify JWT off** for this one (GitHub calls it with a secret instead).
+  1. Supabase → Edge Functions → **Secrets**: add `CHANGELOG_SECRET` = any long random string.
+  2. GitHub → Nexus-28 → Settings → Secrets and variables → Actions → **New repository secret**: `CHANGELOG_SECRET` with the same value.
+  3. EmailJS → Account → Security: turn on **Allow EmailJS API for non-browser applications** (and keep using the Private Key in Apoji Admin).
+  4. Apoji Admin → Releases → Email the changelog → **⚡ Automatic**. From then on, each Nexus release emails subscribers by itself (Nexus' release workflow calls the function after publishing; it never fails the release).
 
 ## Develop
 

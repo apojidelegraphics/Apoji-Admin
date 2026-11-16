@@ -313,3 +313,8 @@ ol.hubsteps { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 6px; fon
 @media (max-width: 760px) {
   .notes { grid-template-columns: 1fr; } .notes aside { position: static; max-height: 240px; } .nbody { min-height: 46vh; }
 }
+/* 1.7 */
+.owner-pill { color: #ffd36b; border-color: rgba(255,211,107,.6); background: rgba(255,211,107,.1); }
+.ax-power.is-on { border-color: rgba(61,255,160,.35); } .ax-power.is-off { border-color: rgba(255,90,110,.55); background: rgba(255,90,110,.06); }
+.acct-grid { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; align-items: center; } .acct-grid > label { color: var(--muted); font-size: 13px; } .acct-grid .row { flex-wrap: wrap; gap: 6px; } .acct-grid .field { flex: 1; min-width: 160px; }
+@media (max-width: 600px) { .acct-grid { grid-template-columns: 1fr; } }

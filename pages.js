@@ -196,7 +196,7 @@
       }
       if (e.target.dataset.rm) {
         if (!confirm(`Remove this ${r.kind} for everyone? It can't be undone.`)) return;
-        const reason = prompt('Reason (saved in the audit log):', REASON[r.reason] || '') ?? null; if (reason === null) return;
+        const reason = await NX.ask('Reason', { value: REASON[r.reason] || '', note: 'Saved in the audit log.', ok: 'Remove', danger: true }); if (reason === null) return;
         try { await rpc('admin_remove_content', { p_kind: r.kind, p_id: r.target_id, p_reason: reason }); toast('✓ Removed'); } catch (err) { return toast(err.message, true); }
       }
       if (e.target.dataset.dis) { const { error: er } = await sb.from('content_reports').update({ status: 'dismissed', handled_by: A.user.id, handled_at: new Date().toISOString(), action_note: 'Dismissed' }).eq('id', id); if (er) return toast(er.message, true); toast('Dismissed'); }
@@ -242,7 +242,7 @@
     if (focusPost) el.querySelector(`[data-post="${focusPost}"]`)?.scrollIntoView({ block: 'center' });
     el.onclick = async e => {
       const u = e.target.closest('[data-user]'); if (u) return userDrawer(u.dataset.user);
-      if (e.target.id === 'spDel') { if (!confirm(`Delete "${s.name}" for all ${d.members.length} members? This can't be undone.`)) return; const reason = prompt('Reason (saved in the audit log):', ''); if (reason === null) return; try { await rpc('admin_remove_content', { p_kind: 'space', p_id: id, p_reason: reason }); toast('✓ Space deleted'); close(); if (A.tab === 'moderation') P.moderation(); } catch (err) { toast(err.message, true); } }
+      if (e.target.id === 'spDel') { if (!confirm(`Delete "${s.name}" for all ${d.members.length} members? This can't be undone.`)) return; const reason = await NX.ask('Reason', { note: 'Saved in the audit log.', ok: 'Delete space', danger: true }); if (reason === null) return; try { await rpc('admin_remove_content', { p_kind: 'space', p_id: id, p_reason: reason }); toast('✓ Space deleted'); close(); if (A.tab === 'moderation') P.moderation(); } catch (err) { toast(err.message, true); } }
       const rp = e.target.closest('[data-rmpost]'); if (rp) { if (!confirm('Remove this post?')) return; try { await rpc('admin_remove_content', { p_kind: 'post', p_id: rp.dataset.rmpost, p_reason: 'Removed by an admin' }); rp.closest('[data-post]').remove(); toast('✓ Removed'); NX.refreshCounts(); } catch (err) { toast(err.message, true); } }
     };
   }
@@ -255,7 +255,7 @@
       <p class="sub">@${esc(a.handle || '')} · code ${esc(a.code)} · by ${esc(a.owner_email || '—')} · ${a.imports} import${a.imports === 1 ? '' : 's'} · ${when(a.created_at)}</p>
       <div class="card"><h3>Instructions</h3><div class="quote">${esc(a.prompt || '(none)')}</div></div>
       <div class="row"><button class="btn danger" id="agDel">Remove this shared agent</button><span class="muted">People who already imported it keep their copy; the code stops working.</span></div>`;
-    el.querySelector('#agDel').onclick = async () => { if (!confirm('Remove this shared agent?')) return; const reason = prompt('Reason (saved in the audit log):', ''); if (reason === null) return; try { await rpc('admin_remove_content', { p_kind: 'agent', p_id: code, p_reason: reason }); toast('✓ Removed'); close(); if (A.tab === 'moderation') P.moderation(); } catch (e) { toast(e.message, true); } };
+    el.querySelector('#agDel').onclick = async () => { if (!confirm('Remove this shared agent?')) return; const reason = await NX.ask('Reason', { note: 'Saved in the audit log.', ok: 'Remove agent', danger: true }); if (reason === null) return; try { await rpc('admin_remove_content', { p_kind: 'agent', p_id: code, p_reason: reason }); toast('✓ Removed'); close(); if (A.tab === 'moderation') P.moderation(); } catch (e) { toast(e.message, true); } };
   }
 
   // =========================================================== Users
@@ -266,7 +266,7 @@
     let r; try { r = await rpc('admin_list_users', { p_search: u.q, p_filter: u.filter, p_limit: per, p_offset: u.page * per, p_sort: u.sort }); }
     catch (e) { return main(`<h1>Users</h1><div class="card err">${esc(e.message)}</div>`); }
     const users = r.users || [], pages = Math.max(1, Math.ceil(r.total / per));
-    const badge = x => `${x.admin_level ? `<span class="pill p-approved">${esc(x.admin_level.toUpperCase())}</span> ` : ''}${x.beta ? '<span class="pill" style="color:var(--cyan)">BETA</span> ' : ''}${x.comped ? '<span class="pill" style="color:var(--gold)">COMPED</span> ' : ''}${x.status !== 'active' ? `<span class="pill p-declined">${esc(x.status.toUpperCase())}</span>` : ''}`;
+    const badge = x => `${x.admin_level ? NX.levelPill(x.admin_level, x.id) + ' ' : ''}${x.beta ? '<span class="pill" style="color:var(--cyan)">BETA</span> ' : ''}${x.comped ? '<span class="pill" style="color:var(--gold)">COMPED</span> ' : ''}${x.status !== 'active' ? `<span class="pill p-declined">${esc(x.status.toUpperCase())}</span>` : ''}`;
     main(`<h1>Users <span class="muted" style="font-size:14px;font-weight:400">${r.total.toLocaleString()}</span></h1><p>Everyone with a Nexus account. Click someone for their profile, notes and history.</p>
       <div class="tabsub" id="uF">${UF.map(([k, l]) => `<button data-f="${k}" class="${u.filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="row" style="margin-bottom:10px"><input class="field" id="uQ" placeholder="Search email, username or nickname" value="${esc(u.q)}" style="flex:1;min-width:200px">
@@ -315,12 +315,33 @@
       lk = await rpc('admin_lookup_user', { target_email: base.email }).catch(() => null);
     } catch (e) { el.innerHTML = `<button class="btn sm x" data-x>✕</button><div class="card err">${esc(e.message)}</div>`; return; }
     const p = lk?.profile || {}, m = lk?.moderation, high = A.level === 'high-admin', email = base.email;
+    const tTier = lk?.admin_level === 'high-admin' ? (A.tiers || {})[uid] || 'editor' : '';
+    // 1.7: change their account without knowing their password (Supabase function admin-users; Editors and the Owner)
+    const canEdit = high && !A.viewer && (tTier !== 'owner' || A.owner), canCreds = canEdit && (A.owner || lk?.admin_level !== 'high-admin' || uid === A.user.id);
+    const acctCard = () => `<div class="card" id="acctCard"><h3>Account ${tTier === 'owner' ? '<span class="pill owner-pill">👑 OWNER</span>' : ''}</h3>
+      ${!canEdit ? `<p class="muted" style="margin:0">${A.viewer ? 'Viewers can look but not change accounts.' : 'Only the Owner can change the Owner account.'}</p>` : `
+      <div class="acct-grid">
+        <label>Name</label><div class="row"><input class="field" id="acNick" value="${esc(base.nickname || '')}" placeholder="Nickname" maxlength="40"><button class="btn sm" data-ac="nick">Save</button></div>
+        <label>Username</label><div class="row"><input class="field" id="acUser" value="${esc(base.username || '')}" placeholder="username" maxlength="24"><button class="btn sm" data-ac="user">Save</button></div>
+        ${canCreds ? `<label>Email</label><div class="row"><input class="field" id="acEmail" value="${esc(email)}" type="email"><button class="btn sm" data-ac="email">Change</button></div>
+        <label>Password</label><div class="row"><button class="btn sm" data-ac="reset">✉ Send reset email</button><input class="field" id="acPw" type="password" placeholder="or set a new one (8+)" autocomplete="new-password"><button class="btn sm" data-ac="pw">Set</button></div>` : '<label>Email & password</label><span class="muted">Only the Owner can change another high-admin\'s email or password.</span>'}
+        ${base.avatar_url ? '<label>Picture</label><div class="row"><button class="btn sm" data-ac="nopic">Remove picture</button></div>' : ''}
+      </div>
+      ${canCreds && uid !== A.user.id ? '<div class="row" style="margin-top:10px"><span class="sp"></span><button class="btn sm danger" data-ac="del">Delete account…</button></div>' : ''}
+      <p class="muted" style="margin:8px 0 0">They're not told about name or email changes; a reset email goes to their current address. Everything here is in the audit log.</p>`}</div>`;
+    const acct = async (body, b) => {
+      if (b) b.disabled = true;
+      const { data, error } = await sb.functions.invoke('admin-users', { body: { user_id: uid, ...body } });
+      if (b) b.disabled = false;
+      const msg = error ? (/Failed to send|not found|404/i.test(error.message) ? 'Deploy the admin-users Supabase function first (see the README).' : (await error.context?.json?.().catch(() => null))?.error || error.message) : data?.ok ? data.message : data?.error;
+      toast(msg || 'Done', !(data?.ok)); return !!data?.ok;
+    };
     const days = []; const act = new Map((d.activity || []).map(a => [a.day + a.source, a]));
     for (let i = 59; i >= 0; i--) { const day = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10); days.push({ day, desk: act.has(day + 'desktop'), phone: act.has(day + 'phone') }); }
     const lastVer = (d.activity || []).find(a => a.source === 'desktop')?.version, lastPhone = (d.activity || []).find(a => a.source === 'phone')?.version;
     el.innerHTML = `<button class="btn sm x" data-x>✕</button>
       <div class="row" style="gap:14px;margin-bottom:6px;flex-wrap:nowrap">${av({ id: uid, nickname: base.nickname || base.username, avatar_url: base.avatar_url }, 'lg')}<div style="min-width:0"><h1 style="margin:0">${esc(base.nickname || base.username || '(no username)')}</h1>
-        <div class="muted">${esc(email)}${base.username ? ' · @' + esc(base.username) : ''}</div><div style="margin-top:4px">${lk?.admin_level ? `<span class="pill p-approved">${esc(lk.admin_level.toUpperCase())}</span> ` : ''}${p.is_beta_tester ? '<span class="pill" style="color:var(--cyan)">BETA</span> ' : ''}${p.is_comped ? '<span class="pill" style="color:var(--gold)">COMPED</span> ' : ''}${d.reports_against ? `<span class="pill" style="color:var(--danger)">${d.reports_against} OPEN REPORT${d.reports_against === 1 ? '' : 'S'}</span>` : ''}</div></div></div>
+        <div class="muted">${esc(email)}${base.username ? ' · @' + esc(base.username) : ''}</div><div style="margin-top:4px">${lk?.admin_level ? NX.levelPill(lk.admin_level, uid) + ' ' : ''}${p.is_beta_tester ? '<span class="pill" style="color:var(--cyan)">BETA</span> ' : ''}${p.is_comped ? '<span class="pill" style="color:var(--gold)">COMPED</span> ' : ''}${d.reports_against ? `<span class="pill" style="color:var(--danger)">${d.reports_against} OPEN REPORT${d.reports_against === 1 ? '' : 'S'}</span>` : ''}</div></div></div>
       <div class="card"><div class="kv"><span>Joined</span><span>${when(base.created_at)}</span><span>Last active</span><span>${ago(base.last_active_at || base.last_sign_in_at)}${lastVer ? ` · Mac v${esc(lastVer)}` : ''}${lastPhone ? ' · uses N28C' : ''}</span>
         <span>Status</span><span>${m && m.status !== 'active' ? `<b class="err">${esc(m.status)}</b>${m.reason ? ' · ' + esc(m.reason) : ''}${m.suspended_until ? ' · until ' + when(m.suspended_until) : ''}` : 'Active'}</span>
         <span>Chats used</span><span>${(lk?.chat_usage || []).map(c => `${esc(c.assistant_name)}: ${c.count} <button class="btn sm" data-reset="${esc(c.assistant_name)}">reset</button>`).join(' · ') || '—'}</span>
@@ -334,8 +355,11 @@
         <select class="field" id="mh"><option value="">For…</option><option value="1">1 hour</option><option value="24">1 day</option><option value="72">3 days</option><option value="168">1 week</option><option value="720">30 days</option></select>
         <input class="field" id="mr" placeholder="Reason (they see this)" style="flex:1;min-width:160px"><button class="btn" id="mgo">Apply</button></div>
         <p class="muted" style="margin:8px 0 0">Suspended or banned accounts can't use the free Nexus key, Shared Spaces or N28C until it's lifted. Their own API keys still work.</p></div>
+      ${high ? acctCard() : ''}
       ${high ? `<div class="card"><h3>Admin role</h3><div class="row"><select class="field" id="rl"><option value="mod">Mod</option><option value="admin">Admin</option><option value="high-admin">High-admin</option></select>
-        <button class="btn" id="rgo">Grant</button>${lk?.admin_level ? '<button class="btn danger" id="rrv">Revoke role</button>' : ''}</div></div>` : ''}
+        <button class="btn" id="rgo" ${A.viewer || (tTier === 'owner' && !A.owner) ? 'disabled' : ''}>Grant</button>${lk?.admin_level ? `<button class="btn danger" id="rrv" ${A.viewer || (tTier === 'owner' && !A.owner) ? 'disabled' : ''}>Revoke role</button>` : ''}</div>
+        ${lk?.admin_level === 'high-admin' ? `<div class="row" style="margin-top:10px"><span class="muted">Tier</span>${tTier === 'owner' ? '<span class="pill owner-pill">👑 OWNER</span><span class="muted">set in the SQL editor only</span>'
+          : `<select class="field" id="tierSel" ${A.owner ? '' : 'disabled'}><option value="editor" ${tTier === 'editor' ? 'selected' : ''}>Editor: can change things</option><option value="viewer" ${tTier === 'viewer' ? 'selected' : ''}>Viewer: can only look</option></select>${A.owner ? '<button class="btn" id="tierGo">Save tier</button>' : '<span class="muted">Only the Owner changes tiers</span>'}`}</div>` : ''}</div>` : ''}
       <div class="row" style="margin-bottom:10px"><button class="btn" data-mktask>✅ Make a task about ${esc(base.nickname || base.username || 'them')}</button></div>
       <div class="card"><h3>Private notes <span class="muted">(admins only)</span></h3><div class="thread-r" id="notes">${(d.notes || []).map(n => `<div class="r internal"><small>${esc(n.author_email || 'admin')} · ${when(n.created_at)}${n.mine || high ? ` · <a href="#" data-delnote="${n.id}">delete</a>` : ''}</small>${esc(n.body)}</div>`).join('') || '<div class="muted">No notes yet.</div>'}</div>
         <div class="row"><input class="field" id="nt" placeholder="Add a note, e.g. sent great bug reports" style="flex:1"><button class="btn primary" id="nadd">Add</button></div></div>
@@ -350,6 +374,17 @@
         if (b.dataset.fb) { e.preventDefault(); close(); return NX.go('feedback', { arg: b.dataset.fb }); }
         if (b.dataset.delnote) { e.preventDefault(); if (!confirm('Delete this note?')) return; const { error } = await sb.from('admin_user_notes').delete().eq('id', b.dataset.delnote); if (error) throw error; return userDrawer(uid); }
         if (b.id === 'nadd') { const body = $('nt').value.trim(); if (!body) return; const { error } = await sb.from('admin_user_notes').insert({ user_id: uid, body }); if (error) throw error; toast('✓ Note added'); return userDrawer(uid); }
+        if (b.dataset.ac) {
+          const a = b.dataset.ac;
+          if (a === 'nick') return (await acct({ action: 'profile', nickname: $('acNick').value }, b)) && userDrawer(uid);
+          if (a === 'user') return (await acct({ action: 'profile', username: $('acUser').value.trim() }, b)) && userDrawer(uid);
+          if (a === 'nopic') return (await acct({ action: 'profile', remove_avatar: true }, b)) && userDrawer(uid);
+          if (a === 'email') { const v = $('acEmail').value.trim(); if (v === email || !confirm(`Change ${email}'s sign-in email to ${v}?`)) return; return (await acct({ action: 'email', email: v }, b)) && userDrawer(uid); }
+          if (a === 'reset') { if (!confirm(`Email a password reset link to ${email}?`)) return; return acct({ action: 'reset', redirect: 'https://apojidelegraphics.github.io/Nexus-28/companion/' }, b); }
+          if (a === 'pw') { const v = $('acPw').value; if (v.length < 8) return toast('Use at least 8 characters.', true); if (!confirm(`Set a new password for ${email}?`)) return; if (await acct({ action: 'password', password: v }, b)) $('acPw').value = ''; return; }
+          if (a === 'del') { const t = await NX.ask(`Delete ${email}?`, { note: 'Their account, Shared Space posts and everything synced to it go for good. Type DELETE to confirm.', placeholder: 'DELETE', ok: 'Delete forever', danger: true }); if (t !== 'DELETE') return t !== null && toast('Not deleted. Type DELETE exactly.', true); if (await acct({ action: 'delete', confirm: 'DELETE' }, b)) { close(); if (A.tab === 'users') P.users(); } return; }
+        }
+        if (b.id === 'tierGo') { await rpc('admin_set_tier', { p_user: uid, p_tier: $('tierSel').value }); await NX.loadAdmins(); toast('✓ Tier saved'); return userDrawer(uid); }
         if (b.dataset.beta) await rpc('admin_set_beta_tester', { target_email: email, enabled: b.dataset.beta === '1' });
         else if (b.dataset.comp) await rpc('admin_set_comp', { target_email: email, enabled: b.dataset.comp === '1' });
         else if (b.dataset.reset) { if (!confirm(`Reset their ${b.dataset.reset} chat count?`)) return; await rpc('admin_reset_chat_usage', { target_email: email, target_assistant: b.dataset.reset }); }
