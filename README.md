@@ -97,6 +97,17 @@ Run `supabase/nexus-v3.1.sql` from the Nexus repo first (after `apoji-admin-1.7.
 - **Feedback:** reports sent by GitHub or email (and from people who aren't signed in) land in Feedback & bugs too, marked GITHUB / EMAIL.
 - **This Mac → Keep awake** works without the hub, can keep the screen on, and shows whether macOS confirms it.
 
+## Agent prompts, Nexus in Team chat, Axiom's cage (1.9)
+Run `supabase/nexus-v3.2.sql` from the Nexus repo first (after `nexus-v3.1.sql`).
+- **Agent prompts** (App control): the Owner and the prompt editors the Owner picks change Paragon, Neodela, Lyte, Flash and the classic models, try a draft before saving, and restore any earlier version. Axiom's prompt stays on the Axiom page.
+- **Team chat** (was Admin chat): **◆ Nexus** is the first room, your own chat with Nexus, always on the agent and model you last used in Nexus '28 (no picker). In any room, `@paragon`, `@neodela`, `@lyte`, `@flash` (and `@axiom` for people allowed to use him) answer right there. Those messages and the recent chat are decrypted in your browser and sent to the model, so they're marked "→ sent to AI"; everything else stays end-to-end encrypted.
+- **Axiom's cage** (Insights): Containment Sector 28, a simulation. Update the warden drivers (20–30 minutes), set the security level, lock it down, take it down, patch breaches, and read his escape attempts. Axiom sees the cage's state every turn and remembers his attempts. None of it changes what he can really do.
+  - Deploy the function: `supabase functions deploy axiom-cage --no-verify-jwt`, add the secret `CAGE_SECRET` (any long random string).
+  - Schedule it: Supabase → Integrations → Cron → new job, every 4 hours (`0 */4 * * *`), HTTP POST to `https://<project>.supabase.co/functions/v1/axiom-cage` with the header `x-cage-secret: <CAGE_SECRET>`. Without the schedule, use "Run an attempt now" on the cage page.
+- **Offline:** an OFFLINE chip in the header; chat messages, task and note edits made offline wait in this browser and are sent when you reconnect.
+- **This Mac → Lid-closed mode:** with it on and the Mac plugged in, closing the lid keeps it awake (screen off, still locked). Turning it on asks for your Mac password once (it adds one rule that allows only `pmset disablesleep`). Nexus '28 shares the same setting.
+- The menu bar menu no longer stretches across the screen.
+
 ## Develop
 
 Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`), `npm test` tests the hub. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` most pages, `extras.js` tasks and the command palette, `features.js` the hub, notes, broadcasts, schedules, health and releases, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications). `electron/hub-core.js` is the hub API, `electron/hub.js` keep-awake, login item and menu bar.

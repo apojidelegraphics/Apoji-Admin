@@ -142,13 +142,15 @@
     const state = !on ? pill('p-closed', 'OFF') : st.serving ? pill('p-approved', 'ONLINE') : pill('p-pending', 'NOT ON TAILNET');
     NX.main(`<h1>🖥 This Mac ${state}</h1><p>Make this Mac your team's hub. Over <b>Tailscale</b> (only your tailnet can reach it) it sends notifications to admins' phones, runs schedules on time and stays awake. The website and Supabase keep working everywhere either way.</p>
       <div class="card">${tog('hOn', '🛰 Use this Mac as the hub', 'Runs in the menu bar when you close the window. ⌘Q quits.', on)}</div>
-      <div class="card"><h3>☕ Keep this Mac awake <span class="sp"></span>${st.keepAwake ? `<span class="pill ${st.awake?.on && st.awake?.verified !== false ? 'p-approved' : 'p-pending'}">${st.awake?.on ? (st.awake?.verified ? 'MACOS CONFIRMS' : st.awake?.verified === false ? 'NOT WORKING' : 'ON') : 'NOT RIGHT NOW'}</span>` : ''}</h3>
+      <div class="card"><h3>☕ Keep this Mac awake <span class="sp"></span>${st.keepAwake ? `<span class="pill ${st.awake?.on ? 'p-approved' : 'p-pending'}">${st.awake?.on ? 'ON' : 'NOT RIGHT NOW'}</span>` : ''}</h3>
         <p class="muted" style="margin-top:-4px">Works with or without the hub. ${st.keepAwake ? esc(st.awake?.reason || '') : 'Off: this Mac sleeps like normal.'}</p>
         ${tog('hAwake', 'Keep this Mac awake', 'Stops idle sleep and system sleep while Apoji Admin is running (it stays in the menu bar when you close the window).', st.keepAwake)}
         ${tog('hDisp', 'Keep the screen on too', 'Otherwise the screen can still turn off and lock while the Mac stays awake.', st.keepDisplay, !st.keepAwake)}
         ${tog('hPlug', 'Only while plugged in', 'On battery it sleeps normally.', st.pluggedOnly, !st.keepAwake)}
         ${tog('hLogin', 'Open at login', 'Starts quietly in the menu bar when you log in.', st.openAtLogin)}
-        <p class="muted" style="margin:6px 0 0">A MacBook still sleeps when you close the lid, unless it's plugged in with an external display.</p></div>
+        <h3 style="margin-top:14px">💻 Lid-closed mode <span class="sp"></span><span class="pill ${st.awake?.lid?.on ? 'p-approved' : 'p-closed'}">${st.awake?.lid?.on ? (st.awake.lid.closed ? 'LID CLOSED' : 'ON') : st.lidMode ? 'PAUSED' : 'OFF'}</span></h3>
+        <p class="muted" style="margin-top:-4px">Close the lid and this Mac stays awake: the screen goes dark and it stays locked, while the hub, schedules and phone notifications keep running. Only while plugged in, never below 20% battery. Turning it on asks for your Mac password once to allow exactly this (Nexus '28 shares the same permission).</p>
+        <div class="row">${st.lidMode ? '<button class="btn" id="hLidOff">Turn off</button>' : '<button class="btn primary" id="hLidOn">Turn on</button>'}${st.awake?.lid?.ready ? '<button class="btn ghost sm" id="hLidRevoke">Remove permission</button>' : ''}<span class="muted">${esc(st.awake?.lidText || '')}</span></div></div>
       ${on ? `<div class="grid">
         <div class="stat ${st.serving ? '' : 'hot'}"><b>${st.serving ? '🛰' : '○'}</b><span>${st.serving ? 'On your tailnet' : 'Not reachable yet'}</span></div>
         <div class="stat ${st.awake?.on ? '' : 'hot'}"><b>${st.awake?.on ? '☕' : '💤'}</b><span>${esc(st.awake?.reason || '')}</span></div>
@@ -179,6 +181,10 @@
     $('main').onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.id === 'hChk') { b.disabled = true; paintDeskHub(await D.hub.status(true)); beat(); }
+      if (b.id === 'hLidOn' || b.id === 'hLidOff' || b.id === 'hLidRevoke') {
+        b.disabled = true; const r = b.id === 'hLidRevoke' ? await D.hub.lidRevoke() : await D.hub.lid(b.id === 'hLidOn');
+        if (!r.ok) { b.disabled = false; return toast(r.error, true); } paintDeskHub(r.status); return;
+      }
       if (b.id === 'hCopy') { navigator.clipboard.writeText(st.url).then(() => toast('✓ Copied')); }
       if (b.id === 'hTest') { const r = await D.hub.push({ kind: 'hub', to: A.user.id, title: '🔔 Apoji Admin', body: 'Phone notifications from your Mac work.', tag: 'test' }); toast(r.targets ? `Sent to ${r.sent} of ${r.targets} device${r.targets === 1 ? '' : 's'}` : 'None of your phones are set up yet.', !r.sent); }
       if (b.id === 'hRun') runJobs(true);

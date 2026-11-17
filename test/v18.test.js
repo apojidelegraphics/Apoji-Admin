@@ -9,9 +9,9 @@ assert.ok(f.includes("['select', '✋ Select people'") && !f.includes("'90-ish m
 assert.ok(f.includes("sb.rpc('admin_apex_people'") && f.includes('const manage = r.manage'), 'managers + select people');
 assert.ok(f.indexOf('ax-power') < f.indexOf('id="axStage"') && f.indexOf('id="axStage"') < f.indexOf('Tool kits <span'), 'online first, who-can-use second, kits after');
 assert.ok(f.includes('data-dismiss') && f.includes("sb.rpc('admin_relay_stuck')"), 'health alerts dismiss + details');
-const hub = read('electron/hub.js');
-assert.ok(/want = hub\.cfg\.keepAwake && !\(hub\.cfg\.pluggedOnly && bat\)/.test(hub) && !/want = hub\.cfg\.enabled/.test(hub), 'keep awake no longer needs the hub');
-assert.ok(hub.includes("'-d', '-u'") && hub.includes("'-g', 'assertions'"));
+const hub = read('electron/hub.js'), aw = read('electron/awake.js');
+assert.ok(hub.includes("require('./awake').createAwake") && /wantAwake = !!c\.keepAwake && !\(c\.pluggedOnly !== false && b\.onBattery\)/.test(aw), 'keep awake no longer needs the hub');
+assert.ok(aw.includes("'-d', '-u'") && aw.includes('disablesleep'));
 const css = read('admin.css');
 assert.ok(css.includes('#hdr { flex-wrap: nowrap') && css.includes('.me-chip > span:not(.av)') && css.includes('html.standalone nav'));
 assert.ok(read('pages.js').includes("rpc('admin_remove_redemption'") && read('pages.js').includes('class="me-foot"'));

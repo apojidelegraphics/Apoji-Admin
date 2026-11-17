@@ -29,19 +29,22 @@
   const isDm = r => r.startsWith('dm:'), isGroup = r => r.startsWith('g:');
   const dmOther = r => adminById(r.slice(3).split(':').find(x => x !== me()));
   const groupOf = r => C.groups.find(g => 'g:' + g.id === r);
-  function roomName(r) { if (r === 'all') return 'All admins'; if (isDm(r)) return nameOf(dmOther(r)); const g = groupOf(r); return g ? g.name : 'Group'; }
+  // 1.9: "◆ Nexus" is your own chat with Nexus (v18.js), shown as the first room. Models can be @mentioned in any room.
+  const AGENTS = () => NX.nexusChat?.mentionable() || [];
+  function roomName(r) { if (r === 'nexus') return 'Nexus'; if (r === 'all') return 'All admins'; if (isDm(r)) return nameOf(dmOther(r)); const g = groupOf(r); return g ? g.name : 'Group'; }
   function roomPeople(r) {
     if (r === 'all') return A.admins;
     if (isDm(r)) return [A.me, dmOther(r)].filter(Boolean);
     return (C.members[r.slice(2)] || []).map(m => adminById(m.user_id) || { id: m.user_id, email: '' });
   }
   function roomIcon(r, size = '') {
+    if (r === 'nexus') return NX.nexusChat?.icon() || '<span class="gav" style="--c:var(--accent)">◆</span>';
     if (r === 'all') return `<span class="gav" style="--c:var(--accent)">#</span>`;
     if (isDm(r)) return av(dmOther(r) || { id: r }, size, true);
     const g = groupOf(r) || {}; return `<span class="gav" style="--c:${esc(g.color || '#3dffa0')}">${esc(g.emoji || (g.name || 'G')[0].toUpperCase())}</span>`;
   }
   const muted = r => (A.prefs.muted_rooms || []).includes(r);
-  const allRooms = () => ['all', ...C.groups.map(g => 'g:' + g.id), ...A.admins.filter(a => a.id !== me()).map(a => dmRoom(a.id))];
+  const allRooms = () => ['nexus', 'all', ...C.groups.map(g => 'g:' + g.id), ...A.admins.filter(a => a.id !== me()).map(a => dmRoom(a.id))];
   const mentionsMe = m => { const n = nameOf(A.me).toLowerCase(); const b = String(txt(m)).toLowerCase(); return m.sender !== me() && (b.includes('@' + n) || /@(everyone|here)\b/.test(b)); };
 
   async function loadGroups() {
@@ -53,7 +56,7 @@
     return C.inited || (C.inited = (async () => {
       await loadGroups().catch(() => {});
       const [{ data: recent }, { data: reads }] = await Promise.all([
-        sb.from('admin_messages').select('id,room,sender,sender_name,body,deleted,created_at,attachments').order('id', { ascending: false }).limit(500),
+        sb.from('admin_messages').select('*').order('id', { ascending: false }).limit(500),
         sb.from('admin_reads').select('*')]);
       for (const r of reads || []) { (C.reads[r.room] = C.reads[r.room] || {})[r.user_id] = r.last_read_id; if (r.user_id === me()) C.myRead[r.room] = r.last_read_id; }
       // first time on v2.2: carry over what you'd read on this device in v2.1
@@ -137,7 +140,7 @@
     if (!E.ready() && !(await E.load())) return lockScreen();
     await init();
     if (C.recent && !C.revealed) { C.revealed = true; await reveal(C.recent); await Promise.all(Object.values(C.msgs).map(reveal)); recountAll(); }
-    NX.main(`<h1>Admin chat</h1><p>Your team's own chat, end-to-end encrypted. Nobody can read it in Supabase.</p>
+    NX.main(`<h1>Team chat</h1><p>Your team's own chat, end-to-end encrypted, with Nexus in it: open ◆ Nexus for your own chat, or @mention a model (like @paragon) in any room.</p>
       <div class="chat ${C.open ? 'open' : ''}" id="chat">
         <div class="rooms" id="rooms"></div>
         <div class="thread" id="thread">
@@ -165,12 +168,13 @@
       const badge = meta.unread ? `<span class="unread ${meta.mention ? 'mention' : ''}">${meta.mention ? '@' : meta.unread > 99 ? '99+' : meta.unread}</span>` : muted(r) ? '<span class="mut" title="Muted">🔕</span>' : '';
       return `<button class="rm ${C.room === r ? 'on' : ''}" data-room="${esc(r)}">${roomIcon(r)}<span class="nm">${esc(label)}<small>${esc(sub)}</small></span>${badge}</button>`;
     };
-    const preview = r => { const l = C.meta[r]?.last; if (!l) return ''; const who = l.sender === me() ? 'You' : (l.sender_name || 'Admin').split(' ')[0]; return `${who}: ${l.deleted ? 'deleted a message' : txt(l) || '📎 attachment'}`; };
+    const preview = r => { const l = C.meta[r]?.last; if (!l) return ''; const who = l.bot ? (NX.nexusChat?.agentInfo(l.bot)?.short || 'AI') : l.sender === me() ? 'You' : (l.sender_name || 'Admin').split(' ')[0]; return `${who}: ${l.deleted ? 'deleted a message' : txt(l) || '📎 attachment'}`; };
     const others = A.admins.filter(a => a.id !== me()).sort((a, b) => {
       const order = { online: 0, idle: 1, dnd: 2, offline: 3 }; const la = C.meta[dmRoom(a.id)]?.last?.id || 0, lb = C.meta[dmRoom(b.id)]?.last?.id || 0;
       return (lb - la) || (order[presence(a)] - order[presence(b)]) || nameOf(a).localeCompare(nameOf(b));
     });
     el.innerHTML = `<div class="rtools"><input class="field" id="rq" placeholder="Find a chat" value="${esc(q)}"></div>
+      ${item('nexus', 'Nexus', NX.nexusChat?.subtitle() || 'Your own chat with Nexus')}
       ${item('all', 'All admins', preview('all') || `${A.admins.length} admins`)}
       <h4>GROUPS <button id="newGroup" title="New group">＋</button></h4>
       ${C.groups.map(g => item('g:' + g.id, g.name, preview('g:' + g.id) || `${(C.members[g.id] || []).length} members`)).join('') || (q ? '' : '<p class="muted" style="margin:2px 10px 6px">No groups yet.</p>')}
@@ -192,6 +196,12 @@
 
   async function openRoom(r, user) {
     if (!allRooms().includes(r)) r = 'all';
+    // the Nexus room draws its own thread; coming back from it rebuilds the normal one
+    if (r === 'nexus' || (C.room === 'nexus' && r !== 'nexus' && !$('msgs'))) {
+      const was = C.room; C.room = r; NX.store.set('room', r); if (user) C.open = true;
+      if (r === 'nexus') { $('chat')?.classList.toggle('open', C.open); paintRooms(); NX.nexusChat?.mount($('thread'), () => { C.open = false; $('chat')?.classList.remove('open'); }); return; }
+      if (was === 'nexus') return NX.pages.chat();
+    }
     if (C.room !== r) { C.replyTo = null; C.find = ''; }
     C.room = r; NX.store.set('room', r);
     if (user) C.open = true;
@@ -217,16 +227,17 @@
   const fmtSize = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
   function msgHtml(m, prev) {
     const d = new Date(m.created_at);
-    const cont = prev && prev.sender === m.sender && !prev.deleted && d - new Date(prev.created_at) < 5 * 60e3 && new Date(prev.created_at).toDateString() === d.toDateString() && !m.reply_to;
-    const who = adminById(m.sender) || { id: m.sender, nickname: m.sender_name };
-    const mine = m.sender === me();
+    const cont = prev && prev.sender === m.sender && (prev.bot || null) === (m.bot || null) && !prev.deleted && d - new Date(prev.created_at) < 5 * 60e3 && new Date(prev.created_at).toDateString() === d.toDateString() && !m.reply_to;
+    const bot = m.bot ? NX.nexusChat?.agentInfo(m.bot) : null;
+    const who = bot ? { id: 'bot-' + m.bot, nickname: bot.short } : adminById(m.sender) || { id: m.sender, nickname: m.sender_name };
+    const mine = m.sender === me() && !bot;
     const reply = m.reply_to ? (C.msgs[m.room] || []).find(x => x.id === m.reply_to) : null;
     const atts = (m.attachments || []).map((a0, i) => { const a = metaOf(a0); return /^image\//.test(a.mime || '')
       ? `<span class="ph" data-img="${esc(a0.path)}" data-i="${i}" style="${a.w && a.h ? `width:${Math.min(320, a.w * Math.min(1, 240 / a.h))}px;aspect-ratio:${a.w}/${a.h};height:auto` : ''}"><span class="spinner"></span></span>`
       : `<a class="file" data-file="${esc(a0.path)}" data-name="${esc(a.name)}" href="#"><i>${a0.e ? '🔐' : '📄'}</i><span>${esc(a.name)}<small>${fmtSize(a.size || a0.size || 0)} · download</small></span></a>`; }).join('');
     const rx = Object.entries(m.reactions || {}).filter(([, ids]) => ids.length).map(([e, ids]) => `<button data-rx="${esc(e)}" class="${ids.includes(me()) ? 'mine' : ''}" title="${esc(ids.map(id => nameOf(adminById(id))).join(', '))}">${esc(e)} ${ids.length}</button>`).join('');
-    return `<div class="m ${cont ? 'cont' : ''} ${m.deleted ? 'del' : ''} ${mentionsMe(m) ? 'mentioned' : ''}" data-id="${m.id}">${av(who)}
-      <div class="mb"><div class="by"><b style="color:${colorOf(m.sender)}">${esc(mine ? nameOf(A.me) : m.sender_name || nameOf(who))}</b><time title="${esc(d.toLocaleString())}">${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time></div>
+    return `<div class="m ${cont ? 'cont' : ''} ${m.deleted ? 'del' : ''} ${mentionsMe(m) ? 'mentioned' : ''} ${bot ? 'bot' : ''}" data-id="${m.id}">${bot ? `<span class="av" style="--c:${esc(bot.color)}">${esc(bot.short[0])}</span>` : av(who)}
+      <div class="mb"><div class="by"><b style="color:${bot ? esc(bot.color) : colorOf(m.sender)}">${esc(bot ? bot.name : mine ? nameOf(A.me) : m.sender_name || nameOf(who))}</b>${bot ? `<span class="ai-tag" title="Written by a model, asked by ${esc(nameOf(adminById(m.sender)))}">AI · asked by ${esc(m.sender === me() ? 'you' : nameOf(adminById(m.sender)).split(' ')[0])}</span>` : m.ai_sent ? '<span class="ai-sent" title="This message and the recent chat were sent to a model (not end-to-end encrypted on the way there)">→ sent to AI</span>' : ''}<time title="${esc(d.toLocaleString())}">${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time></div>
         ${reply ? `<div class="rq" data-jump="${reply.id}">↪ ${esc(reply.sender_name || 'Admin')}: ${esc(reply.deleted ? 'deleted message' : txt(reply) || '📎 attachment')}</div>` : m.reply_to ? '<div class="rq">↪ an earlier message</div>' : ''}
         ${m.pinned_at && !m.deleted ? `<div class="pinmark">📌 Pinned by ${esc(m.pinned_by === me() ? 'you' : nameOf(adminById(m.pinned_by)))}</div>` : ''}<div class="tx">${m.deleted ? 'This message was deleted.' : linkify(txt(m))}${m.edited_at && !m.deleted ? '<span class="ed">(edited)</span>' : ''}</div>
         ${!m.deleted && atts ? `<div class="atts">${atts}</div>` : ''}${rx ? `<div class="rx">${rx}</div>` : ''}</div>
@@ -340,8 +351,12 @@
         attachments.push({ path, size: sealed.length, e: await E.enc(JSON.stringify(meta)) });
         attMeta.set(path, meta); if (f.preview) C.urls[path] = f.preview;
       }
-      const { data, error } = await sb.from('admin_messages').insert({ room, body: body ? await E.enc(body) : '', sender_name: nameOf(A.me).slice(0, 60), attachments, reply_to: reply?.id || null }).select().single();
+      let agent = NX.nexusChat?.mentioned(body);       // 1.9: "@paragon …" → this message (and the recent chat) goes to that model
+      const row = { room, body: body ? await E.enc(body) : '', sender_name: nameOf(A.me).slice(0, 60), attachments, reply_to: reply?.id || null };
+      let { data, error } = await sb.from('admin_messages').insert({ ...row, ...(agent ? { ai_sent: true } : {}) }).select().single();
+      if (error && agent && /ai_sent|schema cache|column/i.test(error.message)) { ({ data, error } = await sb.from('admin_messages').insert(row).select().single()); if (!error) { toast('Models answer in chat once supabase/nexus-v3.2.sql is run.', true); agent = null; } }
       if (error) throw new Error(error.message);
+      if (agent) setTimeout(() => NX.nexusChat.groupReply({ room, agent, trigger: data }), 50);
       document.querySelector('.mentions')?.remove();
       t.value = ''; autosize(); C.pending = []; C.replyTo = null; paintPending(); paintReply();
       onMsg({ eventType: 'INSERT', new: data });
@@ -356,7 +371,7 @@
     const t = $('ct'); const before = t.value.slice(0, t.selectionStart); const m = before.match(/(^|\s)@([\w.\-]{0,30})$/);
     if (!m) return null;
     const q = m[2].toLowerCase();
-    const people = [{ id: '@everyone', nickname: 'everyone', special: true }, ...roomPeople(C.room).filter(a => a && a.id !== me())].filter(a => nameOf(a).toLowerCase().startsWith(q)).slice(0, 6);
+    const people = [{ id: '@everyone', nickname: 'everyone', special: true }, ...AGENTS().map(g => ({ id: '@' + g.id, nickname: g.id, agent: g })), ...roomPeople(C.room).filter(a => a && a.id !== me())].filter(a => nameOf(a).toLowerCase().startsWith(q)).slice(0, 7);
     return people.length ? { q, people, start: before.length - m[2].length - 1 } : null;
   }
   function paintMentions() {
@@ -364,7 +379,7 @@
     const s = mentionState(); if (!s) return;
     mentionSel = Math.min(mentionSel, s.people.length - 1);
     const box = document.createElement('div'); box.className = 'mentions';
-    box.innerHTML = s.people.map((a, i) => `<button data-mn="${esc(nameOf(a))}" class="${i === mentionSel ? 'on' : ''}">${a.special ? '<span class="av sm" style="--c:var(--gold)">@</span>' : av(a, 'sm', true)}<span>${esc(nameOf(a))}${a.special ? ' <small class="muted">notify everyone here</small>' : ''}</span></button>`).join('');
+    box.innerHTML = s.people.map((a, i) => `<button data-mn="${esc(nameOf(a))}" class="${i === mentionSel ? 'on' : ''}">${a.special ? '<span class="av sm" style="--c:var(--gold)">@</span>' : a.agent ? `<span class="av sm" style="--c:${esc(a.agent.color)}">${esc(a.agent.short[0])}</span>` : av(a, 'sm', true)}<span>${esc(nameOf(a))}${a.special ? ' <small class="muted">notify everyone here</small>' : a.agent ? ` <small class="muted">${esc(a.agent.short)} answers here (AI)</small>` : ''}</span></button>`).join('');
     $('thread').appendChild(box);
   }
   function pickMention(name) {
@@ -529,7 +544,7 @@
     let cfg = null, err = '';
     try { cfg = await E.config(true); } catch (e) { err = e.message; }
     const high = A.level === 'high-admin';
-    NX.main(`<h1>🔒 Admin chat</h1><p>Admin chat is end-to-end encrypted. Messages and files are scrambled in your browser before they're sent, so nobody can read them in Supabase, not even with database access.</p>
+    NX.main(`<h1>🔒 Team chat</h1><p>Team chat is end-to-end encrypted. Messages and files are scrambled in your browser before they're sent, so nobody can read them in Supabase, not even with database access.</p>
       <div class="card" style="max-width:520px">${err ? `<div class="err">${esc(err)}</div>` : cfg ? `<h3>Unlock the chat</h3><p class="muted" style="margin-top:0">Type the team passphrase. You only need to do this once on this device.</p>
         <form id="unl" class="row"><input class="field" id="pp" type="password" autocomplete="current-password" placeholder="Team passphrase" style="flex:1" required><button class="btn primary">Unlock</button></form><div class="err" id="ppErr" style="margin-top:8px"></div>
         <p class="muted">Don't know it? Ask another admin in person or on a call, never in a message.</p>`
@@ -579,5 +594,21 @@
   }
   async function lock() { await E.lock(); plain.clear(); attMeta.clear(); Object.values(C.urls).forEach(u => u.startsWith('blob:') && URL.revokeObjectURL(u)); C.urls = {}; C.revealed = false; }
 
-  NX.chat = { init, encryptOld, lock, openRoom: (r, u) => openRoom(r, u), dmRoom, state: C };
+  // 1.9: for models in team chat. The room's recent messages as plain text (decrypted here, in this browser), and a way
+  // to post a model's reply (encrypted like every other message).
+  function contextFor(room, n = 20) {
+    return (C.msgs[room] || []).filter(m => !m.deleted).slice(-n).map(m => ({ who: m.bot ? (NX.nexusChat?.agentInfo(m.bot)?.name || m.bot) : m.sender === me() ? nameOf(A.me) : m.sender_name || 'Admin', bot: m.bot || null, text: String(txt(m)).slice(0, 2000) }));
+  }
+  async function postBot({ room, bot, text, replyTo }) {
+    const { data, error } = await sb.from('admin_messages').insert({ room, body: await E.enc(String(text).slice(0, 3900)), sender_name: (NX.nexusChat?.agentInfo(bot)?.name || bot).slice(0, 60), attachments: [], reply_to: replyTo || null, bot }).select().single();
+    if (error) throw new Error(/axiom_not_allowed/.test(error.message) ? 'Axiom only answers for people allowed to use him.' : error.message);
+    onMsg({ eventType: 'INSERT', new: data });
+    return data;
+  }
+  function thinking(room, info, on) {
+    if (C.room !== room || !$('msgs')) return;
+    document.getElementById('botThinking')?.remove();
+    if (on) { $('seen')?.insertAdjacentHTML('beforebegin', `<div class="m bot" id="botThinking"><span class="av" style="--c:${esc(info.color)}">${esc(info.short[0])}</span><div class="mb"><div class="by"><b style="color:${esc(info.color)}">${esc(info.name)}</b></div><div class="tx"><span class="typing"><i></i><i></i><i></i></span></div></div></div>`); const el = $('msgs'); el.scrollTop = el.scrollHeight; }
+  }
+  NX.chat = { init, encryptOld, lock, openRoom: (r, u) => openRoom(r, u), dmRoom, state: C, contextFor, postBot, thinking };
 })();

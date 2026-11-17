@@ -1,7 +1,7 @@
 {
   "name": "apoji-admin",
   "productName": "Apoji Admin",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "The admin app for Nexus '28 and N28C.",
   "author": "Apoji Delegraphics",
   "license": "UNLICENSED",
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --mac dmg zip --arm64 --x64 --publish never",
-    "test": "node test/hub.test.js && node test/v18.test.js"
+    "test": "node test/hub.test.js && node test/v18.test.js && node test/v19.test.js"
   },
   "dependencies": {
     "qrcode": "1.5.4",
@@ -40,6 +40,8 @@
       "pages.js",
       "extras.js",
       "v18.js",
+      "v19.js",
+      "orb.js",
       "features.js",
       "sw.js",
       "manifest.webmanifest",

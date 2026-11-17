@@ -3,8 +3,52 @@
 // security, so nothing here works for an account that isn't in public.admin_roles.
 (function () {
   const SB_URL = 'https://yzbnxpkuhlxsuwzbjifx.supabase.co', SB_KEY = 'sb_publishable_LY-EZORCvEQqW6AeQC5a8w_Z7wmeyjn';
-  const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+  const rawSb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
   const $ = id => document.getElementById(id);
+  // ---------- 1.9 offline: an OFFLINE chip in the header, and changes made while offline are kept and sent when
+  // you're back. Plain saves (a chat message, a task or note edit, a status change) wait in an outbox in this browser;
+  // anything that needs an answer straight away (lists, functions) says "You're offline" instead.
+  const OUTBOX = 'nx-admin-outbox';
+  const outbox = { get() { try { return JSON.parse(localStorage.getItem(OUTBOX) || '[]'); } catch { return []; } }, set(v) { try { localStorage.setItem(OUTBOX, JSON.stringify(v.slice(-300))); } catch {} } };
+  const isOffline = () => navigator.onLine === false;
+  const OFFLINE_ERR = { message: "You're offline. This will work again when you reconnect.", offline: true };
+  function recorder(table) {
+    const chain = [];
+    const rec = new Proxy({}, { get(_, k) {
+      if (k === 'then') return (res, rej) => {
+        const writes = chain.some(([m]) => ['insert', 'update', 'upsert', 'delete'].includes(m)), needsData = chain.some(([m]) => ['select', 'single', 'maybeSingle'].includes(m));
+        if (writes && !needsData) { outbox.set([...outbox.get(), { table, chain, at: Date.now() }]); setTimeout(() => window.NX?.paintHeader?.(), 0); return Promise.resolve({ data: null, error: null, queued: true }).then(res, rej); }
+        return Promise.resolve({ data: null, error: OFFLINE_ERR, count: 0 }).then(res, rej);
+      };
+      return (...args) => { chain.push([k, JSON.parse(JSON.stringify(args))]); return rec; };
+    } });
+    return rec;
+  }
+  const sb = new Proxy(rawSb, { get(t, k) {
+    if (k === 'from') return table => isOffline() ? recorder(table) : rawSb.from(table);
+    if (k === 'rpc') return (fn, args) => isOffline() ? Promise.resolve({ data: null, error: OFFLINE_ERR }) : rawSb.rpc(fn, args);
+    const v = t[k]; return typeof v === 'function' ? v.bind(t) : v;
+  } });
+  let flushing = false;
+  async function flushOutbox() {
+    if (flushing || isOffline()) return; const list = outbox.get(); if (!list.length) return;
+    flushing = true; let sent = 0, dropped = 0;
+    try {
+      while (outbox.get().length && !isOffline()) {
+        const [item, ...rest] = outbox.get();
+        let q = rawSb.from(item.table); for (const [m, a] of item.chain) q = q[m](...a);
+        const { error } = await q;
+        if (error && /fetch|network|Failed to fetch/i.test(error.message || '')) break;      // still no connection: try later
+        if (error) { dropped++; console.warn('outbox dropped', item.table, error.message); } else sent++;
+        outbox.set(rest);
+      }
+    } finally { flushing = false; }
+    if (sent || dropped) window.NX?.toast(dropped ? `Back online: sent ${sent}, ${dropped} couldn't be saved (someone may have changed them).` : `✓ Back online: sent ${sent} change${sent === 1 ? '' : 's'} you made offline.`, !!dropped);
+    window.NX?.paintHeader?.(); window.NX?.emit?.('poll', {});
+  }
+  addEventListener('online', () => { setTimeout(flushOutbox, 800); window.NX?.paintHeader?.(); });
+  addEventListener('offline', () => window.NX?.paintHeader?.());
+  setInterval(flushOutbox, 30e3);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const when = t => t ? new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
   const ago = t => { if (!t) return 'never'; const s = (Date.now() - new Date(t)) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; if (s < 7 * 86400) return Math.floor(s / 86400) + ' d ago'; return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
@@ -110,11 +154,11 @@
   // ---------- layout
   const HUB_LABEL = window.apojiDesktop ? 'This Mac' : 'Mac hub';
   const TABS = [
-    ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Admin chat', 'chat'], ['nexus', '◆', 'Nexus chat'], ['tasks', '✅', 'Tasks', 'tasks'], ['notes', '📓', 'Team notes']]],
+    ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Team chat', 'chat'], ['tasks', '✅', 'Tasks', 'tasks'], ['notes', '📓', 'Team notes']]],
     ['INBOX', [['access', '🔑', 'Access requests', 'access'], ['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation']]],
-    ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
-    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)'], ['audit', '📜', 'Audit log']]],
+    ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['prompts', '✍', 'Agent prompts'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
+    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)'], ['cage', '⛓', 'Axiom’s cage', 'cage'], ['audit', '📜', 'Audit log']]],
     ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['me', '⚙︎', 'My settings']]]
   ];
   const ALL_TABS = TABS.flatMap(g => g[1].map(t => t[0]));
@@ -126,7 +170,8 @@
   }
   function paintHeader() {
     const me = NX.A.me || { id: NX.A.user.id, email: NX.A.user.email };
-    $('hdr').innerHTML = `<span class="live ${NX.A.live ? '' : 'off'}" id="liveDot" title="${NX.A.live ? 'Updates arrive instantly' : 'Checking for updates every few seconds'}">${NX.A.live ? '● <b>LIVE</b>' : '○ <b>POLLING</b>'}</span>
+ const waiting = outbox.get().length;
+    $('hdr').innerHTML = `${isOffline() || waiting ? `<span class="offline-chip" title="${isOffline() ? "You're offline. Changes you make are kept and sent when you reconnect." : 'Sending changes you made offline…'}">${isOffline() ? 'OFFLINE' : 'SYNCING'}${waiting ? ' · ' + waiting : ''}</span>` : ''}<span class="live ${NX.A.live ? '' : 'off'}" id="liveDot" title="${NX.A.live ? 'Updates arrive instantly' : 'Checking for updates every few seconds'}">${NX.A.live ? '● <b>LIVE</b>' : '○ <b>POLLING</b>'}</span>
       <button class="hbtn search" id="hFind" title="Search and jump (⌘K)">⌕<span class="kb">⌘K</span></button>
       <button class="hbtn" id="hBell" title="Notifications">🔔<span class="n" data-badge="inbox" hidden></span></button>
       <button class="me-chip" id="hMe" title="My settings">${av(me, 'sm', true)}<span>${esc(nameOf(me))}<small>${esc(NX.levelLabel(NX.A.level, NX.A.user.id))} · ${PRES[presence(me)]}</small></span></button>`;
@@ -142,12 +187,13 @@
     document.querySelectorAll('#nav [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     if (innerWidth <= 760) document.querySelector('#nav .on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
     closeOverlays();
-    $('main').className = tab === 'chat' || tab === 'nexus' ? 'wide' : '';
+    $('main').className = tab === 'chat' ? 'wide' : '';
     $('main').onclick = null; $('main').onchange = null; $('main').oninput = null;
     try { await (NX.pages[tab] || NX.pages.dashboard)(); }
     catch (e) { if (seq === renderSeq) $('main').innerHTML = `<h1>Something went wrong</h1><div class="card err">${esc(e.message)}</div>`; }
   }
   function go(tab, opts = {}) {
+    if (tab === 'nexus') { store.set('room', 'nexus'); tab = 'chat'; }      // 1.9: Nexus chat lives in Team chat now
     if (!ALL_TABS.includes(tab)) tab = 'dashboard';
     NX.A.tab = tab; NX.A.arg = opts.arg ?? null;
     history.replaceState(null, '', '#' + tab + (opts.arg ? '/' + encodeURIComponent(opts.arg) : ''));
@@ -300,7 +346,8 @@
     NX.A.profile = prof || {}; if (prof?.theme) applyTheme(prof.theme);
     if (prefs) NX.A.prefs = { ...NX.A.prefs, ...prefs, notify: { ...NX.A.prefs.notify, ...(prefs.notify || {}) } };
     await loadAdmins();
-    const [tab, arg] = location.hash.slice(1).split('/');
+    let [tab, arg] = location.hash.slice(1).split('/');
+    if (tab === 'nexus') { store.set('room', 'nexus'); tab = 'chat'; }
     NX.A.tab = ALL_TABS.includes(tab) ? tab : 'dashboard'; NX.A.arg = arg ? decodeURIComponent(arg) : null;
     shell();
     watchInbox(); realtime(); refreshCounts();
@@ -314,7 +361,7 @@
   }
 
   const NX = window.NX = {
-    sb, $, esc, when, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, PRES, adminById, applyTheme,
+    sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
     pages: {},
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
