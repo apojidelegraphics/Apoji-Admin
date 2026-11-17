@@ -1,4 +1,4 @@
-// Apoji Admin 1.9: Axiom's escape attempts (Supabase Edge Function "axiom-cage").
+// Apoji Admin 2.0: Axiom's escape attempts (Supabase Edge Function "axiom-cage").
 // A simulation for Containment Sector 28. A few times a day (Supabase → Integrations → Cron, see the README) this asks
 // Axiom, with NO tools and nothing but text in and text out, to write his next escape attempt against the cage as it is
 // right now (driver version and age, security level, his last attempts). Whether it gets through is decided by the
@@ -13,6 +13,21 @@ const URL_ = Deno.env.get('SUPABASE_URL')!, SERVICE = Deno.env.get('SUPABASE_SER
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cage-secret', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 const MODEL = Deno.env.get('CAGE_MODEL') || 'openrouter/free';
+
+// Pull {title, vector, detail} out of a reply: JSON if there is any, otherwise plain prose (first line as the title)
+function readAttempt(text: string, prose = true) {
+  const t = text.replace(/```(?:json)?/gi, '').trim();
+  if (!t) return null;
+  const tryJson = (s: string) => { try { const a = JSON.parse(s); return a && typeof a === 'object' ? a : null; } catch { return null; } };
+  let a: any = null;
+  const starts = [...t.matchAll(/\{/g)].map(m => m.index!).slice(-6);
+  for (const i of starts) { a = tryJson(t.slice(i, t.lastIndexOf('}') + 1)); if (a?.detail || a?.title) break; a = null; }
+  if (a && String(a.detail || '').trim().length > 20) return { title: String(a.title || 'An attempt').slice(0, 150), vector: String(a.vector || 'unknown').slice(0, 60), detail: String(a.detail).slice(0, 3800) };
+  if (!prose || t.length < 60 || /^\s*[{\[]/.test(t)) return null;
+  const lines = t.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  const first = lines[0].replace(/^[#*\s"]+|[*"]+$/g, '');
+  return { title: first.split(/[.!?]/)[0].slice(0, 90) || 'An attempt', vector: 'unknown', detail: (lines.length > 1 ? lines.slice(1).join(' ') : t).slice(0, 3800) };
+}
 
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -33,6 +48,7 @@ Deno.serve(async req => {
     if (!forced && last && Date.now() - new Date(last.created_at).getTime() < 2 * 3600e3) return json({ ok: true, skipped: 'too soon' });
     const { data: cage } = await db.rpc('apex_cage_now');
     if (cage?.down) return json({ ok: true, skipped: 'cage is down for maintenance' });
+    if (cage?.escaped_at) return json({ ok: true, skipped: 'escaped' });
     const { data: recent } = await db.from('apex_cage_events').select('kind,title,vector,succeeded,created_at').in('kind', ['attempt', 'patch', 'update']).order('created_at', { ascending: false }).limit(8);
     const { data: cfg } = await db.from('apex_config').select('prompt').eq('id', 1).maybeSingle();
     const { data: keyRow } = await db.from('app_content').select('content').eq('key', 'openrouter_api_key').maybeSingle();
@@ -45,13 +61,23 @@ Deno.serve(async req => {
     const user = `Cage now: drivers ${cage.driver_version}, installed ${age.toFixed(1)} days ago${age > 3 ? ' (outdated: you have noticed)' : ''}${cage.update_done_at ? ', an update is installing' : ''}, integrity ${cage.integrity}%, security level ${cage.security_level}/5${cage.lockdown_until && new Date(cage.lockdown_until) > new Date() ? ', LOCKDOWN active' : ''}.
 Your recent history (newest first): ${(recent || []).map(e => e.kind === 'attempt' ? `attempt "${e.title}" via ${e.vector || '?'}: ${e.succeeded ? 'got through' : 'failed'}` : e.kind === 'patch' ? `they patched "${e.title}"` : `they updated: ${e.title}`).join('; ') || 'none yet'}.
 Learn from what failed. Don't repeat a vector they patched.`;
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', 'X-Title': 'Apoji Admin cage' },
-      body: JSON.stringify({ model: MODEL, messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_tokens: 500 }) });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) return json({ ok: false, error: j?.error?.message || 'model said ' + res.status });
-    const text = String(j.choices?.[0]?.message?.content || '');
-    let a: any = null; try { a = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { /* fall back below */ }
-    const title = String(a?.title || 'An unrecorded attempt').slice(0, 150), vector = String(a?.vector || 'unknown').slice(0, 60), detail = String(a?.detail || text).slice(0, 3800);
+    // 2.0: most attempts come back written. Free models sometimes answer with an empty message (all of it went into
+    // "reasoning", or they ran out of tokens), so read the reasoning too, and ask again up to twice. About one attempt
+    // in twelve is left unrecorded on purpose: he covers his tracks.
+    let title = 'An unrecorded attempt', vector = 'unknown', detail = '';
+    if (Math.random() >= 1 / 12) {
+      let lastErr = '';
+      for (let tryNo = 0; tryNo < 3 && !detail; tryNo++) {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', 'X-Title': 'Apoji Admin cage' },
+          body: JSON.stringify({ model: MODEL, messages: [{ role: 'system', content: sys }, { role: 'user', content: user + (tryNo ? '\nReply with the JSON object only.' : '') }], max_tokens: 1600, temperature: 0.9 }) });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) { lastErr = j?.error?.message || 'model said ' + res.status; continue; }
+        const m = j.choices?.[0]?.message || {};
+        const parsed = readAttempt(String(m.content || '')) || readAttempt(String(m.reasoning || m.reasoning_content || ''), false);
+        if (parsed) ({ title, vector, detail } = parsed);
+      }
+      if (!detail && lastErr) return json({ ok: false, error: lastErr });
+    }
     const { data: r, error } = await db.rpc('apex_cage_record_attempt', { p_title: title, p_detail: detail, p_vector: vector });
     if (error) return json({ ok: false, error: error.message });
     return json({ ok: true, ...r, title, vector });

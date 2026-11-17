@@ -109,7 +109,8 @@
     NC.host = el; NC.onBack = onBack;
     if (!conv()) NC.open = NC.convs[0]?.id || newConv().id;
     el.classList.add('nxc-room');
-    el.innerHTML = '<div class="top"></div><div class="log" id="ncLog"></div><div class="cmp"><textarea class="field" id="ncIn" rows="1"></textarea><button class="btn primary" id="ncSend" style="height:42px">Send</button></div>';
+    // 2.0: same layout as every other room (top bar, message rows with avatars and times, the compose box)
+    el.innerHTML = '<div class="top"></div><div class="msgs" id="ncLog"></div><div class="compose"><div class="box"><textarea class="field" id="ncIn" rows="1" maxlength="8000"></textarea><button class="btn primary" id="ncSend" style="height:42px">Send</button></div></div>';
     paint();
     await Promise.all([loadStatus().catch(() => null), loadApex()]);
     if (NC.host === el && el.isConnected) { paint(); renderOrb(); }
@@ -117,7 +118,7 @@
     clearInterval(NC.poll);
     NC.poll = setInterval(() => { if (!NC.host?.isConnected) return clearInterval(NC.poll); pollPending(); loadStatus().then(paintTop).catch(() => {}); }, 6000);
     const inp = el.querySelector('#ncIn');
-    inp.oninput = () => { inp.style.height = 'auto'; inp.style.height = Math.min(160, inp.scrollHeight) + 'px'; };
+    inp.oninput = () => { inp.style.height = 'auto'; inp.style.height = Math.max(42, Math.min(160, inp.scrollHeight)) + 'px'; };
     inp.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
     el.onclick = e => {
       const b = e.target.closest('button'); if (!b) return;
@@ -126,6 +127,7 @@
       if (b.id === 'ncBack') return NC.onBack?.();
       if (b.dataset.handoff) return handoff(+b.dataset.handoff);
       if (b.dataset.copy) { navigator.clipboard?.writeText(conv().messages[+b.dataset.copy].content); return toast('Copied'); }
+      if (b.dataset.tools) { const row = b.closest('.m'); return row?.classList.toggle('tools-on'); }
       if (b.dataset.del) { if (!confirm('Delete this chat from this browser?')) return; NC.convs = NC.convs.filter(x => x.id !== NC.open); NC.open = NC.convs[0]?.id || newConv().id; saveConvs(); return paint(); }
     };
     el.onchange = e => { if (e.target.id === 'ncPick') { NC.open = e.target.value; paint(); } };
@@ -142,9 +144,24 @@
   function paint() { paintTop(); paintLog(); const i = NC.host?.querySelector('#ncIn'); if (i) i.placeholder = `Message ${agentInfo(lastAgent()).short}…`; }
   function paintLog() {
     const c = conv(), log = NC.host?.querySelector('#ncLog'); if (!log || !c) return;
-    log.innerHTML = c.messages.length ? c.messages.map((m, i) => `<div class="bub ${m.role === 'user' ? 'me' : 'ai'} ${m.error ? 'err' : ''}">${m.pending ? '<span class="typing"><i></i><i></i><i></i></span>' : md(m.content)}
-      ${m.role !== 'user' && !m.pending ? `<div class="meta">${esc(m.via || '')}<button data-copy="${i}">Copy</button>${!/^Your Mac/.test(m.via || '') ? `<button data-handoff="${i}" title="Send the question before this answer to your Mac, so it can use tools and @Features">➤ Hand off to my Mac</button>` : ''}</div>` : ''}</div>`).join('')
-      + `<div class="row" style="justify-content:center"><button class="btn sm ghost" data-del="1">Delete chat</button></div>`
+    const a = agentInfo(lastAgent()), meAdmin = A.me || A.admins?.find(x => x.id === A.user?.id) || { id: A.user?.id, email: A.user?.email };
+    const hm = t => new Date(t || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    let html = '', lastDay = '', prev = null;
+    c.messages.forEach((m, i) => {
+      const at = m.at || c.at || Date.now(), day = new Date(at).toDateString(), ai = m.role !== 'user';
+      if (day !== lastDay) { html += `<div class="day">${day === new Date().toDateString() ? 'Today' : new Date(at).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}</div>`; lastDay = day; prev = null; }
+      const cont = prev && prev.role === m.role && at - (prev.at || 0) < 5 * 60e3;
+      const who = ai ? (m.agentName || a.name) : NX.nameOf(meAdmin);
+      const avatar = ai ? (NC.orbImg ? `<img class="av nx-orb" data-nxorb src="${NC.orbImg}" alt="">` : `<span class="av" style="--c:${esc(m.agentColor || a.color)}">${esc((m.agentShort || a.short)[0])}</span>`) : NX.av(meAdmin);
+      const canHand = ai && !m.pending && !/^Your Mac/.test(m.via || '');
+      html += `<div class="m ${cont ? 'cont' : ''} ${ai ? 'bot' : ''} ${m.error ? 'nx-err' : ''}">${avatar}
+        <div class="mb"><div class="by"><b style="color:${ai ? esc(m.agentColor || a.color) : NX.colorOf(meAdmin.id)}">${esc(who)}</b>${ai ? '<span class="ai-tag">AI</span>' : ''}<time>${hm(at)}</time></div>
+          <div class="tx">${m.pending ? '<span class="typing"><i></i><i></i><i></i></span>' : md(m.content)}</div>
+          ${ai && !m.pending && (m.via || canHand) ? `<div class="nx-via">${esc(m.via || '')}${canHand ? `<button data-handoff="${i}" title="Send the question before this answer to your Mac, so it can use tools and @Features">➤ Hand off to my Mac</button>` : ''}</div>` : ''}</div>
+        ${m.pending ? '' : `<div class="tools"><button data-copy="${i}" title="Copy">⧉</button>${canHand ? `<button data-handoff="${i}" title="Hand off to my Mac">➤</button>` : ''}</div><button class="m-more" data-tools="1" title="More" aria-label="More">⋯</button>`}</div>`;
+      prev = { role: m.role, at };
+    });
+    log.innerHTML = c.messages.length ? html + '<div class="nx-end"><button class="btn sm ghost" data-del="1">Delete this chat</button></div>'
       : `<div class="empty">Ask anything. ${macOn() ? 'Your Mac is on, so it answers with all its tools.' : 'Your Mac is off: answers come from the free Nexus key. Need a tool (calendar, files, Axiom’s kits)? Use “Hand off to my Mac”.'}</div>`;
     log.scrollTop = log.scrollHeight;
   }
@@ -169,14 +186,14 @@
     if (c.title === 'New chat') c.title = text.slice(0, 48);
     const a = agentInfo(lastAgent());
     if (macOn()) return relayAsk(c, text, a);
-    const reply = { role: 'assistant', content: '', pending: true, at: Date.now() }; c.messages.push(reply); paintLog(); NC.busy = true;
+    const reply = { role: 'assistant', content: '', pending: true, at: Date.now(), agentName: a.name, agentShort: a.short, agentColor: a.color }; c.messages.push(reply); paintLog(); NC.busy = true;
     try { const r = await ask(a.id, c.messages.filter(m => !m.pending && !m.error).slice(-16).map(m => ({ role: m.role, content: m.content })), '\nYou are answering in Apoji Admin. If something needs the Mac, suggest "Hand off to my Mac".'); Object.assign(reply, { content: r.text, pending: false, via: `Free key · ${r.model}` }); }
     catch (e) { Object.assign(reply, { content: e.message, pending: false, error: true, via: '' }); }
     finally { NC.busy = false; saveConvs(); if (NC.host?.isConnected) paintLog(); }
   }
   // To the Mac, through the relay (what N28C does). The Mac answers with its full toolset, in the same chat each time.
   async function relayAsk(c, text, a, handed = false) {
-    const reply = { role: 'assistant', content: '', pending: true, at: Date.now(), via: 'Your Mac' }; c.messages.push(reply); paintLog();
+    const reply = { role: 'assistant', content: '', pending: true, at: Date.now(), via: 'Your Mac', agentName: a.name, agentShort: a.short, agentColor: a.color }; c.messages.push(reply); paintLog();
     const { data, error } = await sb.from('relay_messages').insert({ direction: 'to_desktop', kind: 'ask', agent: a.id, content: text.slice(0, 8000), meta: { from: 'portal', ...(c.macConv ? { convId: c.macConv } : {}) } }).select('id').single();
     if (error) { Object.assign(reply, { content: error.message, pending: false, error: true }); saveConvs(); return paintLog(); }
     reply.relayId = data.id; saveConvs();

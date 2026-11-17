@@ -26,7 +26,10 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
   const awake = require('./awake').createAwake({ app: 'admin', getCfg: () => hub.cfg, power: powerMonitor,
     onChange: st => { hub.state.awake = { on: st.on, onBattery: st.onBattery, display: !!hub.cfg.keepDisplay && st.on, verified: st.on, reason: st.reason, short: st.short, lid: st.lid, lidText: st.lidText }; hub.changed(); } });
   const applyAwake = () => awake.apply();
-  app.on('before-quit', () => awake.quit());
+  // 2.0: "keep the screen on" still dims after a while away (dimmer.js, shared with Nexus '28)
+  let dimmer = null;
+  try { const { BrowserWindow, screen } = require('electron'); dimmer = require('./dimmer').createDimmer({ BrowserWindow, screen, powerMonitor, getCfg: () => hub.cfg, isAwake: () => !!awake.state().on }); } catch (e) { console.log('[dimmer]', e.message); }
+  app.on('before-quit', () => { awake.quit(); dimmer?.stop(); });
   powerMonitor.on('resume', () => hub.refresh());
 
   function applyLogin() {
@@ -53,6 +56,7 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
       { label: 'Keep this Mac awake', type: 'checkbox', checked: hub.cfg.keepAwake, click: m => setAndApply({ keepAwake: m.checked }) },
       { label: 'Only while plugged in', type: 'checkbox', checked: hub.cfg.pluggedOnly, enabled: hub.cfg.keepAwake, click: m => setAndApply({ pluggedOnly: m.checked }) },
       { label: 'Keep the screen on too', type: 'checkbox', checked: !!hub.cfg.keepDisplay, enabled: hub.cfg.keepAwake, click: m => setAndApply({ keepDisplay: m.checked }) },
+      { label: 'Dim the screen when away', type: 'checkbox', checked: hub.cfg.dim !== false, enabled: hub.cfg.keepAwake && !!hub.cfg.keepDisplay, click: m => setAndApply({ dim: m.checked }) },
       { label: 'Stay awake with the lid closed', type: 'checkbox', checked: !!hub.cfg.lidMode, click: m => lidMode(m.checked).catch(() => paintTray()) },
       { label: 'Run schedules now', click: () => getWin()?.webContents.send('hub:nudge', 'jobs') },
       { type: 'separator' },

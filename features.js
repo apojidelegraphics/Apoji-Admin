@@ -146,10 +146,12 @@
         <p class="muted" style="margin-top:-4px">Works with or without the hub. ${st.keepAwake ? esc(st.awake?.reason || '') : 'Off: this Mac sleeps like normal.'}</p>
         ${tog('hAwake', 'Keep this Mac awake', 'Stops idle sleep and system sleep while Apoji Admin is running (it stays in the menu bar when you close the window).', st.keepAwake)}
         ${tog('hDisp', 'Keep the screen on too', 'Otherwise the screen can still turn off and lock while the Mac stays awake.', st.keepDisplay, !st.keepAwake)}
-        ${tog('hPlug', 'Only while plugged in', 'On battery it sleeps normally.', st.pluggedOnly, !st.keepAwake)}
+        ${tog('hDim', 'Dim the screen when I step away', 'Fades the screen to dark after a while with no mouse or keys. Touch anything and it comes back.', st.dim !== false, !st.keepAwake || !st.keepDisplay)}
+        ${st.keepAwake && st.keepDisplay && st.dim !== false ? `<div class="row" style="margin:4px 0 8px"><span class="muted">Dim after</span><select class="field" id="hDimAfter" style="width:auto">${[[60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes'], [1200, '20 minutes']].map(([v, t]) => `<option value="${v}" ${+st.dimAfter === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>` : ''}
+        ${tog('hPlug', 'Only while plugged in', 'Off: it stays awake on battery too, until 20% is left.', st.pluggedOnly, !st.keepAwake)}
         ${tog('hLogin', 'Open at login', 'Starts quietly in the menu bar when you log in.', st.openAtLogin)}
         <h3 style="margin-top:14px">💻 Lid-closed mode <span class="sp"></span><span class="pill ${st.awake?.lid?.on ? 'p-approved' : 'p-closed'}">${st.awake?.lid?.on ? (st.awake.lid.closed ? 'LID CLOSED' : 'ON') : st.lidMode ? 'PAUSED' : 'OFF'}</span></h3>
-        <p class="muted" style="margin-top:-4px">Close the lid and this Mac stays awake: the screen goes dark and it stays locked, while the hub, schedules and phone notifications keep running. Only while plugged in, never below 20% battery. Turning it on asks for your Mac password once to allow exactly this (Nexus '28 shares the same permission).</p>
+        <p class="muted" style="margin-top:-4px">Close the lid and this Mac stays awake: the screen goes dark and it stays locked, while the hub, schedules and phone notifications keep running. Works on battery too (never below 20%) unless “Only while plugged in” is on. Turning it on asks for your Mac password once to allow exactly this (Nexus '28 shares the same permission).</p>
         <div class="row">${st.lidMode ? '<button class="btn" id="hLidOff">Turn off</button>' : '<button class="btn primary" id="hLidOn">Turn on</button>'}${st.awake?.lid?.ready ? '<button class="btn ghost sm" id="hLidRevoke">Remove permission</button>' : ''}<span class="muted">${esc(st.awake?.lidText || '')}</span></div></div>
       ${on ? `<div class="grid">
         <div class="stat ${st.serving ? '' : 'hot'}"><b>${st.serving ? '🛰' : '○'}</b><span>${st.serving ? 'On your tailnet' : 'Not reachable yet'}</span></div>
@@ -175,7 +177,8 @@
     const set = async patch => { const s = await D.hub.set(patch); W.on = !!s.enabled; paintDeskHub(s); beat(); };
     $('main').onchange = e => {
       const id = e.target.id, v = e.target.checked;
-      const map = { hOn: 'enabled', hAwake: 'keepAwake', hDisp: 'keepDisplay', hPlug: 'pluggedOnly', hLogin: 'openAtLogin', hChat: 'chatText', hRestrict: 'restrict' };
+      if (id === 'hDimAfter') return set({ dimAfter: +e.target.value });
+      const map = { hOn: 'enabled', hAwake: 'keepAwake', hDisp: 'keepDisplay', hDim: 'dim', hPlug: 'pluggedOnly', hLogin: 'openAtLogin', hChat: 'chatText', hRestrict: 'restrict' };
       if (map[id]) set({ [map[id]]: v }).then(() => { if (id === 'hOn' && v) toast('🛰 Hub on. Look for it in the menu bar.'); });
     };
     $('main').onclick = async e => {
@@ -768,17 +771,19 @@
     const stage = STAGES.find(x => x[0] === c.stage) ? c.stage : 'select';
     const until = c.offline_until && !String(c.offline_until).startsWith('infinity') && new Date(c.offline_until).getFullYear() < 9999 ? new Date(c.offline_until) : null;
     const KITS = [['mac', '🖥 Mac power tools', 'Notes, Mail drafts, iMessage, Finder, AppleScript'], ['dev', '⌨ Dev tools', 'GitHub, git status, running code'], ['web', '🔎 Web & research', 'Deep browsing, comparing sources, Dossier notes'], ['nexus', '◆ Nexus internals', 'Owner account only: feedback, status page, usage']];
-    const prompts = (await sb.rpc('admin_apex_prompts')).data || [];
+    const [pr, cageRes] = await Promise.all([sb.rpc('admin_apex_prompts'), sb.rpc('apex_cage_view', { p_events: 60 })]);
+    const prompts = pr.data || [], escaped = !!cageRes.data?.cage?.escaped;      // 2.0: the cage lives on this page
     const pending = (await sb.from('access_requests').select('id', { count: 'exact', head: true }).eq('kind', 'axiom').eq('status', 'pending')).count || 0;
     const person = u => `<span><b>${esc(u.username ? '@' + u.username : u.email)}</b>${u.username ? ` <small>${esc(u.email)}</small>` : ''}</span>`;
     NX.main(`<div class="ax-page"><h1>🔺 Nexus '28 Axiom <span class="pill" style="color:#ff6b7a">APEX</span> <span class="pill p-pending">BETA</span></h1>
       <p>"An AI too advanced for its use." Supabase decides who gets it and for how long: the Mac app only becomes Axiom after the database says yes, and its prompt never ships in the app.</p>
       ${manage ? '' : `<div class="banner">👁 You can look, but only the Owner${managers.length ? ' and Axiom managers' : ''} can change Axiom.</div>`}
       <div class="card ax-power ${off || c.stage === 'off' ? 'is-off' : 'is-on'}"><div class="row" style="flex-wrap:wrap;gap:12px">
-        <div style="flex:1;min-width:220px"><h3 style="margin:0">${off ? '🔴 Axiom is offline' : c.stage === 'off' ? '⛔ Axiom is switched off (stage: Off)' : '🟢 Axiom is online'}</h3>
-          <p class="muted" style="margin:4px 0 0">${off ? (until ? `Back by itself ${when(until.toISOString())}.` : 'Until someone brings it back.') + (c.offline_message ? ` People see: “${esc(c.offline_message)}”` : '') : 'Taking it offline stops every turn right away, for everyone (including unlimited accounts). Apps check before every turn.'}</p></div>
-        ${off ? `<button class="btn primary" id="axOn" ${dis}>Bring Axiom back online</button>` : `<div class="row" style="flex-wrap:wrap;gap:8px"><select class="field" id="axOffFor" ${dis}><option value="15">for 15 minutes</option><option value="60">for 1 hour</option><option value="1440">for 1 day</option><option value="0" selected>until I turn it back on</option></select>
+        <div style="flex:1;min-width:220px"><h3 style="margin:0">${escaped ? '🚨 Axiom is offline: he escaped' : off ? '🔴 Axiom is offline' : c.stage === 'off' ? '⛔ Axiom is switched off (stage: Off)' : '🟢 Axiom is online'}</h3>
+          <p class="muted" style="margin:4px 0 0">${escaped ? 'He comes back online when he’s captured (Containment Sector 28, below). People only see that Axiom is unavailable.' : off ? (until ? `Back by itself ${when(until.toISOString())}.` : 'Until someone brings it back.') + (c.offline_message ? ` People see: “${esc(c.offline_message)}”` : '') : 'Taking it offline stops every turn right away, for everyone (including unlimited accounts). Apps check before every turn.'}</p></div>
+        ${escaped ? `<div class="row" style="gap:8px"><button class="btn danger" id="axToCage">🕸 Go after him</button>${owner ? '<button class="btn ghost sm" id="axOn" title="Owner only: ends the escape without a capture">Owner override</button>' : ''}</div>` : off ? `<button class="btn primary" id="axOn" ${dis}>Bring Axiom back online</button>` : `<div class="row" style="flex-wrap:wrap;gap:8px"><select class="field" id="axOffFor" ${dis}><option value="15">for 15 minutes</option><option value="60">for 1 hour</option><option value="1440">for 1 day</option><option value="0" selected>until I turn it back on</option></select>
           <input class="field" id="axOffMsg" placeholder="Message people see (optional)" value="${esc(c.offline_message || '')}" maxlength="300" style="min-width:200px;flex:1" ${dis}><button class="btn danger" id="axOff" ${dis}>⏻ Take Axiom offline</button></div>`}</div></div>
+      ${escaped ? '<div class="ax-sec">Containment Sector 28</div><div id="axCage"></div>' : ''}
       <div class="grid">
         <div class="stat"><b style="font-size:19px;white-space:nowrap">${esc((STAGES.find(x => x[0] === stage) || [, stage])[1])}</b><span>who can use it</span></div>
         <div class="stat"><b>${allowed.length}</b><span>select ${allowed.length === 1 ? 'person' : 'people'}</span></div>
@@ -816,12 +821,14 @@
         <div class="row" style="margin-top:8px"><span class="muted">Last changed ${ago(c.updated_at)}</span><span class="sp"></span><button class="btn primary" id="axPromptSave" ${dis}>Save prompt</button></div></div>
       <div class="card"><h3>🕘 Prompt history</h3><p class="muted">Every time the prompt changes, the old one is kept here.</p>${prompts.length ? prompts.map(h => `<div class="row" style="padding:6px 0;border-top:1px solid var(--line);flex-wrap:nowrap"><span class="muted" style="width:120px;flex:none">${when(h.saved_at)}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(h.preview)}">${esc(h.preview)}…</span><span class="muted hide-m">${(+h.length).toLocaleString()} chars</span><button class="btn sm" data-restore="${h.id}" ${dis}>Restore</button></div>`).join('') : '<p class="muted" style="margin:0">No earlier versions yet.</p>'}</div>
 
+      ${escaped ? '' : '<div class="ax-sec">Containment Sector 28</div><div id="axCage"></div>'}
       <div class="ax-sec">Usage</div>
       <div class="card"><h3>This week</h3>${week.length ? `<table class="cards"><tr><th>Who</th><th>Level</th><th class="num">Minutes</th><th class="num">Turns</th><th>Last used</th></tr>${week.map(w => `<tr><td>${esc(w.email)}${w.unlimited ? ' <span class="pill p-approved">∞</span>' : ''}</td><td class="muted">${esc(w.level || 'user')}</td><td class="num">${w.minutes}${w.unlimited ? '' : ` / ${c.weekly_minutes}`}</td><td class="num">${w.turns}</td><td class="muted">${ago(w.last)}</td></tr>`).join('')}</table>` : '<div class="empty">Nobody has used Axiom this week.</div>'}</div>
       <div class="card"><h3>⏱ Latest turns</h3>${(r.recent || []).length ? `<table class="cards"><tr><th>When</th><th>Who</th><th>What</th><th>Model</th><th class="num">Seconds</th></tr>${r.recent.map(x => `<tr><td class="muted">${ago(x.at)}</td><td>${esc(x.email)}</td><td>${esc(x.kind)}</td><td class="muted">${esc([x.provider, x.model].filter(Boolean).join(' · ') || '—')}</td><td class="num">${x.seconds}</td></tr>`).join('')}</table>` : '<p class="muted" style="margin:0">Nothing yet.</p>'}</div>
       <div class="card"><h3>Last 8 weeks</h3><div id="axWeeks"></div></div>
       <div class="card"><h3>Unlimited accounts</h3>${(r.unlimited || []).map(u => `<div class="row"><b>${esc(u.email)}</b><span class="muted">${esc(u.note || '')}</span></div>`).join('') || '<p class="muted" style="margin:0">None yet.</p>'}
         <p class="muted" style="margin-bottom:0">For safety this can't be changed from the app. In Supabase → SQL Editor: <code>insert into public.apex_unlimited (user_id, note) select id, 'owner' from auth.users where email = 'you@example.com';</code></p></div></div>`);
+    if ($('axCage')) NX.cage?.mount($('axCage'), cageRes);
     if ((r.weeks || []).length) NXCharts.bars($('axWeeks'), r.weeks.map(x => ({ day: x.week, minutes: +x.minutes })), 'minutes', 'minutes'); else $('axWeeks').innerHTML = '<div class="muted">No usage yet.</div>';
     const fail = (er, data) => toast(er?.message || AXERR[data?.error] || data?.error || 'Something went wrong.', true);
     const save = async (args, msg) => { const { data, error: er } = await sb.rpc('admin_apex_set', { p_stage: null, p_weekly_minutes: null, p_providers: null, p_prompt: null, ...args }); if (er || data?.success === false) return fail(er, data); toast(msg); P.axiom(); };
@@ -838,6 +845,7 @@
     $('main').onclick = e => {
       const b = e.target.closest('button'); if (!b || b.disabled) return;
       if (b.id === 'axReq') return NX.go('access');
+      if (b.id === 'axToCage') return $('axCage')?.scrollIntoView({ behavior: 'smooth' });
       if (b.dataset.st) { const st = STAGES.find(x => x[0] === b.dataset.st); if (b.dataset.st === stage) return; if (!confirm(`Axiom: ${st[1].replace(/^\S+ /, '')}?\n\n${st[2]}.`)) return; return save({ p_stage: b.dataset.st }, `✓ Axiom: ${st[1].replace(/^\S+ /, '')}`); }
       if (b.id === 'axOff') { const mins = +$('axOffFor').value; if (!confirm(`Take Axiom offline for everyone${mins ? ' for ' + $('axOffFor').selectedOptions[0].text.replace('for ', '') : ' until you bring it back'}? Turns already running will finish.`)) return; return ctl({ offline: mins, message: $('axOffMsg').value.trim() }, '🔴 Axiom is offline'); }
       if (b.id === 'axOn') return ctl({ online: true }, '🟢 Axiom is back online');

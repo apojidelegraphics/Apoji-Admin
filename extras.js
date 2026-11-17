@@ -175,7 +175,7 @@
   // =========================================================== Command palette (⌘K) + shortcuts
   const PAGES = [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Team chat'], ['tasks', '✅', 'Tasks'], ['notes', '📓', 'Team notes'], ['requests', '🧪', 'Beta requests'], ['feedback', '📮', 'Feedback & bugs'], ['reports', '🚩', 'Reports'],
     ['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['flags', '⚑', 'Feature flags'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules'],
-    ['health', '🩺', 'Health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)'], ['cage', '⛓', 'Axiom’s cage'], ['prompts', '✍', 'Agent prompts'], ['access', '🔑', 'Access requests'], ['audit', '📜', 'Audit log'], ['hub', '🖥', window.apojiDesktop ? 'This Mac' : 'Mac hub'], ['me', '⚙︎', 'My settings']];
+    ['health', '🩺', 'Health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex) · Containment Sector 28'], ['prompts', '✍', 'Agent prompts'], ['access', '🔑', 'Access requests'], ['audit', '📜', 'Audit log'], ['hub', '🖥', window.apojiDesktop ? 'This Mac' : 'Mac hub'], ['me', '⚙︎', 'My settings']];
   function actions() {
     return [
       { ic: '✅', label: 'New task', words: 'add todo', run: () => taskModal() },

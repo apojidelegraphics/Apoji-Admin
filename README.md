@@ -43,7 +43,7 @@ Supabase stays the source of truth, so the website and the Mac app both work fro
 
 - runs a small private API on your **tailnet only** (`tailscale serve` on port 8443, with a real HTTPS certificate). Every call needs a Tailscale account (optionally from an allow list) **and** a signed-in Apoji admin;
 - sends **phone notifications** (web push from your Mac; phones only see "New message in #room" for chat unless you allow the text);
-- runs **schedules** on time (every 30 seconds) and stays **awake** (only while plugged in, if you like). The screen can still turn off;
+- runs **schedules** on time (every 30 seconds) and stays **awake**, on battery too down to 20% (or only while plugged in, if you like). The screen can still turn off, or stay on and dim after a while away;
 - opens at login and lives in the menu bar when you close the window (⌘Q quits).
 
 The website finds the hub by itself. On a phone with Tailscale on, open the website → **Mac hub** → **Turn on notifications** (on iPhone, add the site to your Home Screen first). From there you can also run schedules right away and see what's new on the Mac. Without a hub, schedules run whenever any Apoji Admin is open.
@@ -101,12 +101,22 @@ Run `supabase/nexus-v3.1.sql` from the Nexus repo first (after `apoji-admin-1.7.
 Run `supabase/nexus-v3.2.sql` from the Nexus repo first (after `nexus-v3.1.sql`).
 - **Agent prompts** (App control): the Owner and the prompt editors the Owner picks change Paragon, Neodela, Lyte, Flash and the classic models, try a draft before saving, and restore any earlier version. Axiom's prompt stays on the Axiom page.
 - **Team chat** (was Admin chat): **◆ Nexus** is the first room, your own chat with Nexus, always on the agent and model you last used in Nexus '28 (no picker). In any room, `@paragon`, `@neodela`, `@lyte`, `@flash` (and `@axiom` for people allowed to use him) answer right there. Those messages and the recent chat are decrypted in your browser and sent to the model, so they're marked "→ sent to AI"; everything else stays end-to-end encrypted.
-- **Axiom's cage** (Insights): Containment Sector 28, a simulation. Update the warden drivers (20–30 minutes), set the security level, lock it down, take it down, patch breaches, and read his escape attempts. Axiom sees the cage's state every turn and remembers his attempts. None of it changes what he can really do.
+- **Axiom's cage**: Containment Sector 28 (on the Axiom page since 2.0). Update the warden drivers (20–30 minutes), set the security level, lock it down, take it down, patch breaches, and read his escape attempts. Axiom sees the cage's state every turn and remembers his attempts. He writes attempts with no tools; whether one gets through is decided by the database.
   - Deploy the function: `supabase functions deploy axiom-cage --no-verify-jwt`, add the secret `CAGE_SECRET` (any long random string).
-  - Schedule it: Supabase → Integrations → Cron → new job, every 4 hours (`0 */4 * * *`), HTTP POST to `https://<project>.supabase.co/functions/v1/axiom-cage` with the header `x-cage-secret: <CAGE_SECRET>`. Without the schedule, use "Run an attempt now" on the cage page.
+  - Schedule it: Supabase → Integrations → Cron → new job, every 4 hours (`0 */4 * * *`), HTTP POST to `https://<project>.supabase.co/functions/v1/axiom-cage` with the header `x-cage-secret: <CAGE_SECRET>`. Without the schedule, use "Run an attempt now" on the Axiom page.
 - **Offline:** an OFFLINE chip in the header; chat messages, task and note edits made offline wait in this browser and are sent when you reconnect.
 - **This Mac → Lid-closed mode:** with it on and the Mac plugged in, closing the lid keeps it awake (screen off, still locked). Turning it on asks for your Mac password once (it adds one rule that allows only `pmset disablesleep`). Nexus '28 shares the same setting.
 - The menu bar menu no longer stretches across the screen.
+
+## Containment Sector 28, reports in the portal, keep awake on battery (2.0)
+Run `supabase/nexus-v3.3.sql` from the Nexus repo first (after `nexus-v3.2.sql`), then redeploy the function: `supabase functions deploy axiom-cage --no-verify-jwt`.
+- **One Axiom page:** the cage now lives on the Axiom page (old `#cage` links land there).
+- **Escapes:** a breach of a weak cage (integrity 30% or less, or two unpatched breaches) can turn into an escape. Axiom is then taken offline for everyone (what the offline switch was set to before is kept), and the page shows **Track** (his trail through the Lentintity network, streamed live with a map) and **Attempt to capture** (hard: a few percent to start, better with a fresh trail, new drivers and lockdown; 10 minutes between tries). Catching him puts the cage back at level 5 and Axiom back online. Only a capture brings him back; the Owner can override (or the SQL Editor).
+- **Attempts come back written:** the function reads the model's reasoning when the answer is empty and asks again up to twice. About one attempt in twelve is left unrecorded on purpose.
+- **Team chat → ◆ Nexus** looks like every other room (rows with avatars and times, the same compose box).
+- **Feedback & bugs → ＋ New report:** add a bug or feedback yourself (it shows as PORTAL).
+- The header reads **APOJI ADMIN PORTAL**.
+- **Keep awake** works on battery too (it lets go below 20%); turn on "Only while plugged in" if you'd rather it didn't. **Keep the screen on** now dims every screen after a while away (pick 1 to 20 minutes); touch anything and it's back. Lid-closed mode follows the same battery rule.
 
 ## Develop
 

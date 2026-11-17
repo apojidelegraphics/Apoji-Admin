@@ -158,7 +158,7 @@
     ['INBOX', [['access', '🔑', 'Access requests', 'access'], ['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation']]],
     ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['prompts', '✍', 'Agent prompts'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
-    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)'], ['cage', '⛓', 'Axiom’s cage', 'cage'], ['audit', '📜', 'Audit log']]],
+    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['audit', '📜', 'Audit log']]],
     ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['me', '⚙︎', 'My settings']]]
   ];
   const ALL_TABS = TABS.flatMap(g => g[1].map(t => t[0]));
@@ -193,7 +193,8 @@
     catch (e) { if (seq === renderSeq) $('main').innerHTML = `<h1>Something went wrong</h1><div class="card err">${esc(e.message)}</div>`; }
   }
   function go(tab, opts = {}) {
-    if (tab === 'nexus') { store.set('room', 'nexus'); tab = 'chat'; }      // 1.9: Nexus chat lives in Team chat now
+    if (tab === 'nexus') { store.set('room', 'nexus'); tab = 'chat'; }
+    if (tab === 'cage') tab = 'axiom';                                     // 2.0: the cage is part of the Axiom page (1.9: Nexus chat lives in Team chat)
     if (!ALL_TABS.includes(tab)) tab = 'dashboard';
     NX.A.tab = tab; NX.A.arg = opts.arg ?? null;
     history.replaceState(null, '', '#' + tab + (opts.arg ? '/' + encodeURIComponent(opts.arg) : ''));
@@ -348,6 +349,7 @@
     await loadAdmins();
     let [tab, arg] = location.hash.slice(1).split('/');
     if (tab === 'nexus') { store.set('room', 'nexus'); tab = 'chat'; }
+    if (tab === 'cage') tab = 'axiom';                                     // 2.0: the cage is part of the Axiom page
     NX.A.tab = ALL_TABS.includes(tab) ? tab : 'dashboard'; NX.A.arg = arg ? decodeURIComponent(arg) : null;
     shell();
     watchInbox(); realtime(); refreshCounts();

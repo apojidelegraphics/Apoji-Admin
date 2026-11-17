@@ -10,7 +10,7 @@ const twin = ['Nexus-28', 'nexus-desktop'].map(d => path.join(__dirname, '..', '
 if (twin) assert.strictEqual(read('electron/awake.js'), fs.readFileSync(twin, 'utf8'), 'same awake.js as Nexus');
 const admin = read('admin.js');
 assert.ok(admin.includes("if (k === 'from') return table => isOffline() ? recorder(table) : rawSb.from(table)") && admin.includes('offline-chip') && admin.includes('async function flushOutbox()'));
-assert.ok(admin.includes("['prompts', '✍', 'Agent prompts']") && admin.includes("['cage', '⛓', 'Axiom’s cage', 'cage']") && !admin.includes("['nexus', '◆', 'Nexus chat']"));
+assert.ok(admin.includes("['prompts', '✍', 'Agent prompts']") && admin.includes("['axiom', '🔺', 'Axiom (Apex)', 'cage']") && !admin.includes("['nexus', '◆', 'Nexus chat']"));
 const chat = read('chat.js'), v18 = read('v18.js'), v19 = read('v19.js');
 assert.ok(chat.includes("const allRooms = () => ['nexus', 'all',") && chat.includes('ai_sent: true') && chat.includes('NX.nexusChat.groupReply'));
 assert.ok(v18.includes('NX.nexusChat = { mount') && v18.includes("const lastAgent = () =>") && !v18.includes('id="ncAgent"'), 'no model picker: always the last agent');

@@ -101,6 +101,34 @@
   // =========================================================== Feedback & bugs inbox
   const FB_STATUS = [['new', 'New'], ['triaged', 'Triaged'], ['working', 'Working on it'], ['fixed', 'Fixed'], ['wontfix', "Won't fix"], ['closed', 'Closed']];
   const FB_KIND = { bug: '🐞 Bug', feature: '✨ Idea', feedback: '💬 Feedback', beta: '🧪 Beta', other: '• Other' };
+  // 2.0: write a bug or feedback straight from the portal (it lands in this inbox like any other report)
+  function newReport() {
+    const { el, close } = NX.modal(`<h3>＋ New report</h3><p class="muted" style="margin-top:0">For something you found yourself, or something someone told you outside the app.</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><select class="field" id="nrK">${Object.entries(FB_KIND).map(([k, l]) => `<option value="${k}" ${k === 'bug' ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <select class="field" id="nrP">${['low', 'normal', 'high', 'urgent'].map(p => `<option value="${p}" ${p === 'normal' ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)} priority</option>`).join('')}</select>
+        <input class="field" id="nrF" placeholder="Feature or area (optional)" maxlength="60" style="flex:1;min-width:140px"></div>
+      <input class="field" id="nrT" placeholder="Title" maxlength="160" style="width:100%;margin-top:8px">
+      <textarea class="field" id="nrB" rows="6" maxlength="8000" placeholder="What happened, steps to reproduce, what you expected…" style="width:100%;margin-top:8px"></textarea>
+      <input class="field" id="nrV" placeholder="App version (optional), e.g. 3.3.0" maxlength="40" style="width:100%;margin-top:8px">
+      <label class="muted" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="nrMe" checked> Assign to me</label>
+      <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" id="nrX">Cancel</button><button class="btn primary" id="nrGo">Add report</button></div>`);
+    el.querySelector('#nrT').focus();
+    el.querySelector('#nrX').onclick = close;
+    el.querySelector('#nrGo').onclick = async () => {
+      const v = id => el.querySelector(id).value.trim(), title = v('#nrT');
+      if (!title) return toast('Give it a title.', true);
+      const b = el.querySelector('#nrGo'); b.disabled = true; b.textContent = 'Adding…';
+      const row = { kind: el.querySelector('#nrK').value, title, body: v('#nrB'), feature: v('#nrF'), app_version: v('#nrV'), source: 'web', channel: 'portal',
+        email: A.user.email || '', username: (NX.nameOf(A.me) || '').slice(0, 60), info: 'Added in Apoji Admin' };
+      let { data, error } = await sb.from('feedback_reports').insert(row).select('id').single();
+      if (error && /channel/i.test(error.message)) ({ data, error } = await sb.from('feedback_reports').insert({ ...row, channel: 'app' }).select('id').single());   // before nexus-v3.3.sql
+      if (error) { b.disabled = false; b.textContent = 'Add report'; return toast(error.message, true); }
+      const pri = el.querySelector('#nrP').value, me = el.querySelector('#nrMe').checked;
+      if (pri !== 'normal' || me) await sb.from('feedback_reports').update({ priority: pri, ...(me ? { assignee: A.user.id, status: 'triaged' } : {}) }).eq('id', data.id);
+      close(); toast('✓ Report added'); NX.refreshCounts?.();
+      A.arg = String(data.id); history.replaceState(null, '', '#feedback/' + data.id); P.feedback();
+    };
+  }
   P.feedback = async () => {
     const f = A.fb = A.fb || { status: 'open', kind: 'all', q: '', mine: false };
     let q = sb.from('feedback_reports').select('*').order('updated_at', { ascending: false }).limit(300);
@@ -115,15 +143,16 @@
       <div class="row" style="margin-bottom:10px"><div class="tabsub" id="fS" style="margin:0">${[['open', 'Open'], ...FB_STATUS, ['all', 'All']].map(([k, l]) => `<button data-s="${k}" class="${f.status === k ? 'on' : ''}">${l}${k === 'new' && A.counts.feedback ? `<b>${A.counts.feedback}</b>` : ''}</button>`).join('')}</div></div>
       <div class="row" style="margin-bottom:12px"><select class="field" id="fK"><option value="all">All kinds</option>${Object.entries(FB_KIND).map(([k, l]) => `<option value="${k}" ${f.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <input class="field" id="fQ" placeholder="Search title, email, text" value="${esc(f.q)}" style="flex:1;min-width:160px"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="fM" ${f.mine ? 'checked' : ''}> Assigned to me</label>
-        <button class="btn" id="fCsv">Export CSV</button></div>
+        <button class="btn" id="fCsv">Export CSV</button><button class="btn primary" id="fNew">＋ New report</button></div>
       <div class="inbox ${sel ? 'open' : ''}" id="inbox"><div class="ilist" id="ilist">${data.map(r => `<button class="iitem ${r.id === sel ? 'on' : ''} ${r.status === 'new' ? 'unread' : ''}" data-fb="${r.id}">
           <span class="row" style="gap:6px"><span class="pill p-${esc(r.status)}">${esc(r.status.toUpperCase())}</span>${r.priority !== 'normal' ? `<span class="pill p-${esc(r.priority)}">${esc(r.priority.toUpperCase())}</span>` : ''}<span class="muted">${FB_KIND[r.kind] || r.kind}</span><span class="sp"></span><span class="muted">${ago(r.updated_at)}</span></span>
-          <b>${esc(r.title)}</b><span class="muted">${r.channel && r.channel !== 'app' ? `<span class="pill" style="font-size:10px">${r.channel === 'github' ? 'GITHUB' : 'EMAIL'}</span> ` : ''}${esc(r.username || r.email || (r.user_id ? 'Someone' : 'Not signed in'))} · ${esc(r.source)} ${esc(r.app_version)}${r.assignee ? ' · ' + esc(nameOf(NX.adminById(r.assignee))) : ''}</span></button>`).join('') || '<div class="empty">Inbox zero. 🎉</div>'}</div>
+          <b>${esc(r.title)}</b><span class="muted">${r.channel && r.channel !== 'app' ? `<span class="pill" style="font-size:10px">${r.channel === 'github' ? 'GITHUB' : r.channel === 'portal' ? 'PORTAL' : 'EMAIL'}</span> ` : ''}${esc(r.username || r.email || (r.user_id ? 'Someone' : 'Not signed in'))} · ${esc(r.source)} ${esc(r.app_version)}${r.assignee ? ' · ' + esc(nameOf(NX.adminById(r.assignee))) : ''}</span></button>`).join('') || '<div class="empty">Inbox zero. 🎉</div>'}</div>
         <div class="idetail" id="idetail">${sel ? '<div class="card"><span class="spinner"></span></div>' : '<div class="card empty">Pick something on the left.</div>'}</div></div>`, { cards: false });
     if (sel) fbDetail(sel);
     $('main').onclick = e => {
       const s = e.target.closest('[data-s]'); if (s) { f.status = s.dataset.s; A.arg = null; return P.feedback(); }
       const it = e.target.closest('[data-fb]'); if (it) { A.arg = it.dataset.fb; history.replaceState(null, '', '#feedback/' + it.dataset.fb); document.querySelectorAll('.iitem').forEach(x => x.classList.toggle('on', x === it)); $('inbox').classList.add('open'); return fbDetail(+it.dataset.fb); }
+      if (e.target.id === 'fNew') return newReport();
       if (e.target.id === 'fCsv') download(`nexus-feedback-${new Date().toISOString().slice(0, 10)}.csv`, csv([['id', 'kind', 'status', 'priority', 'title', 'email', 'username', 'source', 'version', 'created'], ...data.map(r => [r.id, r.kind, r.status, r.priority, r.title, r.email, r.username, r.source, r.app_version, r.created_at])]));
     };
     $('fK').onchange = e => { f.kind = e.target.value; P.feedback(); };
