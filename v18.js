@@ -82,22 +82,43 @@
   }
   const canAxiom = () => !!NC.apex?.allowed;
   const mentionable = () => ['paragon', 'neodela', 'lyte', 'flash', ...(canAxiom() ? ['axiom'] : [])].map(agentInfo);
-  const lastAgent = () => { const id = NC.status?.lastUsed?.agent; return id && (id !== 'axiom' || canAxiom()) && (DEFAULT_AGENTS[id] || (NC.status?.agents || []).some(a => a.id === id)) ? id : 'paragon'; };
-  const lastModel = () => isFree(NC.status?.lastUsed?.model) ? NC.status.lastUsed.model : 'openrouter/free';
+  // 2.0.2: follow the agent and model picked in Nexus right now (status.current), then the last one used
+  const agentOk = id => id && (id !== 'axiom' || canAxiom()) && (DEFAULT_AGENTS[id] || (NC.status?.agents || []).some(a => a.id === id));
+  const lastAgent = () => [NC.status?.current?.agent, NC.status?.lastUsed?.agent].find(agentOk) || 'paragon';
+  const macModel = () => { const c = NC.status?.current, l = NC.status?.lastUsed; return c?.agent === lastAgent() && c.model ? c : l?.agent === lastAgent() && l.model ? l : c?.model ? c : l || null; };
+  const lastModel = () => { const m = macModel(); return m && (m.provider === 'openrouter' || m.freeKey || !m.provider) && isFree(m.model) ? m.model : 'openrouter/free'; };
+  const modelNote = () => { const m = macModel(), use = lastModel(); return !m?.model || m.model === use ? esc(use) : `${esc(use)} <span title="Nexus uses ${esc(m.model)} on your Mac; that one isn't on the free key">(on your Mac: ${esc(m.model)})</span>`; };
   const md = s => esc(s).replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) => `<pre>${c}</pre>`).replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
   const conv = () => NC.convs.find(c => c.id === NC.open) || null;
   function newConv() { const c = { id: 'c' + Date.now().toString(36), title: 'New chat', messages: [], at: Date.now() }; NC.convs.unshift(c); NC.open = c.id; saveConvs(); return c; }
 
-  // Your orb (your orb skin from Nexus, in the color of the agent you last used), as a small picture for the room list
+  // Your orb (your orb skin from Nexus, in the color of the agent you're using). 2.0.2: it moves, like in Nexus '28:
+  // one small orb runs off-screen and every Nexus picture on the page (room list, header, messages) shows its frames.
+  const ORB = { cv: null, o: null, key: '', raf: 0, last: 0 };
   function renderOrb() {
     if (!window.NexusOrb) return;
-    const cv = document.createElement('canvas'); cv.style.cssText = 'width:64px;height:64px;position:fixed;left:-200px;top:0';
+    const skin = lastAgent() === 'axiom' ? 'crucible' : NC.status?.theme?.skin || A.profile?.theme?.skin || 'aurora', color = agentInfo(lastAgent()).color, key = skin + color;
+    if (ORB.key === key && ORB.o) return;
+    ORB.o?.stop(); ORB.cv?.remove();
+    const cv = document.createElement('canvas'); cv.setAttribute('aria-hidden', 'true'); cv.style.cssText = 'width:72px;height:72px;position:fixed;left:-300px;top:0;pointer-events:none';
     document.body.appendChild(cv);
-    const skin = NC.status?.theme?.skin || A.profile?.theme?.skin || 'aurora';
-    const o = window.NexusOrb.create(cv, { minimal: true, color: agentInfo(lastAgent()).color, skin: lastAgent() === 'axiom' ? 'crucible' : skin });
-    setTimeout(() => { try { NC.orbImg = cv.toDataURL('image/png'); } catch {} o.stop(); cv.remove(); document.querySelectorAll('[data-nxorb]').forEach(i => { i.src = NC.orbImg; }); }, 700);
+    ORB.cv = cv; ORB.key = key; ORB.o = window.NexusOrb.create(cv, { minimal: true, color, skin });
+    NC.orbImg = 'live';
+    document.querySelectorAll('.gav[data-nxorb-wait]').forEach(g => g.outerHTML = icon());
+    if (!ORB.raf) ORB.raf = requestAnimationFrame(blit);
   }
-  const icon = () => NC.orbImg ? `<img class="nx-orb" data-nxorb src="${NC.orbImg}" alt="">` : `<span class="gav" style="--c:${esc(agentInfo(lastAgent()).color)}">◆</span>`;
+  function blit(t) {
+    ORB.raf = requestAnimationFrame(blit);
+    if (t - ORB.last < 33 || document.hidden || !ORB.cv) return;     // ~30 fps is plenty for a 32px picture
+    ORB.last = t;
+    for (const c of document.querySelectorAll('canvas[data-nxorb]')) {
+      const r = c.getBoundingClientRect(); if (!r.width || r.bottom < 0 || r.top > innerHeight) continue;
+      const px = Math.round(r.width * (devicePixelRatio || 1));
+      if (c.width !== px) { c.width = px; c.height = px; }
+      const g = c.getContext('2d'); g.clearRect(0, 0, px, px); g.drawImage(ORB.cv, 0, 0, px, px);
+    }
+  }
+  const icon = () => NC.orbImg ? '<canvas class="nx-orb" data-nxorb width="64" height="64" aria-hidden="true"></canvas>' : `<span class="gav" data-nxorb-wait style="--c:${esc(agentInfo(lastAgent()).color)}">◆</span>`;
   const subtitle = () => { const c = NC.convs[0], l = c?.messages?.at(-1); return l ? `${l.role === 'user' ? 'You' : agentInfo(lastAgent()).short}: ${String(l.content).slice(0, 60)}` : `${agentInfo(lastAgent()).short} · ${macOn() ? 'Mac on' : 'free key'}`; };
   const mentioned = text => { const m = String(text || '').match(/(^|\s)@(paragon|neodela|lyte|flash|axiom)\b/i); if (!m) return null; const id = m[2].toLowerCase(); return id === 'axiom' && !canAxiom() ? null : id; };
 
@@ -116,7 +137,7 @@
     if (NC.host === el && el.isConnected) { paint(); renderOrb(); }
     if (!NC.chan) NC.chan = sb.channel('nexus-relay-' + A.user.id).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'relay_messages', filter: `user_id=eq.${A.user.id}` }, p => onRelay(p.new)).subscribe();
     clearInterval(NC.poll);
-    NC.poll = setInterval(() => { if (!NC.host?.isConnected) return clearInterval(NC.poll); pollPending(); loadStatus().then(paintTop).catch(() => {}); }, 6000);
+    NC.poll = setInterval(() => { if (!NC.host?.isConnected) return clearInterval(NC.poll); pollPending(); loadStatus().then(() => { paintTop(); renderOrb(); }).catch(() => {}); }, 6000);
     const inp = el.querySelector('#ncIn');
     inp.oninput = () => { inp.style.height = 'auto'; inp.style.height = Math.max(42, Math.min(160, inp.scrollHeight)) + 'px'; };
     inp.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
@@ -136,7 +157,7 @@
     const el = NC.host?.querySelector('.top'); if (!el) return;
     const a = agentInfo(lastAgent()), on = macOn();
     el.innerHTML = `<button class="btn sm back" id="ncBack">‹</button>${icon()}
-      <div class="ti"><b>Nexus <span class="muted" style="font-weight:400">· ${esc(a.short)}</span></b><small>${on ? 'Your Mac answers, with every tool and @Feature' : `Free Nexus key · ${esc(lastModel())} · no tools`} · always the agent and model you last used in Nexus</small></div>
+      <div class="ti"><b>Nexus <span class="muted" style="font-weight:400">· ${esc(a.short)}</span></b><small>${on ? 'Your Mac answers, with every tool and @Feature' : `Free Nexus key · ${modelNote()} · no tools`} · the agent and model you're using in Nexus</small></div>
       <select class="field" id="ncPick" title="Your chats">${NC.convs.map(c => `<option value="${esc(c.id)}" ${c.id === NC.open ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select>
       <button class="btn sm" id="ncNew" title="New chat">＋</button>
       <span class="mac-dot ${on ? 'on' : 'off'}" title="${on ? 'Your Mac is on and linked' : NC.status ? 'Your Mac was last seen ' + ago(NC.statusAt) : 'Turn on the phone link in Nexus (Settings → Phone) to hand off to your Mac'}">${on ? '● Mac on' : '○ Mac off'}</span>`;
@@ -152,7 +173,7 @@
       if (day !== lastDay) { html += `<div class="day">${day === new Date().toDateString() ? 'Today' : new Date(at).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}</div>`; lastDay = day; prev = null; }
       const cont = prev && prev.role === m.role && at - (prev.at || 0) < 5 * 60e3;
       const who = ai ? (m.agentName || a.name) : NX.nameOf(meAdmin);
-      const avatar = ai ? (NC.orbImg ? `<img class="av nx-orb" data-nxorb src="${NC.orbImg}" alt="">` : `<span class="av" style="--c:${esc(m.agentColor || a.color)}">${esc((m.agentShort || a.short)[0])}</span>`) : NX.av(meAdmin);
+      const avatar = ai ? (NC.orbImg ? '<canvas class="av nx-orb" data-nxorb width="64" height="64" aria-hidden="true"></canvas>' : `<span class="av" style="--c:${esc(m.agentColor || a.color)}">${esc((m.agentShort || a.short)[0])}</span>`) : NX.av(meAdmin);
       const canHand = ai && !m.pending && !/^Your Mac/.test(m.via || '');
       html += `<div class="m ${cont ? 'cont' : ''} ${ai ? 'bot' : ''} ${m.error ? 'nx-err' : ''}">${avatar}
         <div class="mb"><div class="by"><b style="color:${ai ? esc(m.agentColor || a.color) : NX.colorOf(meAdmin.id)}">${esc(who)}</b>${ai ? '<span class="ai-tag">AI</span>' : ''}<time>${hm(at)}</time></div>

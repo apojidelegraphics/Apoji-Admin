@@ -119,6 +119,13 @@ Run `supabase/nexus-v3.3.sql` from the Nexus repo first (after `nexus-v3.2.sql`)
 - **Keep awake** works on battery too (it lets go below 20%); turn on "Only while plugged in" if you'd rather it didn't. **Keep the screen on** now dims every screen after a while away (pick 1 to 20 minutes); touch anything and it's back. Lid-closed mode follows the same battery rule.
 - **2.0.1:** lid-closed mode can't get stuck on: a small watcher switches it off when the app's process ends (even a crash or force-quit), every check turns it off if no running app wants it, and closing the lid puts the screen to sleep so the Mac locks even with "keep the screen on".
 
+## 2.0.2
+Run `supabase/nexus-v3.3.2.sql` from the Nexus repo (adds the Feature & Fix kind).
+- **This Mac → Dim when I step away:** a slider from 0% (dark) through 55% to None.
+- **Feedback & bugs:** reports written in the portal can be edited (✎ Edit); new kind **🛠 Feature & Fix**.
+- **Team chat:** "Maya is typing…" in every room and DM (sent over Realtime, with the room and person sealed with the team key).
+- **◆ Nexus** follows the agent and model picked in Nexus '28 right now (the free key only runs free models, so a paid one falls back to `openrouter/free` and says so), and the Nexus orb moves like in the app.
+
 ## Develop
 
 Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`), `npm test` tests the hub. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` most pages, `extras.js` tasks and the command palette, `features.js` the hub, notes, broadcasts, schedules, health and releases, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications). `electron/hub-core.js` is the hub API, `electron/hub.js` keep-awake, login item and menu bar.

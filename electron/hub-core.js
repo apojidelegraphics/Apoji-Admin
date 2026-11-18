@@ -190,12 +190,13 @@ function createHub(opts) {
   function set(patch = {}) {
     for (const k of ['enabled', 'keepAwake', 'keepDisplay', 'lidMode', 'pluggedOnly', 'dim', 'openAtLogin', 'restrict', 'chatText']) if (k in patch) cfg[k] = !!patch[k];
     if ('dimAfter' in patch) cfg.dimAfter = Math.min(1800, Math.max(30, +patch.dimAfter || 120));
+    if ('dimLevel' in patch) cfg.dimLevel = Math.min(1, Math.max(0, +patch.dimLevel || 0));
     if (Array.isArray(patch.allow)) cfg.allow = [...new Set(patch.allow.map(s => String(s).trim().toLowerCase()).filter(s => /^[^\s@]+@[^\s@]+$|^[\w.-]+@github$|^[\w.-]+$/.test(s) && s.length < 120))].slice(0, 30);
     saveCfg(); return cfg;
   }
   function publicStatus() {
     return { id: cfg.id, name, version, enabled: cfg.enabled, online: state.listening, serving: state.serving, url: state.serving ? url() : '', port: TS_PORT,
-      tailscale: { ...state.ts }, awake: { ...state.awake }, keepAwake: cfg.keepAwake, keepDisplay: !!cfg.keepDisplay, lidMode: !!cfg.lidMode, pluggedOnly: cfg.pluggedOnly, dim: cfg.dim !== false, dimAfter: cfg.dimAfter || 120, openAtLogin: cfg.openAtLogin,
+      tailscale: { ...state.ts }, awake: { ...state.awake }, keepAwake: cfg.keepAwake, keepDisplay: !!cfg.keepDisplay, lidMode: !!cfg.lidMode, pluggedOnly: cfg.pluggedOnly, dim: cfg.dim !== false, dimLevel: cfg.dimLevel ?? 0.45, dimAfter: cfg.dimAfter || 120, openAtLogin: cfg.openAtLogin,
       restrict: cfg.restrict, allow: cfg.allow.slice(), chatText: cfg.chatText, devices: sec.subs.length, uptime: Math.round((Date.now() - state.startedAt) / 1000), error: state.error };
   }
   function status() { return { ...publicStatus(), recent: state.recent.slice(0, 20), subs: sec.subs.map(s => ({ id: hash(s.endpoint), label: s.label, email: s.email, login: s.login, kinds: s.kinds || DEFAULT_KINDS, added: s.added, lastOk: s.lastOk || null })) }; }

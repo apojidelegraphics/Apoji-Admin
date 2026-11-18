@@ -100,28 +100,41 @@
 
   // =========================================================== Feedback & bugs inbox
   const FB_STATUS = [['new', 'New'], ['triaged', 'Triaged'], ['working', 'Working on it'], ['fixed', 'Fixed'], ['wontfix', "Won't fix"], ['closed', 'Closed']];
-  const FB_KIND = { bug: '🐞 Bug', feature: '✨ Idea', feedback: '💬 Feedback', beta: '🧪 Beta', other: '• Other' };
+  const FB_KIND = { bug: '🐞 Bug', feature: '✨ Idea', featfix: '🛠 Feature & Fix', feedback: '💬 Feedback', beta: '🧪 Beta', other: '• Other' };
+  const PORTAL_KINDS = ['bug', 'featfix', 'feature', 'feedback', 'other'];      // what you can pick when writing one here
   // 2.0: write a bug or feedback straight from the portal (it lands in this inbox like any other report)
-  function newReport() {
-    const { el, close } = NX.modal(`<h3>＋ New report</h3><p class="muted" style="margin-top:0">For something you found yourself, or something someone told you outside the app.</p>
-      <div class="row" style="gap:8px;flex-wrap:wrap"><select class="field" id="nrK">${Object.entries(FB_KIND).map(([k, l]) => `<option value="${k}" ${k === 'bug' ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <select class="field" id="nrP">${['low', 'normal', 'high', 'urgent'].map(p => `<option value="${p}" ${p === 'normal' ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)} priority</option>`).join('')}</select>
+  const isPortal = r => r.channel === 'portal' || r.info === 'Added in Apoji Admin';
+  // 2.0.2: the same form edits a report that was written here (r = the report)
+  function newReport(r = null) {
+    const ed = !!r, kinds = [...new Set([...PORTAL_KINDS, ...(r ? [r.kind] : [])])];
+    const { el, close } = NX.modal(`<h3>${ed ? '✎ Edit report' : '＋ New report'}</h3><p class="muted" style="margin-top:0">${ed ? `#${r.id}, written in the portal${r.username ? ' by ' + esc(r.username) : ''}.` : 'For something you found yourself, or something someone told you outside the app.'}</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><select class="field" id="nrK">${kinds.map(k => `<option value="${k}" ${(r ? r.kind : 'bug') === k ? 'selected' : ''}>${FB_KIND[k] || k}</option>`).join('')}</select>
+        ${ed ? '' : `<select class="field" id="nrP">${['low', 'normal', 'high', 'urgent'].map(p => `<option value="${p}" ${p === 'normal' ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)} priority</option>`).join('')}</select>`}
         <input class="field" id="nrF" placeholder="Feature or area (optional)" maxlength="60" style="flex:1;min-width:140px"></div>
       <input class="field" id="nrT" placeholder="Title" maxlength="160" style="width:100%;margin-top:8px">
       <textarea class="field" id="nrB" rows="6" maxlength="8000" placeholder="What happened, steps to reproduce, what you expected…" style="width:100%;margin-top:8px"></textarea>
       <input class="field" id="nrV" placeholder="App version (optional), e.g. 3.3.0" maxlength="40" style="width:100%;margin-top:8px">
-      <label class="muted" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="nrMe" checked> Assign to me</label>
-      <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" id="nrX">Cancel</button><button class="btn primary" id="nrGo">Add report</button></div>`);
+      ${ed ? '' : '<label class="muted" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="nrMe" checked> Assign to me</label>'}
+      <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" id="nrX">Cancel</button><button class="btn primary" id="nrGo">${ed ? 'Save changes' : 'Add report'}</button></div>`);
+    if (ed) { el.querySelector('#nrF').value = r.feature || ''; el.querySelector('#nrT').value = r.title || ''; el.querySelector('#nrB').value = r.body || ''; el.querySelector('#nrV').value = r.app_version || ''; }
     el.querySelector('#nrT').focus();
     el.querySelector('#nrX').onclick = close;
     el.querySelector('#nrGo').onclick = async () => {
       const v = id => el.querySelector(id).value.trim(), title = v('#nrT');
       if (!title) return toast('Give it a title.', true);
-      const b = el.querySelector('#nrGo'); b.disabled = true; b.textContent = 'Adding…';
+      const b = el.querySelector('#nrGo'); b.disabled = true; b.textContent = ed ? 'Saving…' : 'Adding…';
+      if (ed) {
+        const patch = { kind: el.querySelector('#nrK').value, title, body: v('#nrB'), feature: v('#nrF'), app_version: v('#nrV'), updated_at: new Date().toISOString() };
+        let { error } = await sb.from('feedback_reports').update(patch).eq('id', r.id);
+        if (error && /kind/i.test(error.message) && patch.kind === 'featfix') error = { message: 'Run supabase/nexus-v3.3.2.sql (Nexus repo) to turn on Feature & Fix.' };
+        if (error) { b.disabled = false; b.textContent = 'Save changes'; return toast(error.message, true); }
+        close(); toast('✓ Saved'); return P.feedback();
+      }
       const row = { kind: el.querySelector('#nrK').value, title, body: v('#nrB'), feature: v('#nrF'), app_version: v('#nrV'), source: 'web', channel: 'portal',
         email: A.user.email || '', username: (NX.nameOf(A.me) || '').slice(0, 60), info: 'Added in Apoji Admin' };
       let { data, error } = await sb.from('feedback_reports').insert(row).select('id').single();
       if (error && /channel/i.test(error.message)) ({ data, error } = await sb.from('feedback_reports').insert({ ...row, channel: 'app' }).select('id').single());   // before nexus-v3.3.sql
+      if (error && /kind/i.test(error.message) && row.kind === 'featfix') error = { message: 'Run supabase/nexus-v3.3.2.sql (Nexus repo) to turn on Feature & Fix.' };
       if (error) { b.disabled = false; b.textContent = 'Add report'; return toast(error.message, true); }
       const pri = el.querySelector('#nrP').value, me = el.querySelector('#nrMe').checked;
       if (pri !== 'normal' || me) await sb.from('feedback_reports').update({ priority: pri, ...(me ? { assignee: A.user.id, status: 'triaged' } : {}) }).eq('id', data.id);
@@ -169,7 +182,7 @@
       <div class="row" style="margin:12px 0"><select class="field" id="fbSt">${FB_STATUS.map(([k, l]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <select class="field" id="fbPr">${['low', 'normal', 'high', 'urgent'].map(p => `<option value="${p}" ${r.priority === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)} priority</option>`).join('')}</select>
         <select class="field" id="fbAs"><option value="">Unassigned</option>${A.admins.map(a => `<option value="${esc(a.id)}" ${r.assignee === a.id ? 'selected' : ''}>${esc(nameOf(a))}${a.id === A.user.id ? ' (me)' : ''}</option>`).join('')}</select>
-        <span class="sp"></span><button class="btn sm" id="fbTask" title="Make a task for this">✅ Task</button><button class="btn sm danger" id="fbDel">Delete</button></div>
+        <span class="sp"></span>${isPortal(r) ? '<button class="btn sm" id="fbEdit" title="Written in the portal, so you can change it">✎ Edit</button>' : ''}<button class="btn sm" id="fbTask" title="Make a task for this">✅ Task</button><button class="btn sm danger" id="fbDel">Delete</button></div>
       <div class="quote" style="margin-bottom:10px">${esc(r.body || '(no details)')}</div>
       ${r.info ? `<details><summary class="muted" style="cursor:pointer">App details</summary><pre class="info">${esc(r.info)}</pre></details>` : ''}
       <div class="thread-r">${(replies || []).map(x => `<div class="r ${x.is_staff ? 'staff' : ''} ${x.internal ? 'internal' : ''}"><small>${x.internal ? '🔒 Internal note · ' : ''}${esc(x.author_name || (x.is_staff ? 'Admin' : r.username || 'Them'))} · ${when(x.created_at)}</small>${esc(x.body)}</div>`).join('') || '<div class="muted">No replies yet.</div>'}</div>
@@ -185,6 +198,7 @@
       if (e.target.id === 'fbBack') { $('inbox').classList.remove('open'); A.arg = null; return; }
       if (e.target.dataset.quick) { $('fbTxt').value = e.target.dataset.quick; $('fbTxt').focus(); return; }
       if (e.target.id === 'fbSaved') return NX.replies.picker(e.target, $('fbTxt'));
+      if (e.target.id === 'fbEdit') return newReport(r);
       if (e.target.id === 'fbTask') return NX.tasks.modal({ title: r.title.slice(0, 200), link_kind: 'feedback', link_id: String(id), link_label: r.title.slice(0, 200), priority: r.priority === 'urgent' || r.priority === 'high' ? r.priority : 'normal', assignee: r.assignee || A.user.id });
       if (e.target.id === 'fbDel') { if (!confirm('Delete this report and its replies?')) return; const { error: er } = await sb.from('feedback_reports').delete().eq('id', id); if (er) return toast(er.message, true); A.arg = null; NX.refreshCounts(); return P.feedback(); }
       if (e.target.id === 'fbSend') {

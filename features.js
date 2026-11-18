@@ -146,8 +146,11 @@
         <p class="muted" style="margin-top:-4px">Works with or without the hub. ${st.keepAwake ? esc(st.awake?.reason || '') : 'Off: this Mac sleeps like normal.'}</p>
         ${tog('hAwake', 'Keep this Mac awake', 'Stops idle sleep and system sleep while Apoji Admin is running (it stays in the menu bar when you close the window).', st.keepAwake)}
         ${tog('hDisp', 'Keep the screen on too', 'Otherwise the screen can still turn off and lock while the Mac stays awake.', st.keepDisplay, !st.keepAwake)}
-        ${tog('hDim', 'Dim the screen when I step away', 'Fades the screen to dark after a while with no mouse or keys. Touch anything and it comes back.', st.dim !== false, !st.keepAwake || !st.keepDisplay)}
-        ${st.keepAwake && st.keepDisplay && st.dim !== false ? `<div class="row" style="margin:4px 0 8px"><span class="muted">Dim after</span><select class="field" id="hDimAfter" style="width:auto">${[[60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes'], [1200, '20 minutes']].map(([v, t]) => `<option value="${v}" ${+st.dimAfter === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>` : ''}
+        ${st.keepAwake && st.keepDisplay ? (() => { const br = st.dim === false ? 100 : Math.round(100 - (st.dimLevel ?? 0.45) * 100); return `<div class="dimbox"><div class="row"><b>🌙 Dim when I step away</b><span class="sp"></span><span class="muted" id="hDimVal">${br >= 100 ? 'None' : `Screen at ${br}%`}</span></div>
+          <input type="range" id="hDimLv" min="0" max="100" step="5" value="${br}" list="hDimTicks"><datalist id="hDimTicks"><option value="0"></option><option value="55"></option><option value="100"></option></datalist>
+          <div class="dimticks"><span>0% (dark)</span><span style="left:55%">55%</span><span>None</span></div>
+          ${br < 100 ? `<div class="row" style="margin-top:6px"><span class="muted">Dim after</span><select class="field" id="hDimAfter" style="width:auto">${[[60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes'], [1200, '20 minutes']].map(([v, t]) => `<option value="${v}" ${+st.dimAfter === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>` : ''}
+          <p class="muted" style="margin:6px 0 0">Touch the mouse or any key and it comes right back.</p></div>`; })() : ''}
         ${tog('hPlug', 'Only while plugged in', 'Off: it stays awake on battery too, until 20% is left.', st.pluggedOnly, !st.keepAwake)}
         ${tog('hLogin', 'Open at login', 'Starts quietly in the menu bar when you log in.', st.openAtLogin)}
         <h3 style="margin-top:14px">💻 Lid-closed mode <span class="sp"></span><span class="pill ${st.awake?.lid?.on ? 'p-approved' : 'p-closed'}">${st.awake?.lid?.on ? (st.awake.lid.closed ? 'LID CLOSED' : 'ON') : st.lidMode ? 'PAUSED' : 'OFF'}</span></h3>
@@ -175,9 +178,11 @@
         <div class="chips" style="margin-top:8px">${(st.allow || []).map(a => `<span class="chip">${esc(a)}<button data-rmallow="${esc(a)}" title="Remove">✕</button></span>`).join('') || '<span class="muted">Nobody added.</span>'}</div></div>
       <div class="card"><h3>🕘 What happened on this Mac</h3>${(st.recent || []).length ? `<div class="feed">${st.recent.map(e => `<div><span class="muted">${ago(e.at)}</span> ${esc(e.title)}${e.body ? ` <span class="muted">· ${esc(e.body)}</span>` : ''}${e.sent != null ? ` <span class="muted">→ ${e.sent} phone${e.sent === 1 ? '' : 's'}</span>` : ''}</div>`).join('')}</div>` : '<p class="muted">Nothing yet.</p>'}</div>` : ''}`, { cards: false });
     const set = async patch => { const s = await D.hub.set(patch); W.on = !!s.enabled; paintDeskHub(s); beat(); };
+    $('main').oninput = e => { if (e.target.id === 'hDimLv' && $('hDimVal')) { const br = +e.target.value; $('hDimVal').textContent = br >= 100 ? 'None' : `Screen at ${br}%`; } };
     $('main').onchange = e => {
       const id = e.target.id, v = e.target.checked;
       if (id === 'hDimAfter') return set({ dimAfter: +e.target.value });
+      if (id === 'hDimLv') { const br = +e.target.value; return set(br >= 100 ? { dim: false } : { dim: true, dimLevel: (100 - br) / 100 }); }
       const map = { hOn: 'enabled', hAwake: 'keepAwake', hDisp: 'keepDisplay', hDim: 'dim', hPlug: 'pluggedOnly', hLogin: 'openAtLogin', hChat: 'chatText', hRestrict: 'restrict' };
       if (map[id]) set({ [map[id]]: v }).then(() => { if (id === 'hOn' && v) toast('🛰 Hub on. Look for it in the menu bar.'); });
     };

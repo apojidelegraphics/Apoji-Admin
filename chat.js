@@ -93,6 +93,7 @@
   function viewing(r) { return A.tab === 'chat' && C.room === r && !document.hidden && (C.open || innerWidth > 760); }
   async function onMsg(p) {
     const m = p.new; if (!m?.id) return;
+    if (p.eventType === 'INSERT' && TY.who[m.room]?.[m.sender]) { delete TY.who[m.room][m.sender]; paintTyping(); }
     await reveal([m]);
     if (p.eventType === 'UPDATE') {
       const list = C.msgs[m.room]; const i = list ? list.findIndex(x => x.id === m.id) : -1;
@@ -148,7 +149,7 @@
           <div class="find" id="tfind" hidden><input class="field" id="tfq" placeholder="Search this chat…" style="width:100%"></div>
           <div class="msgs" id="msgs"></div>
           <div class="compose" id="compose">
-            <div class="replying" id="replying" hidden></div><div class="pend" id="pend" hidden></div>
+            <div class="typing-line" id="typingLine" hidden></div><div class="replying" id="replying" hidden></div><div class="pend" id="pend" hidden></div>
             <div class="box"><button class="ib" id="cAttach" title="Attach images or files (or paste / drop them)">📎</button><input type="file" id="cFile" multiple hidden>
               <textarea class="field" id="ct" placeholder="Encrypted message…" maxlength="4000" rows="1"></textarea>
               <button class="ib" id="cSaved" title="Saved replies">⚡</button><button class="ib" id="cEmoji" title="Emoji">🙂</button><button class="btn primary" id="cSend" style="height:42px">Send</button></div>
@@ -206,7 +207,7 @@
     C.room = r; NX.store.set('room', r);
     if (user) C.open = true;
     $('chat')?.classList.toggle('open', C.open);
-    paintRooms(); paintTop(); paintReply(); paintPinCount();
+    paintRooms(); paintTop(); paintReply(); paintPinCount(); paintTyping();
     if (!$('msgs')) return;
     if (!C.msgs[r]) {
       $('msgs').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -333,8 +334,45 @@
     paintPending(); $('ct')?.focus();
   }
   const imgSize = url => new Promise(res => { const i = new Image(); i.onload = () => res([i.naturalWidth, i.naturalHeight]); i.onerror = () => res([0, 0]); i.src = url; });
+  // ---------- typing indicators (2.0.2): "Maya is typing…" in every room and DM. Sent over a Realtime broadcast with
+  // the room and sender sealed with the team key, so only signed-in admins with the key can see who's typing where.
+  const TY = { chan: null, who: {}, lastSent: 0, tick: null };
+  function typingChan() {
+    if (TY.chan || !sb.channel) return TY.chan;
+    try { TY.chan = sb.channel('admin-typing', { config: { broadcast: { self: false } } }).on('broadcast', { event: 'typing' }, ({ payload }) => onTyping(payload)).subscribe(); } catch {}
+    return TY.chan;
+  }
+  async function sendTyping(on) {
+    const ch = typingChan(); if (!ch?.send || !E.ready() || C.room === 'nexus') return;
+    const now = Date.now();
+    if (on && now - TY.lastSent < 2500) return;
+    if (!on && !TY.lastSent) return;
+    TY.lastSent = on ? now : 0;
+    try { await ch.send({ type: 'broadcast', event: 'typing', payload: { x: await E.enc(JSON.stringify({ room: C.room, user: me(), on })) } }); } catch {}
+  }
+  async function onTyping(p) {
+    let d; try { d = JSON.parse(await E.dec(p?.x)); } catch { return; }
+    if (!d || d.user === me() || !adminById(d.user) || !allRooms().includes(d.room)) return;
+    const r = TY.who[d.room] = TY.who[d.room] || {};
+    if (d.on) r[d.user] = Date.now() + 6000; else delete r[d.user];
+    paintTyping();
+  }
+  function typingIn(room) { const r = TY.who[room] || {}, now = Date.now(); for (const [u, t] of Object.entries(r)) if (t < now) delete r[u]; return Object.keys(r); }
+  function paintTyping() {
+    const ids = typingIn(C.room), el = $('typingLine');
+    if (el) {
+      const names = ids.map(id => nameOf(adminById(id)));
+      el.hidden = !names.length;
+      el.innerHTML = names.length ? `<span class="typing"><i></i><i></i><i></i></span> ${esc(names.length === 1 ? names[0] + ' is typing…' : names.length === 2 ? names.join(' and ') + ' are typing…' : 'Several people are typing…')}` : '';
+    }
+    document.querySelectorAll('[data-room]').forEach(b => b.classList.toggle('is-typing', typingIn(b.dataset.room).length > 0));
+    const any = Object.keys(TY.who).some(r => typingIn(r).length);
+    if (any && !TY.tick) TY.tick = setInterval(paintTyping, 1500);
+    if (!any && TY.tick) { clearInterval(TY.tick); TY.tick = null; }
+  }
   async function send() {
     if (C.sending) return;
+    sendTyping(false);
     const t = $('ct'), body = t.value.trim();
     if (!body && !C.pending.length) return;
     C.sending = true; $('cSend').disabled = true;
@@ -490,7 +528,9 @@
       }
     });
     const t = $('ct');
-    t.addEventListener('input', () => { autosize(); paintMentions(); });
+    t.addEventListener('input', () => { autosize(); paintMentions(); sendTyping(!!t.value.trim()); });
+    t.addEventListener('blur', () => sendTyping(false));
+    typingChan();
     t.addEventListener('keydown', e => {
       const box = document.querySelector('.mentions');
       if (box) {
