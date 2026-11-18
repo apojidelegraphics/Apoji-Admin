@@ -126,6 +126,13 @@ Run `supabase/nexus-v3.3.2.sql` from the Nexus repo (adds the Feature & Fix kind
 - **Team chat:** "Maya is typing…" in every room and DM (sent over Realtime, with the room and person sealed with the team key).
 - **◆ Nexus** follows the agent and model picked in Nexus '28 right now (the free key only runs free models, so a paid one falls back to `openrouter/free` and says so), and the Nexus orb moves like in the app.
 
+## 2.0.3
+Run `supabase/nexus-v3.4.sql` from the Nexus repo.
+- **Real screen dimming:** "Dim when I step away" now lowers the screen's actual brightness (a small helper, `bin/apoji-brightness`, built by `npm install` and in CI; it uses Apple's private DisplayServices like MonitorControl does). The app checks your screens on start; "Try it" dims for a few seconds. Screens that don't allow it get the dark layer, and brightness is always put back, even after a crash.
+- **◆ Nexus** is one continuous chat, like a DM (older chats were merged into it).
+- **Dashboard → 🧪 Test Run:** people, answers and searches from the web version (Nexus without a Mac). Take it down from **Maintenance → 🧪 Test Run**.
+- **Containment Sector 28:** attempts now run by themselves every 3 hours (pg_cron + a private secret, already set up), and the function rejects answers that just copy its instructions.
+
 ## Develop
 
 Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`), `npm test` tests the hub. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` most pages, `extras.js` tasks and the command palette, `features.js` the hub, notes, broadcasts, schedules, health and releases, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications). `electron/hub-core.js` is the hub API, `electron/hub.js` keep-awake, login item and menu bar.

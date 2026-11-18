@@ -196,7 +196,7 @@ function createHub(opts) {
   }
   function publicStatus() {
     return { id: cfg.id, name, version, enabled: cfg.enabled, online: state.listening, serving: state.serving, url: state.serving ? url() : '', port: TS_PORT,
-      tailscale: { ...state.ts }, awake: { ...state.awake }, keepAwake: cfg.keepAwake, keepDisplay: !!cfg.keepDisplay, lidMode: !!cfg.lidMode, pluggedOnly: cfg.pluggedOnly, dim: cfg.dim !== false, dimLevel: cfg.dimLevel ?? 0.45, dimAfter: cfg.dimAfter || 120, openAtLogin: cfg.openAtLogin,
+      tailscale: { ...state.ts }, awake: { ...state.awake }, brightness: state.brightness || null, keepAwake: cfg.keepAwake, keepDisplay: !!cfg.keepDisplay, lidMode: !!cfg.lidMode, pluggedOnly: cfg.pluggedOnly, dim: cfg.dim !== false, dimLevel: cfg.dimLevel ?? 0.45, dimAfter: cfg.dimAfter || 120, openAtLogin: cfg.openAtLogin,
       restrict: cfg.restrict, allow: cfg.allow.slice(), chatText: cfg.chatText, devices: sec.subs.length, uptime: Math.round((Date.now() - state.startedAt) / 1000), error: state.error };
   }
   function status() { return { ...publicStatus(), recent: state.recent.slice(0, 20), subs: sec.subs.map(s => ({ id: hash(s.endpoint), label: s.label, email: s.email, login: s.login, kinds: s.kinds || DEFAULT_KINDS, added: s.added, lastOk: s.lastOk || null })) }; }

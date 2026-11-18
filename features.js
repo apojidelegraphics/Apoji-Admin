@@ -150,6 +150,7 @@
           <input type="range" id="hDimLv" min="0" max="100" step="5" value="${br}" list="hDimTicks"><datalist id="hDimTicks"><option value="0"></option><option value="55"></option><option value="100"></option></datalist>
           <div class="dimticks"><span>0% (dark)</span><span style="left:55%">55%</span><span>None</span></div>
           ${br < 100 ? `<div class="row" style="margin-top:6px"><span class="muted">Dim after</span><select class="field" id="hDimAfter" style="width:auto">${[[60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes'], [1200, '20 minutes']].map(([v, t]) => `<option value="${v}" ${+st.dimAfter === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>` : ''}
+          <div class="row" style="margin-top:6px"><span class="muted" style="flex:1">${(() => { const b = st.brightness; if (!window.apojiDesktop) return ''; if (!b?.checked) return 'Checking whether your screens can dim for real…'; const yes = (b.displays || []).filter(d => d.supported); return yes.length ? `✓ Lowers the real brightness on ${yes.map(d => d.builtin ? 'your built-in screen' : 'a display').join(' and ')}${b.displays.length > yes.length ? '; other screens get a dark layer' : ''}.` : esc(b.error || 'Uses a dark layer (your screens don’t let apps change their brightness).'); })()}</span><button class="btn sm" id="hDimTry">Try it</button><button class="btn ghost sm" id="hDimCheck">Check again</button></div>
           <p class="muted" style="margin:6px 0 0">Touch the mouse or any key and it comes right back.</p></div>`; })() : ''}
         ${tog('hPlug', 'Only while plugged in', 'Off: it stays awake on battery too, until 20% is left.', st.pluggedOnly, !st.keepAwake)}
         ${tog('hLogin', 'Open at login', 'Starts quietly in the menu bar when you log in.', st.openAtLogin)}
@@ -189,6 +190,8 @@
     $('main').onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.id === 'hChk') { b.disabled = true; paintDeskHub(await D.hub.status(true)); beat(); }
+      if (b.id === 'hDimTry') { const r = await D.hub.testDim?.(); b.textContent = r?.ok ? 'Dimming…' : 'Can’t'; setTimeout(() => { b.textContent = 'Try it'; }, 4200); return; }
+      if (b.id === 'hDimCheck') { b.textContent = 'Checking…'; await D.hub.checkBrightness?.(); return paintDeskHub(await D.hub.status()); }
       if (b.id === 'hLidOn' || b.id === 'hLidOff' || b.id === 'hLidRevoke') {
         b.disabled = true; const r = b.id === 'hLidRevoke' ? await D.hub.lidRevoke() : await D.hub.lid(b.id === 'hLidOn');
         if (!r.ok) { b.disabled = false; return toast(r.error, true); } paintDeskHub(r.status); return;

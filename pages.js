@@ -21,6 +21,7 @@
     $('dash').innerHTML = `
       ${t.maintenance_on ? `<div class="banner warn">🛠 <span style="flex:1">${t.maintenance_on} maintenance switch${t.maintenance_on === 1 ? ' is' : 'es are'} on right now.</span><button class="btn sm" data-go="maint">Manage</button></div>` : ''}
       <div class="card" id="myDay"><span class="spinner"></span></div>
+      <div id="tryCard"></div>
       <div class="grid">${tile(t.users, 'accounts', 'users')}${tile(t.new_7d, 'new this week', 'users')}${tile(t.active_today, 'active today')}${tile(t.active_7d, 'active this week')}
         ${tile(t.online_now, 'using Nexus now')}${tile(t.pending_requests, 'beta requests waiting', 'requests', 1)}${tile(t.new_feedback, 'new feedback & bugs', 'feedback', 1)}${tile(t.open_reports, 'open reports', 'reports', 1)}
         ${tile(t.beta_testers, 'beta testers', 'users')}${tile(t.moderated, 'suspended / banned', 'users')}${tile(t.spaces, 'Shared Spaces', 'moderation')}${tile(t.shared_agents, 'shared agents', 'moderation')}</div>
@@ -52,6 +53,10 @@
     NXCharts.hbars($('vDesk'), vers('desktop')); NXCharts.hbars($('vPhone'), vers('phone'));
     NXCharts.hbars($('cAgents'), (d.agents || []).map(a => ({ label: a.name, value: +a.chats, sub: `${a.people} people` })));
     NX.tasks?.paintMyDay();
+    // 2.0.3: Nexus Test Run (the web version) at a glance
+    rpc('admin_try_stats').then(r => { const el = $('tryCard'); if (!el || !r?.success) return; el.innerHTML = `<div class="card"><h3>🧪 Test Run (web) <span class="sp"></span><a class="muted" href="https://apojidelegraphics.github.io/Nexus-28/try/" target="_blank" rel="noopener" style="font-size:12px">Open it ↗</a></h3>
+      <div class="grid" style="margin:0">${[[r.people, 'people have used it'], [r.active_week, 'active this week'], [r.answers_today, 'free answers today'], [r.answers_week, 'answers this week'], [r.searches_week, 'web searches this week'], [r.chats, 'saved chats']].map(([n, l]) => `<div class="stat"><b>${(+n || 0).toLocaleString()}</b><span>${l}</span></div>`).join('')}</div>
+      <p class="muted" style="margin:6px 0 0;font-size:12.5px">Take it down from Maintenance → 🧪 Test Run.</p></div>`; }).catch(() => {});
     $('dUpd').textContent = '· updated ' + new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
     $('main').onclick = e => {
       const g = e.target.closest('[data-go]'); if (g) return NX.go(g.dataset.go);
@@ -503,7 +508,7 @@
 
   // =========================================================== Maintenance
   const SCOPES = [['global', '🌐 Everything', 'The Mac app and N28C: no chats at all'], ['desktop', '💻 Mac app', 'All chats in the Mac app (and asks from N28C)'], ['phone', '📱 N28C', 'The phone app'],
-    ['spaces', '👥 Shared Spaces', 'Shared Spaces and live sessions'], ['paragon', '@paragon', 'Only this agent'], ['neodela', '@neodela', 'Only this agent'], ['lyte', '@lyte', 'Only this agent'], ['flash', '@flash', 'Only this agent'], ['axiom', '@axiom', 'Only Axiom (Apex)']];
+    ['spaces', '👥 Shared Spaces', 'Shared Spaces and live sessions'], ['web', '🧪 Test Run', 'The web version (Nexus without a Mac)'], ['paragon', '@paragon', 'Only this agent'], ['neodela', '@neodela', 'Only this agent'], ['lyte', '@lyte', 'Only this agent'], ['flash', '@flash', 'Only this agent'], ['axiom', '@axiom', 'Only Axiom (Apex)']];
   const isOn = m => m.enabled === true || m.enabled === 'true' || m.enabled?.enabled === true;
   P.maint = async () => {
     const { data, error } = await sb.from('maintenance_config').select('*').order('scope');

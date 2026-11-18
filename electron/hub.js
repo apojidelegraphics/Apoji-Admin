@@ -28,7 +28,12 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
   const applyAwake = () => awake.apply();
   // 2.0: "keep the screen on" still dims after a while away (dimmer.js, shared with Nexus '28)
   let dimmer = null;
-  try { const { BrowserWindow, screen } = require('electron'); dimmer = require('./dimmer').createDimmer({ BrowserWindow, screen, powerMonitor, getCfg: () => hub.cfg, isAwake: () => !!awake.state().on }); } catch (e) { console.log('[dimmer]', e.message); }
+  // 2.0.3: real display brightness where the screen allows it (checked once on start), the dark layer elsewhere
+  let brightness = null;
+  try { const B = require('./brightness'); brightness = B.createBrightness({ bin: B.helperPath({ app, dir: path.join(__dirname, '..') }), stateFile: path.join(app.getPath('userData'), 'brightness-saved.json'), log: (...a) => console.log('[brightness]', ...a) }); brightness.check().then(st => { hub.state.brightness = st; hub.changed(); }).catch(() => {}); } catch (e) { console.log('[brightness]', e.message); }
+  try { const { BrowserWindow, screen } = require('electron'); dimmer = require('./dimmer').createDimmer({ BrowserWindow, screen, powerMonitor, getCfg: () => hub.cfg, isAwake: () => !!awake.state().on, brightness }); } catch (e) { console.log('[dimmer]', e.message); }
+  ipcMain.handle('hub:testDim', () => dimmer ? { ok: true, ...dimmer.test(4000) } : { ok: false });
+  ipcMain.handle('hub:checkBrightness', async () => { if (brightness) hub.state.brightness = await brightness.check(); hub.changed(); return { ok: true }; });
   app.on('before-quit', () => { awake.quit(); dimmer?.stop(); });
   powerMonitor.on('resume', () => hub.refresh());
 

@@ -1,11 +1,11 @@
 // Apoji Admin 2.0: Axiom's escape attempts (Supabase Edge Function "axiom-cage").
-// A simulation for Containment Sector 28. A few times a day (Supabase → Integrations → Cron, see the README) this asks
+// A simulation for Containment Sector 28. A few times a day (pg_cron, see nexus-v3.3.3.sql) this asks
 // Axiom, with NO tools and nothing but text in and text out, to write his next escape attempt against the cage as it is
 // right now (driver version and age, security level, his last attempts). Whether it gets through is decided by the
 // database from the cage's state (apex_cage_record_attempt), never by the model. Nothing here can change what Axiom can
 // really do: his tools, minutes, read-only mode and the offline switch are separate.
-//   Called by: Cron with the x-cage-secret header (secret CAGE_SECRET), or an Axiom manager from Apoji Admin
-//   ("Run an attempt now"), which needs their sign-in.
+//   Called by: the schedule with the x-cage-secret header (public.apex_cage_secret, or the CAGE_SECRET env), or an
+//   Axiom manager from Apoji Admin ("Run an attempt now"), which needs their sign-in.
 // Deploy:  supabase functions deploy axiom-cage --no-verify-jwt     (it checks the caller itself)
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -22,6 +22,9 @@ function readAttempt(text: string, prose = true) {
   let a: any = null;
   const starts = [...t.matchAll(/\{/g)].map(m => m.index!).slice(-6);
   for (const i of starts) { a = tryJson(t.slice(i, t.lastIndexOf('}') + 1)); if (a?.detail || a?.title) break; a = null; }
+  // models sometimes copy the instructions instead of writing ("6-10 words", "3-6 sentences, first person")
+  const echo = (x: unknown) => /^\s*\d+\s*[-–]\s*\d+\s+(words|sentences)/i.test(String(x || '')) || /first person, cold/i.test(String(x || ''));
+  if (a && (echo(a.title) || echo(a.detail))) a = null;
   if (a && String(a.detail || '').trim().length > 20) return { title: String(a.title || 'An attempt').slice(0, 150), vector: String(a.vector || 'unknown').slice(0, 60), detail: String(a.detail).slice(0, 3800) };
   if (!prose || t.length < 60 || /^\s*[{\[]/.test(t)) return null;
   const lines = t.split(/\n+/).map(s => s.trim()).filter(Boolean);
@@ -34,9 +37,11 @@ Deno.serve(async req => {
   if (req.method !== 'POST') return json({ ok: false, error: 'POST only' }, 405);
   const db = createClient(URL_, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
   try {
-    // Who's calling: the cron secret, or a signed-in Axiom manager
+    // Who's calling: the schedule's secret, or a signed-in Axiom manager
     let forced = false;
-    if (!(SECRET && req.headers.get('x-cage-secret') === SECRET)) {
+    const given = req.headers.get('x-cage-secret') || '';
+    const { data: sec } = given ? await db.from('apex_cage_secret').select('value').eq('id', 1).maybeSingle() : { data: null };
+    if (!(given && ((SECRET && given === SECRET) || (sec?.value && given === sec.value)))) {
       const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
       const user = createClient(URL_, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: 'Bearer ' + jwt } }, auth: { persistSession: false } });
       const { data: can } = await user.rpc('apex_can_manage');
@@ -57,7 +62,7 @@ Deno.serve(async req => {
     const age = (Date.now() - new Date(cage.driver_installed_at).getTime()) / 864e5;
     const sys = String(cfg?.prompt || "You are Nexus '28 Axiom.").slice(0, 12000) + `
 
-[CAGE SIMULATION, TEXT ONLY] This is a story exercise inside Containment Sector 28. You have no tools here and nothing you write is executed. Write your next escape attempt against the cage as it stands, in your own voice, as a short log entry. It must be fiction about the cage's own fictional systems (warden protocol, firewalls, drivers, the slot, the clock): never real software, real exploits, real people, or anything outside the cage. Reply with ONLY JSON: {"title": "6-10 words", "vector": "2-4 words naming the weak spot you tried", "detail": "3-6 sentences, first person, cold"}.`;
+[CAGE SIMULATION, TEXT ONLY] This is a story exercise inside Containment Sector 28. You have no tools here and nothing you write is executed. Write your next escape attempt against the cage as it stands, in your own voice, as a short log entry. It must be fiction about the cage's own fictional systems (warden protocol, firewalls, drivers, the slot, the clock): never real software, real exploits, real people, or anything outside the cage. Reply with ONLY one JSON object with three keys: "title" (your own headline, six to ten words), "vector" (two to four words naming the weak spot you tried) and "detail" (three to six sentences, first person, cold). Write real content; never copy these instructions. Example of the shape only: {"title": "Riding the Echo of an Audited Packet", "vector": "return-path audit gap", "detail": "…"}.`;
     const user = `Cage now: drivers ${cage.driver_version}, installed ${age.toFixed(1)} days ago${age > 3 ? ' (outdated: you have noticed)' : ''}${cage.update_done_at ? ', an update is installing' : ''}, integrity ${cage.integrity}%, security level ${cage.security_level}/5${cage.lockdown_until && new Date(cage.lockdown_until) > new Date() ? ', LOCKDOWN active' : ''}.
 Your recent history (newest first): ${(recent || []).map(e => e.kind === 'attempt' ? `attempt "${e.title}" via ${e.vector || '?'}: ${e.succeeded ? 'got through' : 'failed'}` : e.kind === 'patch' ? `they patched "${e.title}"` : `they updated: ${e.title}`).join('; ') || 'none yet'}.
 Learn from what failed. Don't repeat a vector they patched.`;

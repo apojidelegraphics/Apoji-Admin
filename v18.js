@@ -90,6 +90,14 @@
   const modelNote = () => { const m = macModel(), use = lastModel(); return !m?.model || m.model === use ? esc(use) : `${esc(use)} <span title="Nexus uses ${esc(m.model)} on your Mac; that one isn't on the free key">(on your Mac: ${esc(m.model)})</span>`; };
   const md = s => esc(s).replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) => `<pre>${c}</pre>`).replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
   const conv = () => NC.convs.find(c => c.id === NC.open) || null;
+  // 2.0.3: one continuous chat with Nexus, like a DM (older separate chats are merged into it, oldest first)
+  function oneChat() {
+    if (NC.convs.length === 1 && NC.convs[0].id === 'nexus') { NC.open = 'nexus'; return NC.convs[0]; }
+    const all = NC.convs.flatMap(c => c.messages || []).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-200);
+    const macConv = NC.convs.slice().sort((a, b) => (b.at || 0) - (a.at || 0)).find(c => c.macConv)?.macConv;
+    NC.convs = [{ id: 'nexus', title: 'Nexus', messages: all, at: Date.now(), ...(macConv ? { macConv } : {}) }];
+    NC.open = 'nexus'; saveConvs(); return NC.convs[0];
+  }
   function newConv() { const c = { id: 'c' + Date.now().toString(36), title: 'New chat', messages: [], at: Date.now() }; NC.convs.unshift(c); NC.open = c.id; saveConvs(); return c; }
 
   // Your orb (your orb skin from Nexus, in the color of the agent you're using). 2.0.2: it moves, like in Nexus '28:
@@ -128,7 +136,7 @@
   // ---------- the ◆ Nexus room
   async function mount(el, onBack) {
     NC.host = el; NC.onBack = onBack;
-    if (!conv()) NC.open = NC.convs[0]?.id || newConv().id;
+    oneChat();
     el.classList.add('nxc-room');
     // 2.0: same layout as every other room (top bar, message rows with avatars and times, the compose box)
     el.innerHTML = '<div class="top"></div><div class="msgs" id="ncLog"></div><div class="compose"><div class="box"><textarea class="field" id="ncIn" rows="1" maxlength="8000"></textarea><button class="btn primary" id="ncSend" style="height:42px">Send</button></div></div>';
@@ -144,22 +152,18 @@
     el.onclick = e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.id === 'ncSend') return send();
-      if (b.id === 'ncNew') { newConv(); return paint(); }
       if (b.id === 'ncBack') return NC.onBack?.();
       if (b.dataset.handoff) return handoff(+b.dataset.handoff);
       if (b.dataset.copy) { navigator.clipboard?.writeText(conv().messages[+b.dataset.copy].content); return toast('Copied'); }
       if (b.dataset.tools) { const row = b.closest('.m'); return row?.classList.toggle('tools-on'); }
-      if (b.dataset.del) { if (!confirm('Delete this chat from this browser?')) return; NC.convs = NC.convs.filter(x => x.id !== NC.open); NC.open = NC.convs[0]?.id || newConv().id; saveConvs(); return paint(); }
+      if (b.dataset.del) { if (!confirm('Clear your Nexus chat in this browser? (Your chats on the Mac stay.)')) return; NC.convs = []; oneChat(); return paint(); }
     };
-    el.onchange = e => { if (e.target.id === 'ncPick') { NC.open = e.target.value; paint(); } };
   }
   function paintTop() {
     const el = NC.host?.querySelector('.top'); if (!el) return;
     const a = agentInfo(lastAgent()), on = macOn();
     el.innerHTML = `<button class="btn sm back" id="ncBack">‹</button>${icon()}
       <div class="ti"><b>Nexus <span class="muted" style="font-weight:400">· ${esc(a.short)}</span></b><small>${on ? 'Your Mac answers, with every tool and @Feature' : `Free Nexus key · ${modelNote()} · no tools`} · the agent and model you're using in Nexus</small></div>
-      <select class="field" id="ncPick" title="Your chats">${NC.convs.map(c => `<option value="${esc(c.id)}" ${c.id === NC.open ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select>
-      <button class="btn sm" id="ncNew" title="New chat">＋</button>
       <span class="mac-dot ${on ? 'on' : 'off'}" title="${on ? 'Your Mac is on and linked' : NC.status ? 'Your Mac was last seen ' + ago(NC.statusAt) : 'Turn on the phone link in Nexus (Settings → Phone) to hand off to your Mac'}">${on ? '● Mac on' : '○ Mac off'}</span>`;
   }
   function paint() { paintTop(); paintLog(); const i = NC.host?.querySelector('#ncIn'); if (i) i.placeholder = `Message ${agentInfo(lastAgent()).short}…`; }
@@ -182,7 +186,7 @@
         ${m.pending ? '' : `<div class="tools"><button data-copy="${i}" title="Copy">⧉</button>${canHand ? `<button data-handoff="${i}" title="Hand off to my Mac">➤</button>` : ''}</div><button class="m-more" data-tools="1" title="More" aria-label="More">⋯</button>`}</div>`;
       prev = { role: m.role, at };
     });
-    log.innerHTML = c.messages.length ? html + '<div class="nx-end"><button class="btn sm ghost" data-del="1">Delete this chat</button></div>'
+    log.innerHTML = c.messages.length ? html + '<div class="nx-end"><button class="btn sm ghost" data-del="1">Clear chat</button></div>'
       : `<div class="empty">Ask anything. ${macOn() ? 'Your Mac is on, so it answers with all its tools.' : 'Your Mac is off: answers come from the free Nexus key. Need a tool (calendar, files, Axiom’s kits)? Use “Hand off to my Mac”.'}</div>`;
     log.scrollTop = log.scrollHeight;
   }

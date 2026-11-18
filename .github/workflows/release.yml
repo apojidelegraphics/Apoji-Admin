@@ -18,6 +18,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
+      - name: Brightness helper (real screen dimming)
+        run: sh scripts/build-brightness.sh
       - name: Build
         run: npx electron-builder --mac dmg zip --arm64 --x64 --publish never
       - name: Release notes
