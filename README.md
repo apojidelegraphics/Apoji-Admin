@@ -117,6 +117,7 @@ Run `supabase/nexus-v3.3.sql` from the Nexus repo first (after `nexus-v3.2.sql`)
 - **Feedback & bugs → ＋ New report:** add a bug or feedback yourself (it shows as PORTAL).
 - The header reads **APOJI ADMIN PORTAL**.
 - **Keep awake** works on battery too (it lets go below 20%); turn on "Only while plugged in" if you'd rather it didn't. **Keep the screen on** now dims every screen after a while away (pick 1 to 20 minutes); touch anything and it's back. Lid-closed mode follows the same battery rule.
+- **2.0.1:** lid-closed mode can't get stuck on: a small watcher switches it off when the app's process ends (even a crash or force-quit), every check turns it off if no running app wants it, and closing the lid puts the screen to sleep so the Mac locks even with "keep the screen on".
 
 ## Develop
 

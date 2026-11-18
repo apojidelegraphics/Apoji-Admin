@@ -35,6 +35,6 @@ assert.ok(hub.includes("require('./dimmer').createDimmer") && hub.includes("labe
 ok('keep awake works on battery (down to 20%); "keep the screen on" dims after a while away');
 
 const pkg = JSON.parse(read('package.json'));
-assert.ok(pkg.version === '2.0.0' && read('sw.js').includes("'apoji-admin-v2.0.0'"));
-ok('version 2.0.0');
+assert.ok(/^2\.0\.\d+$/.test(pkg.version) && read('sw.js').includes(`'apoji-admin-v${pkg.version}'`));
+ok('version 2.0.x');
 console.log(`v2.0: ${n} checks passed`);
