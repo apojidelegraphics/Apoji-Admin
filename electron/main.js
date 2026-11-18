@@ -8,7 +8,7 @@ const { pathToFileURL } = require('url');
 
 const ROOT = path.join(__dirname, '..');
 const MAC = process.platform === 'darwin', WIN = process.platform === 'win32';   // 2.0.4: runs on Windows too
-if (WIN) app.setAppUserModelId('com.apojidelegraphics.admin');   // notifications and the taskbar group under the app's name
+if (WIN) app.setAppUserModelId(app.isPackaged ? 'com.apojidelegraphics.apojiadmin' : process.execPath);   // notifications and the taskbar group under the app's name
 const HOME = 'apoji://admin/index.html';
 const RELEASES = 'https://github.com/apojidelegraphics/Apoji-Admin/releases/latest';
 const SB_URL = process.env.APOJI_TEST_SUPABASE || 'https://yzbnxpkuhlxsuwzbjifx.supabase.co', SB_KEY = 'sb_publishable_LY-EZORCvEQqW6AeQC5a8w_Z7wmeyjn';

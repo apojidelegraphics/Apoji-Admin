@@ -16,5 +16,5 @@ const main = read('electron/main.js'), pkg = JSON.parse(read('package.json')), r
 assert.ok(main.includes("require('electron-updater').autoUpdater") && main.includes('autoInstallOnAppQuit = true') && main.includes('quitAndInstall') && read('electron/preload.js').includes('installUpdate'));
 assert.ok(pkg.dependencies['electron-updater'] && pkg.build.publish[0].repo === 'Apoji-Admin' && rel.includes('dist/latest.yml') && rel.includes('dist/*.exe.blockmap'));
 ok('Windows updates itself (electron-updater + latest.yml in the release)');
-assert.strictEqual(pkg.version, '2.1.0'); assert.ok(read('sw.js').includes('v2.1.0'));
+assert.ok(/^2\.1\.\d+$/.test(pkg.version) && read('sw.js').includes('v' + pkg.version));
 console.log(`2.1: ${n + 1} checks passed`);

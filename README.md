@@ -156,6 +156,9 @@ Run `supabase/apoji-admin-2.1.sql` (already applied to the live project).
 - **Dashboard:** 🧪 Test Run sits under Active people and Admins online.
 - **Windows updates itself** (see above).
 
+## 2.1.1
+- **Windows notifications:** fixed (the app id now matches the Start menu shortcut, which Windows needs to show them).
+
 ## Develop
 
 Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`), `npm test` tests the hub. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` most pages, `extras.js` tasks and the command palette, `features.js` the hub, notes, broadcasts, schedules, health and releases, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications). `electron/hub-core.js` is the hub API, `electron/hub.js` keep-awake, login item and menu bar.
