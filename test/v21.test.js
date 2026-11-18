@@ -1,0 +1,20 @@
+// 2.1 checks: Team Chat + level rooms, New profile, Test Run card placement, Windows automatic updates.
+const assert = require('assert'), fs = require('fs'), path = require('path');
+const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+let n = 0; const ok = m => { n++; console.log('  ✓ ' + m); };
+const chat = read('chat.js'), sql = read('supabase/apoji-admin-2.1.sql');
+assert.ok(chat.includes("if (r === 'all') return 'Team Chat'") && ["'lvl:high-admin': ['high-admin', 'All High Admins'", "'lvl:admin': ['admin', 'All Admins'", "'lvl:mod': ['mod', 'All Mods'"].every(x => chat.includes(x)));
+assert.ok(chat.includes("a.level === LVL[r][0] || isOwnerId(a.id)") && sql.includes("r in ('lvl:high-admin', 'lvl:admin', 'lvl:mod')") && sql.includes('public.is_owner()'));
+ok('Team Chat, plus All High Admins / All Admins / All Mods rooms (that level + the Owner, enforced by the database)');
+const pages = read('pages.js'), fn = read('supabase/functions/admin-users/index.ts');
+assert.ok(pages.includes('id="uNew"') && pages.includes('id="dNewAdmin"') && pages.includes("action: 'create'") && pages.includes("rpc('admin_grant_role'"));
+assert.ok(fn.includes("if (action === 'create')") && fn.includes('admin.auth.admin.createUser(') && fn.includes('inviteUserByEmail(') && fn.includes("myRole.high_tier === 'viewer'"));
+ok('＋ New profile / ＋ New admin profile (password or invite, name, username, role)');
+assert.ok(pages.indexOf('<div id="tryCard"></div>') > pages.indexOf('Admins online <span class="muted">'));
+ok('🧪 Test Run card under Active people + Admins online');
+const main = read('electron/main.js'), pkg = JSON.parse(read('package.json')), rel = read('.github/workflows/release.yml');
+assert.ok(main.includes("require('electron-updater').autoUpdater") && main.includes('autoInstallOnAppQuit = true') && main.includes('quitAndInstall') && read('electron/preload.js').includes('installUpdate'));
+assert.ok(pkg.dependencies['electron-updater'] && pkg.build.publish[0].repo === 'Apoji-Admin' && rel.includes('dist/latest.yml') && rel.includes('dist/*.exe.blockmap'));
+ok('Windows updates itself (electron-updater + latest.yml in the release)');
+assert.strictEqual(pkg.version, '2.1.0'); assert.ok(read('sw.js').includes('v2.1.0'));
+console.log(`2.1: ${n + 1} checks passed`);

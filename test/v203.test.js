@@ -24,5 +24,5 @@ ok('Test Run card on the dashboard + its own maintenance switch');
 const fn = read('supabase/functions/axiom-cage/index.ts');
 assert.ok(fn.includes("from('apex_cage_secret')") && fn.includes('const echo = '));
 ok('Axiom’s attempts run by themselves (pg_cron) and never copy the instructions');
-assert.ok(/^2\.0\.\d+$/.test(pkg.version) && read('sw.js').includes(`'apoji-admin-v${pkg.version}'`));
+assert.ok(/^2\.\d+\.\d+$/.test(pkg.version) && read('sw.js').includes(`'apoji-admin-v${pkg.version}'`));
 console.log(`v2.0.3: ${n} checks passed`);

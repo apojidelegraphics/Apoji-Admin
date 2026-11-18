@@ -365,7 +365,9 @@
     setInterval(() => emit('presence', null), 30e3);
     sb.rpc('log_activity', { p_source: 'portal', p_version: 'portal' }).then(() => {}, () => {});
     // Mac app: a new version on GitHub Releases
-    window.apojiDesktop?.onUpdate(u => u.latest ? toast(`Apoji Admin ${u.latest} is out. Click to download.`, { title: '⬆ Update available', ms: 15000, onClick: () => window.open(u.url, '_blank') }) : toast(`You're on the latest version (${u.current}).`));
+    window.apojiDesktop?.onUpdate(u => u.ready ? toast(`Apoji Admin ${u.latest} is ready. Click to restart and update (or it updates next time you quit).`, { title: '⬆ Update ready', ms: 30000, onClick: () => window.apojiDesktop.installUpdate?.() })
+      : u.downloading ? toast(`Downloading Apoji Admin ${u.latest}… You'll be asked to restart when it's ready.`, { title: '⬆ Updating' })
+      : u.latest ? toast(`Apoji Admin ${u.latest} is out. Click to download.`, { title: '⬆ Update available', ms: 15000, onClick: () => window.open(u.url, '_blank') }) : toast(`You're on the latest version (${u.current}).`));
   }
 
   const NX = window.NX = {

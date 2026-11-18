@@ -21,7 +21,6 @@
     $('dash').innerHTML = `
       ${t.maintenance_on ? `<div class="banner warn">🛠 <span style="flex:1">${t.maintenance_on} maintenance switch${t.maintenance_on === 1 ? ' is' : 'es are'} on right now.</span><button class="btn sm" data-go="maint">Manage</button></div>` : ''}
       <div class="card" id="myDay"><span class="spinner"></span></div>
-      <div id="tryCard"></div>
       <div class="grid">${tile(t.users, 'accounts', 'users')}${tile(t.new_7d, 'new this week', 'users')}${tile(t.active_today, 'active today')}${tile(t.active_7d, 'active this week')}
         ${tile(t.online_now, 'using Nexus now')}${tile(t.pending_requests, 'beta requests waiting', 'requests', 1)}${tile(t.new_feedback, 'new feedback & bugs', 'feedback', 1)}${tile(t.open_reports, 'open reports', 'reports', 1)}
         ${tile(t.beta_testers, 'beta testers', 'users')}${tile(t.moderated, 'suspended / banned', 'users')}${tile(t.spaces, 'Shared Spaces', 'moderation')}${tile(t.shared_agents, 'shared agents', 'moderation')}</div>
@@ -29,8 +28,9 @@
         <label class="muted" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="dTable" ${tableOn ? 'checked' : ''}> Show numbers as tables</label></div>
       <div class="cols3">
         <div class="card"><h3>Active people per day</h3><div id="cActive"></div></div>
-        <div class="card"><h3>Admins online <span class="muted">${online.length} of ${A.admins.length}</span></h3><div class="members">${A.admins.slice().sort((a, b) => ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(a)] - ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(b)]).slice(0, 8).map(a => { const p = presence(a); return `<div>${av(a, 'sm', true)}<span class="nm">${esc(nameOf(a))}<small><span class="prtxt ${p}">${PRES[p]}</span>${a.status_text ? ' · ' + esc(a.status_text) : ''}</small></span>${a.id !== A.user.id ? `<button class="btn sm" data-dm="${esc(a.id)}">💬</button>` : ''}</div>`; }).join('')}</div></div>
+        <div class="card"><h3>Admins online <span class="muted">${online.length} of ${A.admins.length}</span>${A.level === 'high-admin' && A.tier !== 'viewer' ? '<span class="sp"></span><button class="btn sm" id="dNewAdmin" title="Make a new admin profile">＋ New admin profile</button>' : ''}</h3><div class="members">${A.admins.slice().sort((a, b) => ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(a)] - ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(b)]).slice(0, 8).map(a => { const p = presence(a); return `<div>${av(a, 'sm', true)}<span class="nm">${esc(nameOf(a))}<small><span class="prtxt ${p}">${PRES[p]}</span>${a.status_text ? ' · ' + esc(a.status_text) : ''}</small></span>${a.id !== A.user.id ? `<button class="btn sm" data-dm="${esc(a.id)}">💬</button>` : ''}</div>`; }).join('')}</div></div>
       </div>
+      <div id="tryCard"></div>   <!-- 2.1: Test Run sits under active people + admins online -->
       <div class="cols">
         <div class="card"><h3>New accounts</h3><div id="cSign"></div></div>
         <div class="card"><h3>Shared Space posts</h3><div id="cPosts"></div></div>
@@ -61,6 +61,7 @@
     $('main').onclick = e => {
       const g = e.target.closest('[data-go]'); if (g) return NX.go(g.dataset.go);
       const r = e.target.closest('[data-days]'); if (r) { NX.store.set('dashDays', +r.dataset.days); $('dash').innerHTML = '<div class="empty"><span class="spinner"></span></div>'; return P.dashboard(); }
+      if (e.target.id === 'dNewAdmin') return newProfile('admin');
       const dm = e.target.closest('[data-dm]'); if (dm) { NX.go('chat'); setTimeout(() => NX.chat.openRoom(NX.chat.dmRoom(dm.dataset.dm), true), 50); }
     };
     $('dTable').onchange = e => { NX.store.set('dashTable', e.target.checked); draw(); };
@@ -308,6 +309,39 @@
 
   // =========================================================== Users
   const UF = [['all', 'Everyone'], ['new7', 'New this week'], ['active7', 'Active this week'], ['beta', 'Beta testers'], ['comped', 'Comped'], ['admins', 'Admins & mods'], ['moderated', 'Suspended / banned']];
+  // 2.1: make a new Nexus account from here, optionally as an admin profile (Mod / Admin / High-Admin)
+  function newProfile(level = '') {
+    const { el, close } = NX.modal(`<h3>＋ New profile</h3><p class="muted" style="margin-top:0">Makes a Nexus account they can sign in to everywhere (Mac app, N28C, Test Run). Make it an admin profile to give it a role in Apoji Admin too.</p>
+      <div class="acct-grid np-grid">
+        <label>Email</label><input class="field" id="npEmail" type="email" placeholder="name@example.com" autocomplete="off">
+        <label>Password</label><div class="row" style="flex-wrap:nowrap"><input class="field" id="npPw" type="text" placeholder="8+ characters (or leave empty to email an invite)" autocomplete="new-password" style="flex:1"><button class="btn sm" id="npGen" type="button">Generate</button></div>
+        <label>Name</label><input class="field" id="npNick" maxlength="40" placeholder="Nickname (optional)">
+        <label>Username</label><input class="field" id="npUser" maxlength="24" placeholder="username (optional)">
+        <label>Role</label><select class="field" id="npLvl"><option value="">Regular account (no admin role)</option><option value="mod" ${level === 'mod' ? 'selected' : ''}>Mod</option><option value="admin" ${level === 'admin' ? 'selected' : ''}>Admin</option><option value="high-admin" ${level === 'high-admin' ? 'selected' : ''}>High-Admin</option></select>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-x>Cancel</button><button class="btn primary" id="npGo">Create profile</button></div>`);
+    el.onclick = async e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.hasAttribute('data-x')) return close();
+      if (b.id === 'npGen') { const a = new Uint8Array(12); crypto.getRandomValues(a); el.querySelector('#npPw').value = [...a].map(x => 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[x % 55]).join(''); return; }
+      if (b.id !== 'npGo') return;
+      const v = id => el.querySelector(id).value.trim();
+      const body = { action: 'create', email: v('#npEmail'), password: el.querySelector('#npPw').value, nickname: v('#npNick'), username: v('#npUser') };
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) return toast('Type an email address.', true);
+      if (body.password && body.password.length < 8) return toast('Passwords need 8+ characters.', true);
+      const lvl = v('#npLvl');
+      if (lvl && !confirm(`Make ${body.email} a ${NX.levelLabel ? NX.levelLabel(lvl) : lvl}? They'll be able to open Apoji Admin.`)) return;
+      b.disabled = true; b.textContent = 'Creating…';
+      try {
+        const { data, error } = await sb.functions.invoke('admin-users', { body });
+        const res = data || (await error?.context?.json?.().catch(() => null)) || {};
+        if (!res.ok) throw new Error(res.error || error?.message || 'Couldn’t create it.');
+        if (lvl) { const g = await rpc('admin_grant_role', { target_email: body.email, new_level: lvl }); if (g && g.success === false) throw new Error('Account made, but the role failed: ' + (g.error || '')); await NX.loadAdmins?.(); }
+        close(); toast(`✓ ${res.message || 'Profile created.'}${lvl ? ` Role: ${lvl}.` : ''}`); if (A.tab === 'users') P.users(); if (res.user_id) userDrawer(res.user_id);
+      } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Create profile'; }
+    };
+  }
+  NX.newProfile = newProfile;
   P.users = async () => {
     const u = A.uf = A.uf || { q: '', filter: 'all', sort: 'new', page: 0, sel: new Set() };
     const per = 50;
@@ -319,7 +353,7 @@
       <div class="tabsub" id="uF">${UF.map(([k, l]) => `<button data-f="${k}" class="${u.filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="row" style="margin-bottom:10px"><input class="field" id="uQ" placeholder="Search email, username or nickname" value="${esc(u.q)}" style="flex:1;min-width:200px">
         <select class="field" id="uS"><option value="new" ${u.sort === 'new' ? 'selected' : ''}>Newest first</option><option value="active" ${u.sort === 'active' ? 'selected' : ''}>Recently active</option><option value="email" ${u.sort === 'email' ? 'selected' : ''}>Email A–Z</option></select>
-        <button class="btn" id="uCsv">Export CSV</button></div>
+        <button class="btn" id="uCsv">Export CSV</button>${A.level === 'high-admin' && A.tier !== 'viewer' ? '<button class="btn primary" id="uNew">＋ New profile</button>' : ''}</div>
       <div class="banner" id="uBulk" ${u.sel.size ? '' : 'hidden'}><b>${u.sel.size} selected</b><span class="sp" style="flex:1"></span><button class="btn sm" data-bulk="beta_on">Make beta</button><button class="btn sm" data-bulk="beta_off">Remove beta</button>${A.level !== 'mod' ? '<button class="btn sm" data-bulk="comp_on">Comp</button><button class="btn sm" data-bulk="comp_off">Un-comp</button>' : ''}<button class="btn sm ghost" data-bulk="clear">Clear</button></div>
       <div class="card"><table class="cards"><tr><th><input type="checkbox" id="uAll"></th><th>Person</th><th>Joined</th><th>Last active</th><th>Status</th><th class="num">Notes</th></tr>
         ${users.map(x => `<tr class="click ${u.sel.has(x.id) ? 'sel' : ''}" data-uid="${esc(x.id)}"><td><input type="checkbox" data-pick="${esc(x.id)}" ${u.sel.has(x.id) ? 'checked' : ''}></td>
@@ -339,6 +373,7 @@
         try { const res = await rpc('admin_bulk', { p_users: [...u.sel], p_action: bk.dataset.bulk }); toast(`✓ Updated ${res.updated}`); u.sel.clear(); P.users(); } catch (err) { toast(err.message, true); }
         return;
       }
+      if (e.target.id === 'uNew') return newProfile();
       if (e.target.id === 'uCsv') {
         toast('Preparing the CSV…'); const all = [];
         for (let off = 0; off < 5000; off += 200) { const res = await rpc('admin_list_users', { p_search: u.q, p_filter: u.filter, p_limit: 200, p_offset: off, p_sort: u.sort }); all.push(...res.users); if (res.users.length < 200) break; }

@@ -480,3 +480,6 @@ img.nx-orb, canvas.nx-orb { width: 32px; height: 32px; border-radius: 50%; flex:
 /* 2.0.4 Windows: no traffic lights on the left; the minimise / maximise / close buttons sit on the right instead */
 .desktop-app.win-app header { padding-left: 16px; padding-right: 150px; }
 @media (max-width: 760px) { .desktop-app.win-app header { padding-left: 12px; padding-right: 146px; } }
+
+/* 2.1 New profile */
+.np-grid { grid-template-columns: 84px minmax(0, 1fr) !important; } .np-grid > * { min-width: 0; } .np-grid .field { width: 100%; }

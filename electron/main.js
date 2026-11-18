@@ -64,8 +64,28 @@ ipcMain.on('badge', (_e, n) => { n = Math.max(0, n | 0); try { app.setBadgeCount
 ipcMain.on('attention', () => { if (win && !win.isFocused()) { if (MAC) app.dock?.bounce('informational'); else win.flashFrame(true); } });
 ipcMain.handle('version', () => app.getVersion());
 
+// 2.1: automatic updates on Windows (electron-updater + the release's latest.yml): downloads in the background, then
+// asks to restart; if you don't, it installs the next time Apoji Admin quits. Macs keep the download link (an unsigned
+// Mac app can't replace itself).
+let winUpdater = null, winReady = null;
+function setupWinUpdates() {
+  if (!WIN || !app.isPackaged) return;
+  try {
+    winUpdater = require('electron-updater').autoUpdater;
+    winUpdater.autoDownload = true; winUpdater.autoInstallOnAppQuit = true;
+    winUpdater.on('update-downloaded', info => { winReady = info.version; win?.webContents.send('update', { latest: info.version, ready: true }); });
+    winUpdater.on('error', e => console.log('[update]', e?.message || e));
+  } catch (e) { console.log('[update]', e.message); winUpdater = null; }
+}
+ipcMain.handle('update:install', () => { if (winUpdater && winReady) { app.isQuitting = true; setImmediate(() => winUpdater.quitAndInstall(true, true)); return true; } return false; });
 // A quiet update check against GitHub Releases (Help menu shows it too)
 async function checkUpdate(manual) {
+  if (winUpdater) {
+    if (winReady) { win?.webContents.send('update', { latest: winReady, ready: true }); return; }
+    try { const r = await winUpdater.checkForUpdates(); const v = r?.updateInfo?.version; if (manual) win?.webContents.send('update', v && v !== app.getVersion() ? { latest: v, downloading: true } : { latest: '', current: app.getVersion() }); }
+    catch { if (manual) shell.openExternal(RELEASES); }
+    return;
+  }
   try {
     const r = await net.fetch('https://api.github.com/repos/apojidelegraphics/Apoji-Admin/releases/latest', { headers: { 'User-Agent': 'Apoji-Admin' } });
     const j = await r.json(); const latest = String(j.tag_name || '').replace(/^v/, '');
@@ -85,6 +105,7 @@ app.whenReady().then(() => {
   ]));
   nativeTheme.themeSource = 'dark';
   createWindow();
+  setupWinUpdates();
   setTimeout(() => checkUpdate(false), 8000);
   setInterval(() => checkUpdate(false), 6 * 3600e3);
 });

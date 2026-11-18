@@ -25,6 +25,32 @@ Deno.serve(async req => {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || ''), target = String(body.user_id || '');
+    // 2.1: make a new account (Editors and the Owner). Roles are given afterwards with admin_grant_role, as usual.
+    if (action === 'create') {
+      if (myRole.high_tier === 'viewer') return json({ ok: false, error: 'Viewers can look but not change accounts.' }, 403);
+      const email = String(body.email || '').trim().toLowerCase(), password = String(body.password || '');
+      if (!EMAIL.test(email)) return json({ ok: false, error: "That doesn't look like an email address." }, 400);
+      if (password && password.length < 8) return json({ ok: false, error: 'Use at least 8 characters.' }, 400);
+      const uname = String(body.username || '').trim(); if (uname && !USERNAME.test(uname)) return json({ ok: false, error: 'Usernames are 3–24 characters: letters, numbers, _ . -' }, 400);
+      const nick = String(body.nickname || '').trim().slice(0, 40);
+      const made = password
+        ? await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: nick ? { nickname: nick } : {} })
+        : await admin.auth.admin.inviteUserByEmail(email, { data: nick ? { nickname: nick } : {}, redirectTo: 'https://apojidelegraphics.github.io/Nexus-28/companion/' });
+      if (made.error) return json({ ok: false, error: /already|registered|exists/i.test(made.error.message) ? 'Another account already uses that email.' : made.error.message }, 400);
+      const uid = made.data.user!.id;
+      // every account needs a profile with a username: theirs, or one made from the email (name, name2, name37…)
+      const base = (uname || email.split('@')[0].replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 20) || 'user').padEnd(3, '0');
+      let taken = false;
+      for (let i = 0; i < 6; i++) {
+        const tryName = i === 0 ? base : (base.slice(0, 20) + (i === 1 ? '2' : Math.floor(Math.random() * 900 + 100)));
+        const { error } = await admin.from('profiles').upsert({ id: uid, username: tryName, ...(nick ? { nickname: nick } : {}) });
+        if (!error) { taken = i > 0 && !!uname; break; }
+        if (!/duplicate|unique/i.test(error.message)) break;
+      }
+      if (taken) return json({ ok: true, user_id: uid, message: `Profile created for ${email}, but @${uname} was taken, so it got a similar username. Change it in their Account card.` });
+      await admin.from('moderation_log').insert({ action: 'user_created', performed_by: me.id, target_user_id: uid, target_email: email, details: { invited: !password, username: uname || null } }).then(() => {}, () => {});
+      return json({ ok: true, user_id: uid, message: password ? `Profile created for ${email}. Tell them their password privately.` : `Invite sent to ${email}.` });
+    }
     const { data: t } = await admin.auth.admin.getUserById(target);
     if (!t?.user) return json({ ok: false, error: 'That account no longer exists.' }, 404);
     const { data: tRole } = await admin.from('admin_roles').select('level, high_tier').eq('user_id', target).maybeSingle();

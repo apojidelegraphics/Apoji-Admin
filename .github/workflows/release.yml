@@ -1,4 +1,4 @@
-# Pushing a tag like v1.0.0 builds Apoji Admin for Mac (Apple silicon + Intel) and Windows (x64 + Arm), and publishes
+# Pushing a tag like v1.0.0 builds Apoji Admin for Mac (Apple silicon + Intel) and Windows (x64; Arm PCs run it too), and publishes
 # one GitHub Release with the DMGs, zips and the Windows installers. The app checks this release for updates.
 name: Release
 on:
@@ -39,9 +39,10 @@ jobs:
           4. Open it and sign in with your admin account.
 
           ## Apoji Admin for Windows
-          1. Download **Apoji-Admin-…-Windows-x64.exe** (most PCs) or **…-Windows-arm64.exe** (Arm laptops like Snapdragon).
+          1. Download **Apoji-Admin-Setup-….exe** (works on Intel, AMD and Arm PCs).
           2. Run it. Windows may show **"Windows protected your PC"** because the app isn't code-signed yet: click **More info → Run anyway**.
           3. Pick where to install, then open Apoji Admin from the Start menu or the desktop and sign in.
+          From then on Windows updates itself: new versions download in the background and install when you restart the app.
 
           Updating: download the new version, replace the app, and run the two commands again. You stay signed in; on a new Mac, unlock admin chat with the team passphrase.
           NOTES
@@ -66,9 +67,12 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - name: Build
-        run: npx electron-builder --win nsis --x64 --arm64 --publish never
+        run: npx electron-builder --win nsis --x64 --publish never
+      # latest.yml + the .blockmap are what Windows' automatic updates read (2.1)
       - name: Add to the release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml

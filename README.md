@@ -77,9 +77,9 @@ The database enforces this (a guard on `admin_roles`, `user_moderation` and ever
 
 ## Windows app (2.0.4)
 
-Download **Apoji-Admin-…-Windows-x64.exe** (most PCs) or **…-Windows-arm64.exe** (Arm laptops such as Snapdragon) from [Releases](https://github.com/apojidelegraphics/Apoji-Admin/releases/latest) and run it. The app isn't code-signed yet, so Windows may say **"Windows protected your PC"**: click **More info → Run anyway**. It installs for your user only (no admin needed) and adds Start menu and desktop shortcuts.
+Download **Apoji-Admin-Setup-….exe** (Intel, AMD and Arm PCs) from [Releases](https://github.com/apojidelegraphics/Apoji-Admin/releases/latest) and run it. The app isn't code-signed yet, so Windows may say **"Windows protected your PC"**: click **More info → Run anyway**. It installs for your user only (no admin needed) and adds Start menu and desktop shortcuts.
 
-It's the same portal. On Windows the hub page is called **This PC**: the hub and keep awake work the same (Tailscale for Windows, the system tray instead of the menu bar), "Dim when I step away" lowers a laptop's built-in screen through Windows' brightness control (desktop monitors get the dark layer), and unread counts show in the window title. Lid-closed mode is Mac only.
+It's the same portal. On Windows the hub page is called **This PC**: the hub and keep awake work the same (Tailscale for Windows, the system tray instead of the menu bar), "Dim when I step away" lowers a laptop's built-in screen through Windows' brightness control (desktop monitors get the dark layer), and unread counts show in the window title. Lid-closed mode is Mac only. **Updates are automatic on Windows** (2.1): a new version downloads in the background, then Apoji Admin asks to restart (or installs it the next time you quit).
 
 ## Supabase functions (1.7)
 
@@ -148,6 +148,13 @@ Run `supabase/nexus-v3.4.sql` from the Nexus repo.
 ## 2.0.5
 - **👑** The Owner's crown now sits on the top-left of the picture.
 - **Maintenance:** ◆ Nexus and @mentions in Team chat now stop when a switch is on with **Admins bypass** turned off (otherwise admins still get through, as before).
+
+## 2.1
+Run `supabase/apoji-admin-2.1.sql` (already applied to the live project).
+- **Chat rooms:** "All admins" is now **Team Chat**, and there are three new rooms: **All High Admins**, **All Admins** and **All Mods**. Each only lets in people of that level, plus the Owner, who is in all three.
+- **＋ New profile** (Users page) and **＋ New admin profile** (Dashboard → Admins online): make a Nexus account with a password (or email them an invite), name, username, and optionally a role. Needs the redeployed `admin-users` function.
+- **Dashboard:** 🧪 Test Run sits under Active people and Admins online.
+- **Windows updates itself** (see above).
 
 ## Develop
 

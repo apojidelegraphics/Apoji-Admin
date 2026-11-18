@@ -1,4 +1,4 @@
-// Admin chat (Apoji Admin): end-to-end encrypted with the team passphrase (crypto.js) · # All admins, group chats, private messages. Images and files, replies, reactions, edits,
+// Admin chat (Apoji Admin): end-to-end encrypted with the team passphrase (crypto.js) · # Team Chat, rooms per level, group chats, private messages. Images and files, replies, reactions, edits,
 // @mentions, read receipts (you can turn yours off), online / idle / do not disturb / offline, unread counts that
 // follow you between devices, and notifications. Only admins can read any of it (row-level security).
 (function () {
@@ -31,20 +31,28 @@
   const groupOf = r => C.groups.find(g => 'g:' + g.id === r);
   // 1.9: "◆ Nexus" is your own chat with Nexus (v18.js), shown as the first room. Models can be @mentioned in any room.
   const AGENTS = () => NX.nexusChat?.mentionable() || [];
-  function roomName(r) { if (r === 'nexus') return 'Nexus'; if (r === 'all') return 'All admins'; if (isDm(r)) return nameOf(dmOther(r)); const g = groupOf(r); return g ? g.name : 'Group'; }
+  // 2.1: "Team Chat" (everyone) plus a room per level: All High Admins / All Admins / All Mods. The Owner is in all three.
+  const LVL = { 'lvl:high-admin': ['high-admin', 'All High Admins', '★'], 'lvl:admin': ['admin', 'All Admins', 'A'], 'lvl:mod': ['mod', 'All Mods', 'M'] };
+  const isLvl = r => !!LVL[r];
+  const isOwnerId = id => (A.tiers || {})[id] === 'owner';
+  const lvlPeople = r => A.admins.filter(a => a.level === LVL[r][0] || isOwnerId(a.id));
+  const myLvlRooms = () => Object.keys(LVL).filter(r => A.level === LVL[r][0] || isOwnerId(me()));
+  function roomName(r) { if (r === 'nexus') return 'Nexus'; if (r === 'all') return 'Team Chat'; if (isLvl(r)) return LVL[r][1]; if (isDm(r)) return nameOf(dmOther(r)); const g = groupOf(r); return g ? g.name : 'Group'; }
   function roomPeople(r) {
     if (r === 'all') return A.admins;
+    if (isLvl(r)) return lvlPeople(r);
     if (isDm(r)) return [A.me, dmOther(r)].filter(Boolean);
     return (C.members[r.slice(2)] || []).map(m => adminById(m.user_id) || { id: m.user_id, email: '' });
   }
   function roomIcon(r, size = '') {
     if (r === 'nexus') return NX.nexusChat?.icon() || '<span class="gav" style="--c:var(--accent)">◆</span>';
     if (r === 'all') return `<span class="gav" style="--c:var(--accent)">#</span>`;
+    if (isLvl(r)) return `<span class="gav" style="--c:${{ 'lvl:high-admin': 'var(--gold, #ffd36b)', 'lvl:admin': 'var(--cyan, #5ce1ff)', 'lvl:mod': '#b18cff' }[r]}">${LVL[r][2]}</span>`;
     if (isDm(r)) return av(dmOther(r) || { id: r }, size, true);
     const g = groupOf(r) || {}; return `<span class="gav" style="--c:${esc(g.color || '#3dffa0')}">${esc(g.emoji || (g.name || 'G')[0].toUpperCase())}</span>`;
   }
   const muted = r => (A.prefs.muted_rooms || []).includes(r);
-  const allRooms = () => ['nexus', 'all', ...C.groups.map(g => 'g:' + g.id), ...A.admins.filter(a => a.id !== me()).map(a => dmRoom(a.id))];
+  const allRooms = () => ['nexus', 'all', ...myLvlRooms(), ...C.groups.map(g => 'g:' + g.id), ...A.admins.filter(a => a.id !== me()).map(a => dmRoom(a.id))];
   const mentionsMe = m => { const n = nameOf(A.me).toLowerCase(); const b = String(txt(m)).toLowerCase(); return m.sender !== me() && (b.includes('@' + n) || /@(everyone|here)\b/.test(b)); };
 
   async function loadGroups() {
@@ -110,7 +118,7 @@
       const mention = mentionsMe(m);
       if (!muted(m.room) || mention) {
         const who = adminById(m.sender) || { id: m.sender, nickname: m.sender_name };
-        NX.notify({ kind: 'chat', force: mention, who, title: `${mention ? '@ ' : ''}${m.sender_name || nameOf(who)}${m.room === 'all' || isGroup(m.room) ? ' · ' + roomName(m.room) : ''}`,
+        NX.notify({ kind: 'chat', force: mention, who, title: `${mention ? '@ ' : ''}${m.sender_name || nameOf(who)}${m.room === 'all' || isLvl(m.room) || isGroup(m.room) ? ' · ' + roomName(m.room) : ''}`,
           body: (E.ready() || !E.isEnc(m.body) ? txt(m) : '🔒 New encrypted message') || (m.attachments?.length ? `📎 ${m.attachments.length} attachment${m.attachments.length === 1 ? '' : 's'}` : ''), onClick: () => { NX.go('chat'); openRoom(m.room, true); } });
       }
     }
@@ -176,7 +184,8 @@
     });
     el.innerHTML = `<div class="rtools"><input class="field" id="rq" placeholder="Find a chat" value="${esc(q)}"></div>
       ${item('nexus', 'Nexus', NX.nexusChat?.subtitle() || 'Your own chat with Nexus')}
-      ${item('all', 'All admins', preview('all') || `${A.admins.length} admins`)}
+      ${item('all', 'Team Chat', preview('all') || `${A.admins.length} admins`)}
+      ${myLvlRooms().map(r => item(r, LVL[r][1], preview(r) || `${lvlPeople(r).length} ${lvlPeople(r).length === 1 ? 'person' : 'people'}`)).join('')}
       <h4>GROUPS <button id="newGroup" title="New group">＋</button></h4>
       ${C.groups.map(g => item('g:' + g.id, g.name, preview('g:' + g.id) || `${(C.members[g.id] || []).length} members`)).join('') || (q ? '' : '<p class="muted" style="margin:2px 10px 6px">No groups yet.</p>')}
       <h4>DIRECT MESSAGES</h4>
@@ -188,11 +197,12 @@
     const r = C.room, people = roomPeople(r);
     let sub = '';
     if (r === 'all') sub = `${A.admins.filter(a => presence(a) !== 'offline').length} online · ${A.admins.length} admins`;
+    else if (isLvl(r)) sub = `${people.filter(a => presence(a) !== 'offline').length} online · ${people.length} ${LVL[r][0]}s${isOwnerId(me()) || people.some(a => isOwnerId(a.id)) ? ' + the Owner' : ''}`;
     else if (isDm(r)) { const o = dmOther(r); const p = presence(o); sub = `<span class="prtxt ${p}">${PRES[p]}</span>${o?.status_text ? ' · ' + esc(o.status_text) : ''}${p === 'offline' && o?.last_seen && new Date(o.last_seen) > Date.now() - 30 * 864e5 ? ' · last seen ' + NX.ago(o.last_seen) : ''}`; }
     else sub = `${people.length} members · ${people.filter(a => presence(a) !== 'offline').length} online`;
     t.innerHTML = `<button class="btn sm back" id="tBack">‹</button>${roomIcon(r, '')}<div class="ti"><b>${esc(roomName(r))}<span class="e2ee" title="End-to-end encrypted: only admins with the team passphrase can read this. Supabase only stores scrambled text.">🔒 E2EE</span></b><small>${sub}</small></div>
       <button class="btn sm ghost" id="tPins" title="Pinned messages">📌<span id="tPinN"></span></button><button class="btn sm ghost" id="tFind" title="Search">🔍</button><button class="btn sm ghost" id="tMute" title="${muted(r) ? 'Unmute' : 'Mute'} notifications">${muted(r) ? '🔕' : '🔔'}</button>
-      ${isGroup(r) ? '<button class="btn sm ghost" id="tInfo" title="Group settings">ⓘ</button>' : r === 'all' ? '<button class="btn sm ghost" id="tInfo" title="Who\'s here">👥</button>' : ''}`;
+      ${isGroup(r) ? '<button class="btn sm ghost" id="tInfo" title="Group settings">ⓘ</button>' : r === 'all' || isLvl(r) ? '<button class="btn sm ghost" id="tInfo" title="Who\'s here">👥</button>' : ''}`;
   }
 
   async function openRoom(r, user) {
@@ -256,7 +266,7 @@
       if (!newShown && C.unreadMark && m.id > C.unreadMark && m.sender !== me() && !q) { html += '<div class="newline">NEW</div>'; newShown = true; prev = null; }
       html += msgHtml(m, prev); prev = m;
     }
-    if (!list.length) html += `<div class="empty">${q ? 'Nothing matches.' : C.room === 'all' ? 'Say hi to the team 👋' : isDm(C.room) ? `This is the start of your conversation with ${esc(roomName(C.room))}.` : 'This group is quiet. Start it off!'}</div>`;
+    if (!list.length) html += `<div class="empty">${q ? 'Nothing matches.' : C.room === 'all' ? 'Say hi to the team 👋' : isLvl(C.room) ? `Only ${esc(LVL[C.room][1].replace('All ', '').toLowerCase())} and the Owner can see this room.` : isDm(C.room) ? `This is the start of your conversation with ${esc(roomName(C.room))}.` : 'This group is quiet. Start it off!'}</div>`;
     html += '<div class="seen" id="seen"></div>';
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     el.innerHTML = html;
@@ -468,8 +478,8 @@
     });
   }
   function peopleModal() {
-    const list = A.admins.slice().sort((a, b) => ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(a)] - ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(b)]);
-    const { el, close } = NX.modal(`<h3>Admins (${list.length})</h3><div class="members">${list.map(a => { const p = presence(a); return `<div>${av(a, '', true)}<span class="nm">${esc(nameOf(a))}${a.id === me() ? ' <small class="muted">(you)</small>' : ''}<small><span class="prtxt ${p}">${PRES[p]}</span>${a.status_text ? ' · ' + esc(a.status_text) : ''} · ${esc(a.level)}</small></span>${a.id !== me() ? `<button class="btn sm" data-dm="${esc(a.id)}">Message</button>` : ''}</div>`; }).join('')}</div>`);
+    const list = roomPeople(isLvl(C.room) ? C.room : 'all').slice().sort((a, b) => ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(a)] - ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(b)]);
+    const { el, close } = NX.modal(`<h3>${esc(isLvl(C.room) ? LVL[C.room][1] : 'Admins')} (${list.length})</h3><div class="members">${list.map(a => { const p = presence(a); return `<div>${av(a, '', true)}<span class="nm">${esc(nameOf(a))}${a.id === me() ? ' <small class="muted">(you)</small>' : ''}<small><span class="prtxt ${p}">${PRES[p]}</span>${a.status_text ? ' · ' + esc(a.status_text) : ''} · ${esc(a.level)}</small></span>${a.id !== me() ? `<button class="btn sm" data-dm="${esc(a.id)}">Message</button>` : ''}</div>`; }).join('')}</div>`);
     el.onclick = e => { const b = e.target.closest('[data-dm]'); if (b) { close(); openRoom(dmRoom(b.dataset.dm), true); } };
   }
 
