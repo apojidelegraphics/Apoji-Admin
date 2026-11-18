@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('apojiDesktop', {
   badge: n => ipcRenderer.send('badge', n),
   attention: () => ipcRenderer.send('attention'),
   version: () => ipcRenderer.invoke('version'),
+  platform: process.platform,   // 2.0.4: 'darwin' or 'win32'
   onUpdate: fn => ipcRenderer.on('update', (_e, u) => fn(u)),
   // 1.2: the Mac hub (Tailscale, phone notifications, keep awake, schedules)
   hub: {
@@ -21,4 +22,4 @@ contextBridge.exposeInMainWorld('apojiDesktop', {
   }
 });
 // Room for the window buttons, and a draggable title bar
-window.addEventListener('DOMContentLoaded', () => document.documentElement.classList.add('desktop-app'));
+window.addEventListener('DOMContentLoaded', () => { document.documentElement.classList.add('desktop-app'); if (process.platform === 'win32') document.documentElement.classList.add('win-app'); });

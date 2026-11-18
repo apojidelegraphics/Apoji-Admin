@@ -127,10 +127,11 @@
   P.hub = async () => DESK ? deskHub() : webHub();
 
   async function deskHub() {
-    NX.main('<h1>🖥 This Mac</h1><p><span class="spinner"></span> Checking Tailscale…</p>', { cards: false });
+    NX.main(NX.pc('<h1>🖥 This Mac</h1><p><span class="spinner"></span> Checking Tailscale…</p>'), { cards: false });
     paintDeskHub(await D.hub.status(true));
   }
-  function tsHelp(t) {
+  function tsHelp(t) { return NX.pc(tsHelp0(t)); }
+  function tsHelp0(t) {
     if (!t.installed) return `<ol class="hubsteps"><li>Install <a href="https://tailscale.com/download/mac" target="_blank" rel="noopener">Tailscale for Mac</a> and sign in. Already have it? Open Tailscale's Settings and pick <b>Install CLI</b>.</li><li>In the <a href="https://login.tailscale.com/admin/dns" target="_blank" rel="noopener">Tailscale admin console → DNS</a>, turn on <b>MagicDNS</b> and <b>HTTPS Certificates</b>.</li><li>Come back here and press <b>Check again</b>.</li></ol>`;
     if (!t.running) return `<p class="muted">Open Tailscale from the menu bar and connect, then press <b>Check again</b>.</p>`;
     if (!t.https) return `<p class="muted">In the <a href="https://login.tailscale.com/admin/dns" target="_blank" rel="noopener">Tailscale admin console → DNS</a>, turn on <b>MagicDNS</b> and <b>HTTPS Certificates</b>, then press <b>Check again</b>.</p>`;
@@ -140,7 +141,7 @@
     if (A.tab !== 'hub') return;
     const t = st.tailscale || {}, on = st.enabled;
     const state = !on ? pill('p-closed', 'OFF') : st.serving ? pill('p-approved', 'ONLINE') : pill('p-pending', 'NOT ON TAILNET');
-    NX.main(`<h1>🖥 This Mac ${state}</h1><p>Make this Mac your team's hub. Over <b>Tailscale</b> (only your tailnet can reach it) it sends notifications to admins' phones, runs schedules on time and stays awake. The website and Supabase keep working everywhere either way.</p>
+    NX.main(NX.pc(`<h1>🖥 This Mac ${state}</h1><p>Make this Mac your team's hub. Over <b>Tailscale</b> (only your tailnet can reach it) it sends notifications to admins' phones, runs schedules on time and stays awake. The website and Supabase keep working everywhere either way.</p>
       <div class="card">${tog('hOn', '🛰 Use this Mac as the hub', 'Runs in the menu bar when you close the window. ⌘Q quits.', on)}</div>
       <div class="card"><h3>☕ Keep this Mac awake <span class="sp"></span>${st.keepAwake ? `<span class="pill ${st.awake?.on ? 'p-approved' : 'p-pending'}">${st.awake?.on ? 'ON' : 'NOT RIGHT NOW'}</span>` : ''}</h3>
         <p class="muted" style="margin-top:-4px">Works with or without the hub. ${st.keepAwake ? esc(st.awake?.reason || '') : 'Off: this Mac sleeps like normal.'}</p>
@@ -154,9 +155,9 @@
           <p class="muted" style="margin:6px 0 0">Touch the mouse or any key and it comes right back.</p></div>`; })() : ''}
         ${tog('hPlug', 'Only while plugged in', 'Off: it stays awake on battery too, until 20% is left.', st.pluggedOnly, !st.keepAwake)}
         ${tog('hLogin', 'Open at login', 'Starts quietly in the menu bar when you log in.', st.openAtLogin)}
-        <h3 style="margin-top:14px">💻 Lid-closed mode <span class="sp"></span><span class="pill ${st.awake?.lid?.on ? 'p-approved' : 'p-closed'}">${st.awake?.lid?.on ? (st.awake.lid.closed ? 'LID CLOSED' : 'ON') : st.lidMode ? 'PAUSED' : 'OFF'}</span></h3>
+        ${NX.WIN ? '' : `<h3 style="margin-top:14px">💻 Lid-closed mode <span class="sp"></span><span class="pill ${st.awake?.lid?.on ? 'p-approved' : 'p-closed'}">${st.awake?.lid?.on ? (st.awake.lid.closed ? 'LID CLOSED' : 'ON') : st.lidMode ? 'PAUSED' : 'OFF'}</span></h3>
         <p class="muted" style="margin-top:-4px">Close the lid and this Mac stays awake: the screen goes dark and it stays locked, while the hub, schedules and phone notifications keep running. Works on battery too (never below 20%) unless “Only while plugged in” is on. Turning it on asks for your Mac password once to allow exactly this (Nexus '28 shares the same permission).</p>
-        <div class="row">${st.lidMode ? '<button class="btn" id="hLidOff">Turn off</button>' : '<button class="btn primary" id="hLidOn">Turn on</button>'}${st.awake?.lid?.ready ? '<button class="btn ghost sm" id="hLidRevoke">Remove permission</button>' : ''}<span class="muted">${esc(st.awake?.lidText || '')}</span></div></div>
+        <div class="row">${st.lidMode ? '<button class="btn" id="hLidOff">Turn off</button>' : '<button class="btn primary" id="hLidOn">Turn on</button>'}${st.awake?.lid?.ready ? '<button class="btn ghost sm" id="hLidRevoke">Remove permission</button>' : ''}<span class="muted">${esc(st.awake?.lidText || '')}</span></div>`}</div>
       ${on ? `<div class="grid">
         <div class="stat ${st.serving ? '' : 'hot'}"><b>${st.serving ? '🛰' : '○'}</b><span>${st.serving ? 'On your tailnet' : 'Not reachable yet'}</span></div>
         <div class="stat ${st.awake?.on ? '' : 'hot'}"><b>${st.awake?.on ? '☕' : '💤'}</b><span>${esc(st.awake?.reason || '')}</span></div>
@@ -177,7 +178,7 @@
         ${tog('hRestrict', 'Only these Tailscale accounts', `You (${esc(t.login || 'this Mac’s account')}) always get in.`, st.restrict)}
         <div class="row" style="margin-top:8px"><input class="field" id="hAllowIn" placeholder="someone@example.com or name@github" style="flex:1"><button class="btn" id="hAllowAdd">Add</button></div>
         <div class="chips" style="margin-top:8px">${(st.allow || []).map(a => `<span class="chip">${esc(a)}<button data-rmallow="${esc(a)}" title="Remove">✕</button></span>`).join('') || '<span class="muted">Nobody added.</span>'}</div></div>
-      <div class="card"><h3>🕘 What happened on this Mac</h3>${(st.recent || []).length ? `<div class="feed">${st.recent.map(e => `<div><span class="muted">${ago(e.at)}</span> ${esc(e.title)}${e.body ? ` <span class="muted">· ${esc(e.body)}</span>` : ''}${e.sent != null ? ` <span class="muted">→ ${e.sent} phone${e.sent === 1 ? '' : 's'}</span>` : ''}</div>`).join('')}</div>` : '<p class="muted">Nothing yet.</p>'}</div>` : ''}`, { cards: false });
+      <div class="card"><h3>🕘 What happened on this Mac</h3>${(st.recent || []).length ? `<div class="feed">${st.recent.map(e => `<div><span class="muted">${ago(e.at)}</span> ${esc(e.title)}${e.body ? ` <span class="muted">· ${esc(e.body)}</span>` : ''}${e.sent != null ? ` <span class="muted">→ ${e.sent} phone${e.sent === 1 ? '' : 's'}</span>` : ''}</div>`).join('')}</div>` : '<p class="muted">Nothing yet.</p>'}</div>` : ''}`), { cards: false });
     const set = async patch => { const s = await D.hub.set(patch); W.on = !!s.enabled; paintDeskHub(s); beat(); };
     $('main').oninput = e => { if (e.target.id === 'hDimLv' && $('hDimVal')) { const br = +e.target.value; $('hDimVal').textContent = br >= 100 ? 'None' : `Screen at ${br}%`; } };
     $('main').onchange = e => {

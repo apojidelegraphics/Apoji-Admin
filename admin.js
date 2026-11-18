@@ -5,6 +5,11 @@
   const SB_URL = 'https://yzbnxpkuhlxsuwzbjifx.supabase.co', SB_KEY = 'sb_publishable_LY-EZORCvEQqW6AeQC5a8w_Z7wmeyjn';
   const rawSb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
   const $ = id => document.getElementById(id);
+  // 2.0.4: the desktop app runs on Windows too. Hub wording says "PC", "system tray" and Ctrl there.
+  const IS_WIN = window.apojiDesktop?.platform === 'win32';
+  const PC_WORDS = [[/This Mac\b/g, 'This PC'], [/this Mac\b/g, 'this PC'], [/the Mac\b/g, 'the PC'], [/your Mac\b/g, 'your PC'], [/the menu bar/g, 'the system tray'], [/⌘Q quits\./g, 'Exit in the tray icon’s menu quits.'],
+    [/Tailscale for Mac/g, 'Tailscale for Windows'], [/tailscale\.com\/download\/mac/g, 'tailscale.com/download/windows'], [/⌘/g, 'Ctrl+']];
+  const pc = html => IS_WIN ? PC_WORDS.reduce((h, [a, b]) => h.replace(a, b), String(html)) : html;
   // ---------- 1.9 offline: an OFFLINE chip in the header, and changes made while offline are kept and sent when
   // you're back. Plain saves (a chat message, a task or note edit, a status change) wait in an outbox in this browser;
   // anything that needs an answer straight away (lists, functions) says "You're offline" instead.
@@ -104,7 +109,8 @@
   function av(a, size = '', pres = false) {
     const id = a?.id || a?.user_id || a?.email || '?', url = a?.avatar_url;
     const safe = url && /^https:\/\//.test(url) ? url.replace(/["'()\\]/g, '') : '';
-    return `<span class="av ${size} ${safe ? 'img' : ''}" style="--c:${colorOf(id)};${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${pres ? `<i class="pr ${presence(a)}"></i>` : ''}</span>`;
+    const crown = (NX.A.tiers || {})[id] === 'owner' ? '<i class="av-crown" title="Owner">👑</i>' : '';   // 2.0.4: the Owner's picture wears a crown everywhere (chat too)
+    return `<span class="av ${size} ${safe ? 'img' : ''}" style="--c:${colorOf(id)};${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${crown}${pres ? `<i class="pr ${presence(a)}"></i>` : ''}</span>`;
   }
   const adminById = id => NX.A.admins.find(a => a.id === id);
 
@@ -152,7 +158,7 @@
   }
 
   // ---------- layout
-  const HUB_LABEL = window.apojiDesktop ? 'This Mac' : 'Mac hub';
+  const HUB_LABEL = window.apojiDesktop ? (IS_WIN ? 'This PC' : 'This Mac') : 'Mac hub';
   const TABS = [
     ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Team chat', 'chat'], ['tasks', '✅', 'Tasks', 'tasks'], ['notes', '📓', 'Team notes']]],
     ['INBOX', [['access', '🔑', 'Access requests', 'access'], ['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
@@ -172,7 +178,7 @@
     const me = NX.A.me || { id: NX.A.user.id, email: NX.A.user.email };
  const waiting = outbox.get().length;
     $('hdr').innerHTML = `${isOffline() || waiting ? `<span class="offline-chip" title="${isOffline() ? "You're offline. Changes you make are kept and sent when you reconnect." : 'Sending changes you made offline…'}">${isOffline() ? 'OFFLINE' : 'SYNCING'}${waiting ? ' · ' + waiting : ''}</span>` : ''}<span class="live ${NX.A.live ? '' : 'off'}" id="liveDot" title="${NX.A.live ? 'Updates arrive instantly' : 'Checking for updates every few seconds'}">${NX.A.live ? '● <b>LIVE</b>' : '○ <b>POLLING</b>'}</span>
-      <button class="hbtn search" id="hFind" title="Search and jump (⌘K)">⌕<span class="kb">⌘K</span></button>
+      <button class="hbtn search" id="hFind" title="Search and jump (${IS_WIN ? 'Ctrl+K' : '⌘K'})">⌕<span class="kb">${IS_WIN ? 'Ctrl K' : '⌘K'}</span></button>
       <button class="hbtn" id="hBell" title="Notifications">🔔<span class="n" data-badge="inbox" hidden></span></button>
       <button class="me-chip" id="hMe" title="My settings">${av(me, 'sm', true)}<span>${esc(nameOf(me))}<small>${esc(NX.levelLabel(NX.A.level, NX.A.user.id))} · ${PRES[presence(me)]}</small></span></button>`;
     $('hMe').onclick = () => NX.go('me');
@@ -365,7 +371,7 @@
   const NX = window.NX = {
     sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {},
+    pages: {}, WIN: IS_WIN, pc,
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,

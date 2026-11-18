@@ -23,15 +23,19 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
   });
 
   // ---------- keep this Mac awake + lid-closed mode (1.9: awake.js, shared with Nexus '28; works without the hub)
-  const awake = require('./awake').createAwake({ app: 'admin', getCfg: () => hub.cfg, power: powerMonitor,
+  const awake = require('./awake').createAwake({ app: 'admin', getCfg: () => hub.cfg, power: powerMonitor, blocker: powerSaveBlocker,
     onChange: st => { hub.state.awake = { on: st.on, onBattery: st.onBattery, display: !!hub.cfg.keepDisplay && st.on, verified: st.on, reason: st.reason, short: st.short, lid: st.lid, lidText: st.lidText }; hub.changed(); } });
   const applyAwake = () => awake.apply();
   // 2.0: "keep the screen on" still dims after a while away (dimmer.js, shared with Nexus '28)
   let dimmer = null;
   // 2.0.3: real display brightness where the screen allows it (checked once on start), the dark layer elsewhere
+  // 2.0.4 fix: this used to run before the app was ready, when Electron's screen module isn't available yet, so the
+  // dimmer never started. Now it starts once the app is ready.
   let brightness = null;
-  try { const B = require('./brightness'); brightness = B.createBrightness({ bin: B.helperPath({ app, dir: path.join(__dirname, '..') }), stateFile: path.join(app.getPath('userData'), 'brightness-saved.json'), log: (...a) => console.log('[brightness]', ...a) }); brightness.check().then(st => { hub.state.brightness = st; hub.changed(); }).catch(() => {}); } catch (e) { console.log('[brightness]', e.message); }
+  app.whenReady().then(() => {
+  try { const B = require('./brightness'); brightness = B.createBrightness({ bin: B.helperPath({ app, dir: path.join(__dirname, '..') }), stateFile: path.join(app.getPath('userData'), 'brightness-saved.json'), winInternal: () => require('electron').screen.getAllDisplays().filter(d => d.internal).map(d => d.id), log: (...a) => console.log('[brightness]', ...a) }); brightness.check().then(st => { hub.state.brightness = st; hub.changed(); }).catch(() => {}); } catch (e) { console.log('[brightness]', e.message); }
   try { const { BrowserWindow, screen } = require('electron'); dimmer = require('./dimmer').createDimmer({ BrowserWindow, screen, powerMonitor, getCfg: () => hub.cfg, isAwake: () => !!awake.state().on, brightness }); } catch (e) { console.log('[dimmer]', e.message); }
+  });
   ipcMain.handle('hub:testDim', () => dimmer ? { ok: true, ...dimmer.test(4000) } : { ok: false });
   ipcMain.handle('hub:checkBrightness', async () => { if (brightness) hub.state.brightness = await brightness.check(); hub.changed(); return { ok: true }; });
   app.on('before-quit', () => { awake.quit(); dimmer?.stop(); });
@@ -46,8 +50,11 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
   function paintTray(st = hub.status()) {
     if (!hub.cfg.enabled && !hub.cfg.keepAwake) { tray?.destroy(); tray = null; return; }
     if (!tray) {
-      const img = nativeImage.createFromPath(path.join(__dirname, 'trayTemplate.png')); img.setTemplateImage(true);
+      // 2.0.4: Windows' taskbar needs a colour icon (the Mac's black template one would vanish on a dark taskbar)
+      const img = process.platform === 'darwin' ? nativeImage.createFromPath(path.join(__dirname, 'trayTemplate.png')) : nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon.png')).resize({ width: 16, height: 16 });
+      if (process.platform === 'darwin') img.setTemplateImage(true);
       tray = new Tray(img); tray.setToolTip('Apoji Admin hub');
+      if (process.platform !== 'darwin') tray.on('click', () => showWin());   // on Windows a click opens the app
     }
     const cut = (t, n = 38) => String(t || '').length > n ? String(t).slice(0, n - 1) + '…' : String(t || '');
     const line = cut(!hub.cfg.enabled ? '○ Hub is off' : st.serving ? `● Online at ${st.tailscale.dnsName?.split('.')[0] || 'tailnet'}` : st.tailscale?.error ? '○ ' + st.tailscale.error : '○ Not on your tailnet yet');

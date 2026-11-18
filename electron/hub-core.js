@@ -21,7 +21,9 @@ const DEFAULT_KINDS = ['requests', 'feedback', 'reports', 'tasks', 'chat', 'audi
 // The Mac app's own binary is also its command line, but only when it's told to be (TAILSCALE_BE_CLI=1); run from
 // another app without that, it just pokes the menu bar app and prints nothing. /usr/local/bin/tailscale exists if
 // you picked "Install CLI" in Tailscale's settings; Homebrew installs go in /opt/homebrew/bin.
-const CLI_PATHS = ['/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale', `${process.env.HOME || ''}/Applications/Tailscale.app/Contents/MacOS/Tailscale`, '/usr/bin/tailscale'];
+const CLI_PATHS = ['/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale', `${process.env.HOME || ''}/Applications/Tailscale.app/Contents/MacOS/Tailscale`, '/usr/bin/tailscale',
+  // 2.0.4: Windows
+  `${process.env.ProgramFiles || 'C:\\Program Files'}\\Tailscale\\tailscale.exe`, `${process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'}\\Tailscale\\tailscale.exe`];
 
 function createHub(opts) {
   const { dir, version = '0.0.0', name = 'Mac', sbUrl, sbKey, webpush, seal = s => s, unseal = s => s, onNudge = () => {}, onChange = () => {}, log = () => {} } = opts;
@@ -48,7 +50,7 @@ function createHub(opts) {
   // ---------- Tailscale
   let cli = opts.cli || null;
   function findCli() { if (cli) return cli; cli = CLI_PATHS.find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } }) || 'tailscale'; return cli; }
-  const ts = args => new Promise(res => execFile(findCli(), args, { timeout: 10000, env: { ...process.env, TAILSCALE_BE_CLI: '1', PATH: (process.env.PATH || '') + ':/opt/homebrew/bin:/usr/local/bin' } },
+  const ts = args => new Promise(res => execFile(findCli(), args, { timeout: 10000, env: { ...process.env, TAILSCALE_BE_CLI: '1', PATH: process.platform === 'win32' ? process.env.PATH : (process.env.PATH || '') + ':/opt/homebrew/bin:/usr/local/bin' } },
     (err, out, errOut) => res({ ok: !err, out: String(out || ''), err: String(errOut || err?.message || '') })));
   const detail = r => `${findCli()} → ${(r.err || r.out || 'no output').trim().split('\n').slice(-2).join(' ').slice(0, 220)}`;
   async function tailscale() {

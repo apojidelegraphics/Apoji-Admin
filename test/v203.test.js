@@ -9,7 +9,7 @@ for (const [mine, theirs] of [['electron/brightness.js', 'src/brightness.js'], [
   if (twin) assert.strictEqual(read(mine), fs.readFileSync(twin, 'utf8'), 'same ' + theirs + ' as Nexus');
 }
 const pkg = JSON.parse(read('package.json'));
-assert.ok(pkg.scripts.postinstall.includes('build-brightness') && pkg.build.extraResources[0].filter.includes('apoji-brightness') && read('.github/workflows/release.yml').includes('sh scripts/build-brightness.sh'));
+assert.ok(read('scripts/postinstall.js').includes('build-brightness') && pkg.build.mac.extraResources[0].filter.includes('apoji-brightness') && read('.github/workflows/release.yml').includes('sh scripts/build-brightness.sh'));
 assert.ok(read('electron/hub.js').includes("require('./brightness')") && read('features.js').includes('id="hDimTry"'));
 ok('dimming lowers the real brightness (checked on start, "Try it"), built in CI');
 

@@ -1,18 +1,19 @@
 {
   "name": "apoji-admin",
   "productName": "Apoji Admin",
-  "version": "2.0.3",
-  "description": "The admin app for Nexus '28 and N28C.",
+  "version": "2.0.4",
+  "description": "The admin app for Nexus '28 and N28C, for Mac and Windows.",
   "author": "Apoji Delegraphics",
   "license": "UNLICENSED",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "postinstall": "sh scripts/build-brightness.sh",
+    "postinstall": "node scripts/postinstall.js",
     "build:brightness": "sh scripts/build-brightness.sh",
     "dist": "electron-builder --mac dmg zip --arm64 --x64 --publish never",
-    "test": "node test/hub.test.js && node test/v18.test.js && node test/v19.test.js && node test/v20.test.js && node test/v202.test.js && node test/v203.test.js"
+    "test": "node test/hub.test.js && node test/v18.test.js && node test/v19.test.js && node test/v20.test.js && node test/v202.test.js && node test/v203.test.js && node test/v204.test.js",
+    "dist:win": "electron-builder --win nsis --x64 --arm64 --publish never"
   },
   "dependencies": {
     "qrcode": "1.5.4",
@@ -33,6 +34,7 @@
     },
     "files": [
       "electron/**",
+      "build/icon.png",
       "index.html",
       "admin.css",
       "admin.js",
@@ -50,15 +52,6 @@
       "icons/**",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "bin/",
-        "to": "bin/",
-        "filter": [
-          "apoji-brightness"
-        ]
-      }
-    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.png",
@@ -66,6 +59,15 @@
       "target": [
         "dmg",
         "zip"
+      ],
+      "extraResources": [
+        {
+          "from": "bin/",
+          "to": "bin/",
+          "filter": [
+            "apoji-brightness"
+          ]
+        }
       ]
     },
     "dmg": {
@@ -90,6 +92,28 @@
           "path": "/Applications"
         }
       ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "Apoji-Admin-${version}-Windows-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Apoji Admin",
+      "runAfterFinish": true
     }
   }
 }

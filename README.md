@@ -3,7 +3,7 @@
 # Apoji Admin
 
 The admin app for **Nexus '28** and **N28C**.
-A Mac app (download it from Releases) and a website (GitHub Pages) that works from any browser or phone.
+A Mac and Windows app (download it from Releases) and a website (GitHub Pages) that works from any browser or phone.
 
 Only accounts in `public.admin_roles` can use it. Everything goes through Supabase row-level security.
 
@@ -75,11 +75,17 @@ Messages and files are encrypted in your browser before they're sent (AES-256-GC
 
 The database enforces this (a guard on `admin_roles`, `user_moderation` and every new function), not just the buttons.
 
+## Windows app (2.0.4)
+
+Download **Apoji-Admin-…-Windows-x64.exe** (most PCs) or **…-Windows-arm64.exe** (Arm laptops such as Snapdragon) from [Releases](https://github.com/apojidelegraphics/Apoji-Admin/releases/latest) and run it. The app isn't code-signed yet, so Windows may say **"Windows protected your PC"**: click **More info → Run anyway**. It installs for your user only (no admin needed) and adds Start menu and desktop shortcuts.
+
+It's the same portal. On Windows the hub page is called **This PC**: the hub and keep awake work the same (Tailscale for Windows, the system tray instead of the menu bar), "Dim when I step away" lowers a laptop's built-in screen through Windows' brightness control (desktop monitors get the dark layer), and unread counts show in the window title. Lid-closed mode is Mac only.
+
 ## Supabase functions (1.7)
 
 Both live in `supabase/functions/`. Deploy with the Supabase CLI, or in the dashboard: **Edge Functions → Deploy a new function → Via editor**, name it exactly as below, paste the file and deploy.
 
-- **`admin-users`** (`supabase/functions/admin-users/index.ts`): change someone's email, nickname, username or picture, send a password reset email, set a new password without knowing the old one, or delete the account. Editors and the Owner only; every change goes in the audit log. Keep **Verify JWT** on.
+- **`admin-users`** (`supabase/functions/admin-users/index.ts`): change someone's email, nickname, username or picture, send a password reset email, set a new password without knowing the old one, or delete the account. Editors and the Owner only; every change goes in the audit log. It checks the sign-in itself, so **Verify JWT** is off (`supabase functions deploy admin-users --no-verify-jwt`). Deployed for 2.0.4.
 - **`changelog-send`** (`supabase/functions/changelog-send/index.ts`): the automatic changelog email. Turn **Verify JWT off** for this one (GitHub calls it with a secret instead).
   1. Supabase → Edge Functions → **Secrets**: add `CHANGELOG_SECRET` = any long random string.
   2. GitHub → Nexus-28 → Settings → Secrets and variables → Actions → **New repository secret**: `CHANGELOG_SECRET` with the same value.
@@ -132,6 +138,12 @@ Run `supabase/nexus-v3.4.sql` from the Nexus repo.
 - **◆ Nexus** is one continuous chat, like a DM (older chats were merged into it).
 - **Dashboard → 🧪 Test Run:** people, answers and searches from the web version (Nexus without a Mac). Take it down from **Maintenance → 🧪 Test Run**.
 - **Containment Sector 28:** attempts now run by themselves every 3 hours (pg_cron + a private secret, already set up), and the function rejects answers that just copy its instructions.
+
+## 2.0.4
+- **Dimming works:** the dimmer was being set up before the app was ready, so it never started. Fixed.
+- **Windows:** Apoji Admin now comes for Windows too (see above).
+- **Editing users works:** the `admin-users` function is deployed. In a user's Account card, **📷 Change picture** sits left of **Remove picture**.
+- **👑** The Owner's picture wears its crown in chat and everywhere else.
 
 ## Develop
 

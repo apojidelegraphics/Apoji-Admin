@@ -3,7 +3,7 @@
 //   • the caller must be a high-admin Editor or the Owner (Viewers can't change anything)
 //   • only the Owner can touch the Owner account, or another high-admin's email, password or account
 //   • every change is written to the audit log (moderation_log)
-// Deploy: supabase functions deploy admin-users   (or Supabase dashboard → Edge Functions → Deploy new function)
+// Deploy: supabase functions deploy admin-users --no-verify-jwt (it checks the sign-in itself)   (or Supabase dashboard → Edge Functions → Deploy new function)
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const URL_ = Deno.env.get('SUPABASE_URL')!, SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -74,6 +74,21 @@ Deno.serve(async req => {
       if (error) return json({ ok: false, error: /duplicate|unique/i.test(error.message) ? 'That username is taken.' : error.message }, 400);
       await log('user_profile_changed', { before: { username: prof?.username, nickname: prof?.nickname }, after: patch });
       return json({ ok: true, message: 'Saved.' });
+    }
+    // 2.0.4: an admin changes someone else's picture (cropped to 256px in the app, sent as base64)
+    if (action === 'avatar') {
+      const m = String(body.image || '').match(/^data:image\/(webp|png|jpeg);base64,([A-Za-z0-9+/=]+)$/);
+      if (!m) return json({ ok: false, error: 'That picture can’t be used.' }, 400);
+      const bytes = Uint8Array.from(atob(m[2]), c => c.charCodeAt(0));
+      if (bytes.length > 400000) return json({ ok: false, error: 'That picture is too big.' }, 400);
+      const ext = m[1] === 'jpeg' ? 'jpg' : m[1], path = `${target}/avatar.${ext}`;
+      const up = await admin.storage.from('avatars').upload(path, bytes, { upsert: true, contentType: 'image/' + m[1] });
+      if (up.error) return json({ ok: false, error: up.error.message }, 400);
+      const url = admin.storage.from('avatars').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
+      const { error } = await admin.from('profiles').update({ avatar_url: url }).eq('id', target);
+      if (error) return json({ ok: false, error: error.message }, 400);
+      await log('user_avatar_changed', {});
+      return json({ ok: true, message: 'Picture updated.', avatar_url: url });
     }
     if (action === 'delete') {
       if (target === me.id) return json({ ok: false, error: "You can't delete your own account here." }, 400);

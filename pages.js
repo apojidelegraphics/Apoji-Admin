@@ -373,7 +373,7 @@
         <label>Username</label><div class="row"><input class="field" id="acUser" value="${esc(base.username || '')}" placeholder="username" maxlength="24"><button class="btn sm" data-ac="user">Save</button></div>
         ${canCreds ? `<label>Email</label><div class="row"><input class="field" id="acEmail" value="${esc(email)}" type="email"><button class="btn sm" data-ac="email">Change</button></div>
         <label>Password</label><div class="row"><button class="btn sm" data-ac="reset">✉ Send reset email</button><input class="field" id="acPw" type="password" placeholder="or set a new one (8+)" autocomplete="new-password"><button class="btn sm" data-ac="pw">Set</button></div>` : '<label>Email & password</label><span class="muted">Only the Owner can change another high-admin\'s email or password.</span>'}
-        ${base.avatar_url ? '<label>Picture</label><div class="row"><button class="btn sm" data-ac="nopic">Remove picture</button></div>' : ''}
+        <label>Picture</label><div class="row"><button class="btn sm" data-ac="pic">📷 Change picture</button>${base.avatar_url ? '<button class="btn sm" data-ac="nopic">Remove picture</button>' : ''}<input type="file" id="acPicF" accept="image/*" hidden></div>
       </div>
       ${canCreds && uid !== A.user.id ? '<div class="row" style="margin-top:10px"><span class="sp"></span><button class="btn sm danger" data-ac="del">Delete account…</button></div>' : ''}
       <p class="muted" style="margin:8px 0 0">They're not told about name or email changes; a reset email goes to their current address. Everything here is in the audit log.</p>`}</div>`;
@@ -428,6 +428,11 @@
       NX.labelTables();
     };
     paintOrders();
+    el.onchange = async e => {
+      if (e.target.id !== 'acPicF' || !e.target.files[0]) return;
+      try { const image = await NX.avatarData(e.target.files[0]); if (await acct({ action: 'avatar', image })) { await NX.loadAdmins?.(); userDrawer(uid); } }
+      catch (err) { toast(err.message || 'That picture can’t be used.', true); }
+    };
     el.onclick = async e => {
       const b = e.target.closest('button,a'); if (!b) return;
       try {
@@ -441,6 +446,7 @@
           const a = b.dataset.ac;
           if (a === 'nick') return (await acct({ action: 'profile', nickname: $('acNick').value }, b)) && userDrawer(uid);
           if (a === 'user') return (await acct({ action: 'profile', username: $('acUser').value.trim() }, b)) && userDrawer(uid);
+          if (a === 'pic') return $('acPicF').click();   // 2.0.4: change someone's picture (sent to admin-users, which uploads it)
           if (a === 'nopic') return (await acct({ action: 'profile', remove_avatar: true }, b)) && userDrawer(uid);
           if (a === 'email') { const v = $('acEmail').value.trim(); if (v === email || !confirm(`Change ${email}'s sign-in email to ${v}?`)) return; return (await acct({ action: 'email', email: v }, b)) && userDrawer(uid); }
           if (a === 'reset') { if (!confirm(`Email a password reset link to ${email}?`)) return; return acct({ action: 'reset', redirect: 'https://apojidelegraphics.github.io/Nexus-28/companion/' }, b); }
@@ -622,6 +628,14 @@
     };
   };
   // Square-crop, shrink to 256px, upload to avatars/<you>/avatar.webp, save the public URL on your profile
+  // 2.0.4: crop any picture to a 256px square (webp, png fallback) as a data URL, for changing someone else's picture
+  NX.avatarData = async file => {
+    const img = await createImageBitmap(file);
+    const sq = Math.min(img.width, img.height), c = document.createElement('canvas'); c.width = c.height = 256;
+    c.getContext('2d').drawImage(img, (img.width - sq) / 2, (img.height - sq) / 2, sq, sq, 0, 0, 256, 256);
+    let u = c.toDataURL('image/webp', .88); if (!u.startsWith('data:image/webp')) u = c.toDataURL('image/png');
+    return u;
+  };
   async function uploadAvatar(file) {
     try {
       const img = await createImageBitmap(file);

@@ -7,6 +7,8 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 
 const ROOT = path.join(__dirname, '..');
+const MAC = process.platform === 'darwin', WIN = process.platform === 'win32';   // 2.0.4: runs on Windows too
+if (WIN) app.setAppUserModelId('com.apojidelegraphics.admin');   // notifications and the taskbar group under the app's name
 const HOME = 'apoji://admin/index.html';
 const RELEASES = 'https://github.com/apojidelegraphics/Apoji-Admin/releases/latest';
 const SB_URL = process.env.APOJI_TEST_SUPABASE || 'https://yzbnxpkuhlxsuwzbjifx.supabase.co', SB_KEY = 'sb_publishable_LY-EZORCvEQqW6AeQC5a8w_Z7wmeyjn';
@@ -39,7 +41,9 @@ function serve() {
 function createWindow() {
   win = new BrowserWindow({
     width: 1320, height: 880, minWidth: 380, minHeight: 520, show: false, title: 'Apoji Admin',
-    backgroundColor: '#0a0817', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 21 },
+    backgroundColor: '#0a0817',
+    ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 21 } }
+      : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#0a0817', symbolColor: '#e8e6f5', height: 60 }, icon: path.join(ROOT, 'build', 'icon.png'), autoHideMenuBar: true }),
     // keeps running at full speed in the background (the hub runs schedules and sends phone notifications)
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true, backgroundThrottling: false }
   });
@@ -52,10 +56,12 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('apoji://admin/')) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); } });
   win.on('closed', () => { win = null; });
+  if (!MAC) win.on('focus', () => win?.flashFrame(false));
 }
 
-ipcMain.on('badge', (_e, n) => { try { app.setBadgeCount(Math.max(0, n | 0)); } catch {} });
-ipcMain.on('attention', () => { if (win && !win.isFocused()) app.dock?.bounce('informational'); });
+ipcMain.on('badge', (_e, n) => { n = Math.max(0, n | 0); try { app.setBadgeCount(n); } catch {}
+  if (!MAC && win) win.setTitle(n > 0 ? `(${n}) Apoji Admin` : 'Apoji Admin'); });   // Windows has no Dock badge: the count goes in the title
+ipcMain.on('attention', () => { if (win && !win.isFocused()) { if (MAC) app.dock?.bounce('informational'); else win.flashFrame(true); } });
 ipcMain.handle('version', () => app.getVersion());
 
 // A quiet update check against GitHub Releases (Help menu shows it too)
@@ -72,7 +78,7 @@ async function checkUpdate(manual) {
 app.whenReady().then(() => {
   serve();
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { role: 'appMenu' }, { role: 'editMenu' },
+    ...(MAC ? [{ role: 'appMenu' }] : [{ label: 'File', submenu: [{ role: 'quit', label: 'Exit' }] }]), { role: 'editMenu' },
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }, ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' }])] },
     { role: 'windowMenu' },
     { role: 'help', submenu: [{ label: 'Check for Updates…', click: () => checkUpdate(true) }, { label: 'Apoji Admin on GitHub', click: () => shell.openExternal('https://github.com/apojidelegraphics/Apoji-Admin') }] }
