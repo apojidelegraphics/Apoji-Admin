@@ -44,8 +44,8 @@
         return `<div>${`<span class="fi">${ic}</span>`}<span class="ft">${esc(what)}${e.who ? ' · ' + esc(e.who) : ''}<small>${esc(e.kind === 'admin' ? '' : e.what)}</small></span><time>${ago(e.at)}</time></div>`; }).join('') || '<div class="muted">Nothing yet.</div>'}</div></div>`;
     const draw = () => {
       const tbl = $('dTable')?.checked;
-      if (tbl) { $('cActive').innerHTML = NXCharts.table(rows, [{ key: 'active_desktop', label: 'Mac app' }, { key: 'active_phone', label: 'N28C' }, { key: 'active', label: 'Total' }]); $('cSign').innerHTML = NXCharts.table(rows, [{ key: 'signups', label: 'Accounts' }]); $('cPosts').innerHTML = NXCharts.table(rows, [{ key: 'space_posts', label: 'Posts' }]); return; }
-      NXCharts.line($('cActive'), rows, [{ key: 'active_desktop', label: 'Mac app', color: 'var(--s1)' }, { key: 'active_phone', label: 'N28C phone', color: 'var(--s2)' }]);
+      if (tbl) { $('cActive').innerHTML = NXCharts.table(rows, [{ key: 'active_desktop', label: 'Mac & PC' }, { key: 'active_phone', label: 'N28C' }, { key: 'active', label: 'Total' }]); $('cSign').innerHTML = NXCharts.table(rows, [{ key: 'signups', label: 'Accounts' }]); $('cPosts').innerHTML = NXCharts.table(rows, [{ key: 'space_posts', label: 'Posts' }]); return; }
+      NXCharts.line($('cActive'), rows, [{ key: 'active_desktop', label: 'Mac & PC', color: 'var(--s1)' }, { key: 'active_phone', label: 'N28C phone', color: 'var(--s2)' }]);
       NXCharts.bars($('cSign'), rows, 'signups', 'new accounts'); NXCharts.bars($('cPosts'), rows, 'space_posts', 'posts');
     };
     draw();
@@ -154,6 +154,7 @@
     if (f.status === 'open') q = q.in('status', ['new', 'triaged', 'working']); else if (f.status !== 'all') q = q.eq('status', f.status);
     if (f.kind !== 'all') q = q.eq('kind', f.kind);
     if (f.mine) q = q.eq('assignee', A.user.id);
+    if (f.feature) q = q.eq('feature', f.feature);   // from Beta → See bug reports
     if (f.q) q = q.or(`title.ilike.%${f.q.replace(/[%,()]/g, '')}%,email.ilike.%${f.q.replace(/[%,()]/g, '')}%,body.ilike.%${f.q.replace(/[%,()]/g, '')}%`);
     const { data, error } = await q;
     if (error) return main(`<h1>Feedback & bugs</h1><div class="card err">${esc(error.message)}${sqlHint(error)}</div>`);
@@ -162,7 +163,7 @@
       <div class="row" style="margin-bottom:10px"><div class="tabsub" id="fS" style="margin:0">${[['open', 'Open'], ...FB_STATUS, ['all', 'All']].map(([k, l]) => `<button data-s="${k}" class="${f.status === k ? 'on' : ''}">${l}${k === 'new' && A.counts.feedback ? `<b>${A.counts.feedback}</b>` : ''}</button>`).join('')}</div></div>
       <div class="row" style="margin-bottom:12px"><select class="field" id="fK"><option value="all">All kinds</option>${Object.entries(FB_KIND).map(([k, l]) => `<option value="${k}" ${f.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <input class="field" id="fQ" placeholder="Search title, email, text" value="${esc(f.q)}" style="flex:1;min-width:160px"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="fM" ${f.mine ? 'checked' : ''}> Assigned to me</label>
-        <button class="btn" id="fCsv">Export CSV</button><button class="btn primary" id="fNew">＋ New report</button></div>
+        ${f.feature ? `<button class="btn sm" id="fFeat" title="Show everything">β ${esc(f.feature)} ✕</button>` : ''}<button class="btn" id="fCsv">Export CSV</button><button class="btn primary" id="fNew">＋ New report</button></div>
       <div class="inbox ${sel ? 'open' : ''}" id="inbox"><div class="ilist" id="ilist">${data.map(r => `<button class="iitem ${r.id === sel ? 'on' : ''} ${r.status === 'new' ? 'unread' : ''}" data-fb="${r.id}">
           <span class="row" style="gap:6px"><span class="pill p-${esc(r.status)}">${esc(r.status.toUpperCase())}</span>${r.priority !== 'normal' ? `<span class="pill p-${esc(r.priority)}">${esc(r.priority.toUpperCase())}</span>` : ''}<span class="muted">${FB_KIND[r.kind] || r.kind}</span><span class="sp"></span><span class="muted">${ago(r.updated_at)}</span></span>
           <b>${esc(r.title)}</b><span class="muted">${r.channel && r.channel !== 'app' ? `<span class="pill" style="font-size:10px">${r.channel === 'github' ? 'GITHUB' : r.channel === 'portal' ? 'PORTAL' : 'EMAIL'}</span> ` : ''}${esc(r.username || r.email || (r.user_id ? 'Someone' : 'Not signed in'))} · ${esc(r.source)} ${esc(r.app_version)}${r.assignee ? ' · ' + esc(nameOf(NX.adminById(r.assignee))) : ''}</span></button>`).join('') || '<div class="empty">Inbox zero. 🎉</div>'}</div>
@@ -170,6 +171,7 @@
     if (sel) fbDetail(sel);
     $('main').onclick = e => {
       const s = e.target.closest('[data-s]'); if (s) { f.status = s.dataset.s; A.arg = null; return P.feedback(); }
+      if (e.target.closest('#fFeat')) { f.feature = ''; return P.feedback(); }
       const it = e.target.closest('[data-fb]'); if (it) { A.arg = it.dataset.fb; history.replaceState(null, '', '#feedback/' + it.dataset.fb); document.querySelectorAll('.iitem').forEach(x => x.classList.toggle('on', x === it)); $('inbox').classList.add('open'); return fbDetail(+it.dataset.fb); }
       if (e.target.id === 'fNew') return newReport();
       if (e.target.id === 'fCsv') download(`nexus-feedback-${new Date().toISOString().slice(0, 10)}.csv`, csv([['id', 'kind', 'status', 'priority', 'title', 'email', 'username', 'source', 'version', 'created'], ...data.map(r => [r.id, r.kind, r.status, r.priority, r.title, r.email, r.username, r.source, r.app_version, r.created_at])]));
@@ -311,7 +313,7 @@
   const UF = [['all', 'Everyone'], ['new7', 'New this week'], ['active7', 'Active this week'], ['beta', 'Beta testers'], ['comped', 'Comped'], ['admins', 'Admins & mods'], ['moderated', 'Suspended / banned']];
   // 2.1: make a new Nexus account from here, optionally as an admin profile (Mod / Admin / High-Admin)
   function newProfile(level = '') {
-    const { el, close } = NX.modal(`<h3>＋ New profile</h3><p class="muted" style="margin-top:0">Makes a Nexus account they can sign in to everywhere (Mac app, N28C, Test Run). Make it an admin profile to give it a role in Apoji Admin too.</p>
+    const { el, close } = NX.modal(`<h3>＋ New profile</h3><p class="muted" style="margin-top:0">Makes a Nexus account they can sign in to everywhere (Mac, PC, N28C, Test Run). Make it an admin profile to give it a role in Apoji Admin too.</p>
       <div class="acct-grid np-grid">
         <label>Email</label><input class="field" id="npEmail" type="email" placeholder="name@example.com" autocomplete="off">
         <label>Password</label><div class="row" style="flex-wrap:nowrap"><input class="field" id="npPw" type="text" placeholder="8+ characters (or leave empty to email an invite)" autocomplete="new-password" style="flex:1"><button class="btn sm" id="npGen" type="button">Generate</button></div>
@@ -425,12 +427,12 @@
     el.innerHTML = `<button class="btn sm x" data-x>✕</button>
       <div class="row" style="gap:14px;margin-bottom:6px;flex-wrap:nowrap">${av({ id: uid, nickname: base.nickname || base.username, avatar_url: base.avatar_url }, 'lg')}<div style="min-width:0"><h1 style="margin:0">${esc(base.nickname || base.username || '(no username)')}</h1>
         <div class="muted">${esc(email)}${base.username ? ' · @' + esc(base.username) : ''}</div><div style="margin-top:4px">${lk?.admin_level ? NX.levelPill(lk.admin_level, uid) + ' ' : ''}${p.is_beta_tester ? '<span class="pill" style="color:var(--cyan)">BETA</span> ' : ''}${p.is_comped ? '<span class="pill" style="color:var(--gold)">COMPED</span> ' : ''}${d.reports_against ? `<span class="pill" style="color:var(--danger)">${d.reports_against} OPEN REPORT${d.reports_against === 1 ? '' : 'S'}</span>` : ''}</div></div></div>
-      <div class="card"><div class="kv"><span>Joined</span><span>${when(base.created_at)}</span><span>Last active</span><span>${ago(base.last_active_at || base.last_sign_in_at)}${lastVer ? ` · Mac v${esc(lastVer)}` : ''}${lastPhone ? ' · uses N28C' : ''}</span>
+      <div class="card"><div class="kv"><span>Joined</span><span>${when(base.created_at)}</span><span>Last active</span><span>${ago(base.last_active_at || base.last_sign_in_at)}${lastVer ? ` · desktop v${esc(lastVer)}` : ''}${lastPhone ? ' · uses N28C' : ''}</span>
         <span>Status</span><span>${m && m.status !== 'active' ? `<b class="err">${esc(m.status)}</b>${m.reason ? ' · ' + esc(m.reason) : ''}${m.suspended_until ? ' · until ' + when(m.suspended_until) : ''}` : 'Active'}</span>
         <span>Chats used</span><span>${(lk?.chat_usage || []).map(c => `${esc(c.assistant_name)}: ${c.count} <button class="btn sm" data-reset="${esc(c.assistant_name)}">reset</button>`).join(' · ') || '—'}</span>
         <span>Shared Spaces</span><span>${(d.spaces || []).map(s => `<a href="#" data-space="${esc(s.id)}">${esc(s.name)}</a>${s.owner ? ' (owner)' : ''}`).join(', ') || '—'}</span></div>
         <b class="muted" style="font-size:11px;letter-spacing:.08em;display:block;margin:12px 0 4px">LAST 60 DAYS</b>
-        <div style="display:grid;grid-template-columns:repeat(60,1fr);gap:2px" title="Days they used Nexus">${days.map(x => `<i title="${x.day}${x.desk ? ' · Mac' : ''}${x.phone ? ' · N28C' : ''}" style="height:16px;border-radius:2px;background:${x.desk && x.phone ? 'var(--accent)' : x.desk || x.phone ? 'rgba(var(--rgb),.5)' : 'rgba(var(--rgb),.07)'}"></i>`).join('')}</div></div>
+        <div style="display:grid;grid-template-columns:repeat(60,1fr);gap:2px" title="Days they used Nexus">${days.map(x => `<i title="${x.day}${x.desk ? ' · Mac/PC' : ''}${x.phone ? ' · N28C' : ''}" style="height:16px;border-radius:2px;background:${x.desk && x.phone ? 'var(--accent)' : x.desk || x.phone ? 'rgba(var(--rgb),.5)' : 'rgba(var(--rgb),.07)'}"></i>`).join('')}</div></div>
       <div class="card" id="ordCard"><h3>🧾 Redeemed orders <span class="muted" id="ordN"></span></h3><div id="ordList"><span class="spinner"></span></div></div>
       <div class="card"><h3>Perks</h3><div class="row"><button class="btn ${p.is_beta_tester ? 'danger' : 'primary'}" data-beta="${p.is_beta_tester ? 0 : 1}">${p.is_beta_tester ? 'Remove beta' : 'Make beta tester'}</button>
         <button class="btn" data-comp="${p.is_comped ? 0 : 1}">${p.is_comped ? 'Remove comp' : 'Comp (unlimited free key)'}</button></div></div>
@@ -526,11 +528,39 @@
     };
   };
 
+  // =========================================================== Beta dashboard (3.7)
+  // Per beta feature: who has it, how many people used it, 👍 / 👎 from the one-tap beta feedback, and bug reports.
+  P.beta = async () => {
+    const { data, error } = await sb.rpc('admin_beta_stats');
+    if (error) return main(`<h1>Beta</h1><div class="card err">${/admin_beta_stats|beta_events|42883|PGRST202/.test(error.message) ? 'Run <code>supabase/nexus-v3.7.sql</code> in the Supabase SQL editor to turn on the Beta dashboard.' : esc(error.message)}</div>`);
+    const ST = { off: 'Off', admin: 'Admins', beta: 'Beta testers', all: 'Everyone' };
+    const PL = { mac: '🍎 Mac', windows: '🪟 PC', web: '🧪 Test Run', phone: '📱 Phone', other: 'Other' };
+    const early = (data || []).filter(f => f.stage !== 'all'), rest = (data || []).filter(f => f.stage === 'all');
+    const card = f => { const votes = (f.up || 0) + (f.down || 0), pct = votes ? Math.round(f.up / votes * 100) : null;
+      return `<div class="card beta-f"><div class="row"><b>${esc(f.title || f.key)}</b><span class="pill p-${f.stage === 'beta' ? 'approved' : f.stage === 'admin' ? 'pending' : f.stage === 'off' ? 'closed' : 'open'}">${ST[f.stage] || f.stage}</span>${f.min_version ? `<span class="muted">${esc(f.min_version)}+</span>` : ''}<span class="sp"></span>
+        <select class="field sm" data-stage="${esc(f.key)}">${Object.entries(ST).map(([v, l]) => `<option value="${v}" ${f.stage === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="beta-stats"><div><b>${f.uses_7d || 0}</b><span>uses this week</span></div><div><b>${f.people_30d || 0}</b><span>people (30 days)</span></div>
+          <div><b>${pct === null ? '–' : pct + '%'}</b><span>👍 ${f.up || 0} · 👎 ${f.down || 0}</span></div><div><b class="${f.open_reports ? 'warn' : ''}">${f.open_reports || 0}</b><span>open bug reports (${f.reports || 0} total)</span></div></div>
+        ${votes ? `<div class="bar2"><i style="width:${pct}%"></i></div>` : ''}
+        <div class="muted">${f.platforms ? Object.entries(f.platforms).map(([p, n]) => `${PL[p] || p} ${n}`).join(' · ') : 'Nobody has used it yet.'}${f.last_used ? ' · last used ' + ago(f.last_used) : ''}</div>
+        ${(f.notes || []).length ? `<details><summary>What people said (${f.notes.length})</summary>${f.notes.map(n => `<div class="beta-note">${n.kind === 'up' ? '👍' : n.kind === 'down' ? '👎' : '•'} ${esc(n.note)} <span class="muted">${PL[n.platform] || ''} · ${ago(n.at)}</span></div>`).join('')}</details>` : ''}
+        ${f.reports ? `<button class="btn sm" data-reports="${esc(f.key)}">See bug reports</button>` : ''}</div>`; };
+    main(`<h1>Beta</h1><p>How each early feature is doing. Testers rate a feature with one tap (⋯ menu → Beta feedback, on Mac, PC and in Test Run); bug reports land in Feedback. Change who gets it right here.</p>
+      ${early.length ? early.map(card).join('') : '<div class="empty">No features in beta right now.</div>'}
+      ${rest.length ? `<details class="card"><summary>Out of beta (${rest.length})</summary>${rest.map(card).join('')}</details>` : ''}`);
+    $('main').onchange = async e => {
+      const t = e.target; if (!t.dataset.stage) return;
+      const { error: er } = await sb.from('feature_flags').update({ stage: t.value, updated_at: new Date().toISOString() }).eq('key', t.dataset.stage);
+      toast(er ? er.message : '✓ Saved', !!er); if (!er) P.beta();
+    };
+    $('main').onclick = e => { const b = e.target.closest('[data-reports]'); if (b) { A.fb = { status: 'all', kind: 'all', q: '', mine: false, feature: b.dataset.reports }; NX.go('feedback'); } };
+  };
+
   // =========================================================== Announcements
   P.announce = async () => {
     const { data, error } = await sb.from('announcements').select('*').order('created_at', { ascending: false }).limit(50);
     if (error) return main(`<h1>Announcements</h1><div class="card err">${esc(error.message)}</div>`);
-    main(`<h1>Announcements</h1><p>Live announcements show as a banner in the Mac app, in N28C and on web Nexus.</p>
+    main(`<h1>Announcements</h1><p>Live announcements show as a banner in Nexus on Mac and PC, in N28C and in Test Run.</p>
       <div class="card"><h3>New announcement</h3><textarea class="field" id="am" rows="2" maxlength="300" placeholder="Nexus 2.2 is out! Update from the app menu."></textarea>
         <div class="banner" style="margin:10px 0 0" id="apv" hidden>📣 <span></span></div>
         <div class="row" style="margin-top:8px"><span class="muted" id="ac">0 / 300</span><span class="sp"></span><button class="btn primary" id="aadd">Post it live</button></div></div>
@@ -548,15 +578,15 @@
   };
 
   // =========================================================== Maintenance
-  const SCOPES = [['global', '🌐 Everything', 'The Mac app and N28C: no chats at all'], ['desktop', '💻 Mac app', 'All chats in the Mac app (and asks from N28C)'], ['phone', '📱 N28C', 'The phone app'],
-    ['spaces', '👥 Shared Spaces', 'Shared Spaces and live sessions'], ['web', '🧪 Test Run', 'The web version (Nexus without a Mac)'], ['paragon', '@paragon', 'Only this agent'], ['neodela', '@neodela', 'Only this agent'], ['lyte', '@lyte', 'Only this agent'], ['flash', '@flash', 'Only this agent'], ['axiom', '@axiom', 'Only Axiom (Apex)']];
+  const SCOPES = [['global', '🌐 Everything', 'Nexus on Mac and PC, and N28C: no chats at all'], ['desktop', '💻 Desktop app', 'All chats in Nexus on Mac and PC (and asks from N28C)'], ['phone', '📱 N28C', 'The phone app'],
+    ['spaces', '👥 Shared Spaces', 'Shared Spaces and live sessions'], ['web', '🧪 Test Run', 'The web version (Nexus in a browser)'], ['websearch', '🔎 Web search', 'Searching the web and reading pages everywhere (Mac, PC, Test Run, N28C); answers still work'], ['paragon', '@paragon', 'Only this agent'], ['neodela', '@neodela', 'Only this agent'], ['lyte', '@lyte', 'Only this agent'], ['flash', '@flash', 'Only this agent'], ['axiom', '@axiom', 'Only Axiom (Apex)']];
   const isOn = m => m.enabled === true || m.enabled === 'true' || m.enabled?.enabled === true;
   P.maint = async () => {
     const { data, error } = await sb.from('maintenance_config').select('*').order('scope');
     if (error) return main(`<h1>Maintenance</h1><div class="card err">${esc(error.message)}</div>`);
     const hasNew = data.length ? 'ends_at' in data[0] : true;
     const label = s => (SCOPES.find(x => x[0] === s) || [s, '⚙︎ @' + s + ' (feature)'])[1];
-    main(`<h1>Maintenance</h1><p>Turn parts of Nexus off for everyone, with a message. The Mac app and N28C check every minute (instantly in N28C) and block what's down. Admins can keep using things unless you turn that off.</p>
+    main(`<h1>Maintenance</h1><p>Turn parts of Nexus off for everyone, with a message. Nexus on Mac and PC, Test Run and N28C check every minute (instantly in N28C) and block what's down. Admins can keep using things unless you turn that off.</p>
       ${hasNew ? '' : '<div class="banner warn">Run supabase/nexus-v2.2.sql to add end times and the admin bypass.</div>'}
       <div class="card"><h3>Take something down</h3>
         <div class="tabsub" id="scp" style="flex-wrap:wrap">${SCOPES.map(([k, l], i) => `<button data-sc="${k}" class="${i === 0 ? 'on' : ''}" title="${esc(SCOPES[i][2])}">${l}</button>`).join('')}<button data-sc="__feature">⚙︎ A feature…</button></div>
@@ -618,7 +648,7 @@
     const profile = `<div class="card"><h3>Profile</h3><div class="row" style="gap:16px;flex-wrap:nowrap">${av(me, 'xl', true)}<div style="flex:1;min-width:0">
           <input class="field" id="nick" placeholder="Your name in chat" maxlength="24" value="${esc(me.nickname || '')}" style="width:100%"><div class="row" style="margin-top:8px">
           <button class="btn" id="pic">Change picture</button>${me.avatar_url ? '<button class="btn ghost" id="picRm">Remove</button>' : ''}<input type="file" id="picF" accept="image/*" hidden></div>
-          <p class="muted" style="margin:8px 0 0">Your picture shows here, in the Mac app and in N28C. You can also change it in the Mac app (Settings → Account).</p></div></div></div>`;
+          <p class="muted" style="margin:8px 0 0">Your picture shows here, in Nexus on Mac and PC, in Test Run and in N28C. You can also change it in Nexus (Settings → Account).</p></div></div></div>`;
     const status = `<div class="card"><h3>Status</h3><div class="tabsub" id="st" style="flex-wrap:wrap">${[['auto', '🟢 Automatic', 'Online, or idle when you step away'], ['dnd', '⛔ Do not disturb', 'No pop-ups or sounds'], ['invisible', '⚪ Invisible', 'Look offline']].map(([k, l, s]) => `<button data-st="${k}" class="${p.status === k ? 'on' : ''}" title="${s}">${l}</button>`).join('')}</div>
           <input class="field" id="stt" maxlength="80" placeholder="Custom status, e.g. 🛠 fixing the relay" value="${esc(p.status_text || '')}" style="width:100%">
           <p class="muted" style="margin:8px 0 0">Right now others see you as <span class="prtxt ${presence(me)}">${PRES[presence(me)]}</span>.</p></div>`;

@@ -22,7 +22,7 @@
       ${list.length ? list.map(x => `<div class="card areq">${av({ id: x.user_id, nickname: x.nickname || x.username, email: x.email })}
         <div style="min-width:0"><div class="row" style="gap:8px"><b>${esc(x.nickname || x.username || x.email.split('@')[0])}</b><span class="muted">${esc(x.email)}</span>${x.status !== 'pending' ? `<span class="pill p-${x.status === 'approved' ? 'approved' : 'declined'}">${x.status.toUpperCase()}</span>` : ''}</div>
           <div style="margin-top:4px">${what(x)}</div>${x.note ? `<q class="quote muted" style="margin-top:4px">${esc(x.note)}</q>` : ''}
-          <div class="muted" style="margin-top:4px">${ago(x.created_at)} · from ${esc(x.source === 'phone' ? 'N28C' : x.source === 'web' ? 'the web' : 'Nexus for Mac')}${x.reviewed_at ? ` · answered ${ago(x.reviewed_at)}` : ''}${x.review_note ? ` · “${esc(x.review_note)}”` : ''}</div></div>
+          <div class="muted" style="margin-top:4px">${ago(x.created_at)} · from ${esc(x.source === 'phone' ? 'N28C' : x.source === 'web' ? 'the web' : 'Nexus on Mac or PC')}${x.reviewed_at ? ` · answered ${ago(x.reviewed_at)}` : ''}${x.review_note ? ` · “${esc(x.review_note)}”` : ''}</div></div>
         <div class="acts">${x.status === 'pending' && can ? `<button class="btn primary" data-ok="${x.id}">Approve</button><button class="btn danger" data-no="${x.id}">Deny</button>` : ''}
           ${x.status === 'approved' && can && x.kind === 'feature' ? `<button class="btn sm" data-revoke="${esc(x.user_id)}" data-flag="${esc(x.target)}">Take it back</button>` : ''}
           <button class="btn sm ghost" data-user="${esc(x.user_id)}">Profile</button></div></div>`).join('') : `<div class="empty">${f === 'pending' ? 'Nobody is waiting. 🎉' : 'Nothing here.'}</div>`}`);
@@ -50,10 +50,10 @@
   };
 
   // =========================================================== Nexus (1.9: lives in Team chat)
-  // "◆ Nexus" is the first room in Team chat: your own chat with Nexus, even when the Mac app is closed. There's no
-  // model picker: it always uses the agent and model you last chatted with in Nexus '28 (from your Mac's phone link).
-  // When your Mac is on with the phone link, the Mac answers with every tool; otherwise the free Nexus key answers and
-  // "Hand off to my Mac" queues the question for the Mac. Chats are kept in this browser.
+  // "◆ Nexus" is the first room in Team chat: your own chat with Nexus, even when the desktop app is closed. There's no
+  // model picker: it always uses the agent and model you last chatted with in Nexus '28 (from your computer's phone link).
+  // When your computer is on with the phone link, your computer answers with every tool; otherwise the free Nexus key answers and
+  // "Hand off to my computer" queues the question for your computer. Chats are kept in this browser.
   // In any other room, @paragon / @neodela / @lyte / @flash (and @axiom for people allowed to use him) answer in the
   // room: the recent messages are decrypted here and sent to the model, and those messages are marked "sent to AI".
   const OR = 'https://openrouter.ai/api/v1/chat/completions';
@@ -87,7 +87,7 @@
   const lastAgent = () => [NC.status?.current?.agent, NC.status?.lastUsed?.agent].find(agentOk) || 'paragon';
   const macModel = () => { const c = NC.status?.current, l = NC.status?.lastUsed; return c?.agent === lastAgent() && c.model ? c : l?.agent === lastAgent() && l.model ? l : c?.model ? c : l || null; };
   const lastModel = () => { const m = macModel(); return m && (m.provider === 'openrouter' || m.freeKey || !m.provider) && isFree(m.model) ? m.model : 'openrouter/free'; };
-  const modelNote = () => { const m = macModel(), use = lastModel(); return !m?.model || m.model === use ? esc(use) : `${esc(use)} <span title="Nexus uses ${esc(m.model)} on your Mac; that one isn't on the free key">(on your Mac: ${esc(m.model)})</span>`; };
+  const modelNote = () => { const m = macModel(), use = lastModel(); return !m?.model || m.model === use ? esc(use) : `${esc(use)} <span title="Nexus uses ${esc(m.model)} on your computer; that one isn't on the free key">(on your computer: ${esc(m.model)})</span>`; };
   const md = s => esc(s).replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) => `<pre>${c}</pre>`).replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
   const conv = () => NC.convs.find(c => c.id === NC.open) || null;
   // 2.0.3: one continuous chat with Nexus, like a DM (older separate chats are merged into it, oldest first)
@@ -156,15 +156,15 @@
       if (b.dataset.handoff) return handoff(+b.dataset.handoff);
       if (b.dataset.copy) { navigator.clipboard?.writeText(conv().messages[+b.dataset.copy].content); return toast('Copied'); }
       if (b.dataset.tools) { const row = b.closest('.m'); return row?.classList.toggle('tools-on'); }
-      if (b.dataset.del) { if (!confirm('Clear your Nexus chat in this browser? (Your chats on the Mac stay.)')) return; NC.convs = []; oneChat(); return paint(); }
+      if (b.dataset.del) { if (!confirm('Clear your Nexus chat in this browser? (Your chats on your computer stay.)')) return; NC.convs = []; oneChat(); return paint(); }
     };
   }
   function paintTop() {
     const el = NC.host?.querySelector('.top'); if (!el) return;
     const a = agentInfo(lastAgent()), on = macOn();
     el.innerHTML = `<button class="btn sm back" id="ncBack">‹</button>${icon()}
-      <div class="ti"><b>Nexus <span class="muted" style="font-weight:400">· ${esc(a.short)}</span></b><small>${on ? 'Your Mac answers, with every tool and @Feature' : `Free Nexus key · ${modelNote()} · no tools`} · the agent and model you're using in Nexus</small></div>
-      <span class="mac-dot ${on ? 'on' : 'off'}" title="${on ? 'Your Mac is on and linked' : NC.status ? 'Your Mac was last seen ' + ago(NC.statusAt) : 'Turn on the phone link in Nexus (Settings → Phone) to hand off to your Mac'}">${on ? '● Mac on' : '○ Mac off'}</span>`;
+      <div class="ti"><b>Nexus <span class="muted" style="font-weight:400">· ${esc(a.short)}</span></b><small>${on ? 'Your computer answers, with every tool and @Feature' : `Free Nexus key · ${modelNote()} · no tools`} · the agent and model you're using in Nexus</small></div>
+      <span class="mac-dot ${on ? 'on' : 'off'}" title="${on ? 'Your computer is on and linked' : NC.status ? 'Your computer was last seen ' + ago(NC.statusAt) : 'Turn on the phone link in Nexus (Settings → Phone) to hand off to your computer'}">${on ? '● Mac on' : '○ Mac off'}</span>`;
   }
   function paint() { paintTop(); paintLog(); const i = NC.host?.querySelector('#ncIn'); if (i) i.placeholder = `Message ${agentInfo(lastAgent()).short}…`; }
   function paintLog() {
@@ -178,16 +178,16 @@
       const cont = prev && prev.role === m.role && at - (prev.at || 0) < 5 * 60e3;
       const who = ai ? (m.agentName || a.name) : NX.nameOf(meAdmin);
       const avatar = ai ? (NC.orbImg ? '<canvas class="av nx-orb" data-nxorb width="64" height="64" aria-hidden="true"></canvas>' : `<span class="av" style="--c:${esc(m.agentColor || a.color)}">${esc((m.agentShort || a.short)[0])}</span>`) : NX.av(meAdmin);
-      const canHand = ai && !m.pending && !/^Your Mac/.test(m.via || '');
+      const canHand = ai && !m.pending && !/^Your computer/.test(m.via || '');
       html += `<div class="m ${cont ? 'cont' : ''} ${ai ? 'bot' : ''} ${m.error ? 'nx-err' : ''}">${avatar}
         <div class="mb"><div class="by"><b style="color:${ai ? esc(m.agentColor || a.color) : NX.colorOf(meAdmin.id)}">${esc(who)}</b>${ai ? '<span class="ai-tag">AI</span>' : ''}<time>${hm(at)}</time></div>
           <div class="tx">${m.pending ? '<span class="typing"><i></i><i></i><i></i></span>' : md(m.content)}</div>
-          ${ai && !m.pending && (m.via || canHand) ? `<div class="nx-via">${esc(m.via || '')}${canHand ? `<button data-handoff="${i}" title="Send the question before this answer to your Mac, so it can use tools and @Features">➤ Hand off to my Mac</button>` : ''}</div>` : ''}</div>
-        ${m.pending ? '' : `<div class="tools"><button data-copy="${i}" title="Copy">⧉</button>${canHand ? `<button data-handoff="${i}" title="Hand off to my Mac">➤</button>` : ''}</div><button class="m-more" data-tools="1" title="More" aria-label="More">⋯</button>`}</div>`;
+          ${ai && !m.pending && (m.via || canHand) ? `<div class="nx-via">${esc(m.via || '')}${canHand ? `<button data-handoff="${i}" title="Send the question before this answer to your computer, so it can use tools and @Features">➤ Hand off to my computer</button>` : ''}</div>` : ''}</div>
+        ${m.pending ? '' : `<div class="tools"><button data-copy="${i}" title="Copy">⧉</button>${canHand ? `<button data-handoff="${i}" title="Hand off to my computer">➤</button>` : ''}</div><button class="m-more" data-tools="1" title="More" aria-label="More">⋯</button>`}</div>`;
       prev = { role: m.role, at };
     });
     log.innerHTML = c.messages.length ? html + '<div class="nx-end"><button class="btn sm ghost" data-del="1">Clear chat</button></div>'
-      : `<div class="empty">Ask anything. ${macOn() ? 'Your Mac is on, so it answers with all its tools.' : 'Your Mac is off: answers come from the free Nexus key. Need a tool (calendar, files, Axiom’s kits)? Use “Hand off to my Mac”.'}</div>`;
+      : `<div class="empty">Ask anything. ${macOn() ? 'Your computer is on, so it answers with all its tools.' : 'Your computer is off: answers come from the free Nexus key. Need a tool (calendar, files, Axiom’s kits)? Use “Hand off to my computer”.'}</div>`;
     log.scrollTop = log.scrollHeight;
   }
   // One model call on the free key (no tools). Axiom gets his prompt from Supabase and logs his minutes.
@@ -202,7 +202,7 @@
     if (down) throw new Error('🛠 ' + (down.message || `${agentInfo(agentId).name} is down for maintenance (admins don't bypass this one).`));
     const a = agentInfo(agentId), key = await freeKey();
     if (!key) throw new Error("The free Nexus key isn't set up.");
-    let sys = `You are ${a.name}, an assistant in Nexus '28 by Apoji Delegraphics. You have no tools here: if something needs files, a calendar or Mac apps, say so.` + (a.about ? '\n\nAbout you: ' + a.about : '');
+    let sys = `You are ${a.name}, an assistant in Nexus '28 by Apoji Delegraphics. You have no tools here: if something needs files, a calendar or your computer's apps, say so.` + (a.about ? '\n\nAbout you: ' + a.about : '');
     if (a.apex) { const { data: s } = await sb.rpc('apex_session'); if (!s?.allowed || !s.prompt) throw new Error(s?.exhausted ? 'You’ve used your Axiom minutes this week.' : 'Axiom isn’t available right now.'); sys = s.prompt; }
     const model = lastModel(), t0 = Date.now();
     const res = await fetch(OR, { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', 'X-Title': 'Apoji Admin' },
@@ -220,17 +220,17 @@
     const a = agentInfo(lastAgent());
     if (macOn()) return relayAsk(c, text, a);
     const reply = { role: 'assistant', content: '', pending: true, at: Date.now(), agentName: a.name, agentShort: a.short, agentColor: a.color }; c.messages.push(reply); paintLog(); NC.busy = true;
-    try { const r = await ask(a.id, c.messages.filter(m => !m.pending && !m.error).slice(-16).map(m => ({ role: m.role, content: m.content })), '\nYou are answering in Apoji Admin. If something needs the Mac, suggest "Hand off to my Mac".'); Object.assign(reply, { content: r.text, pending: false, via: `Free key · ${r.model}` }); }
+    try { const r = await ask(a.id, c.messages.filter(m => !m.pending && !m.error).slice(-16).map(m => ({ role: m.role, content: m.content })), '\nYou are answering in Apoji Admin. If something needs your computer, suggest "Hand off to my computer".'); Object.assign(reply, { content: r.text, pending: false, via: `Free key · ${r.model}` }); }
     catch (e) { Object.assign(reply, { content: e.message, pending: false, error: true, via: '' }); }
     finally { NC.busy = false; saveConvs(); if (NC.host?.isConnected) paintLog(); }
   }
-  // To the Mac, through the relay (what N28C does). The Mac answers with its full toolset, in the same chat each time.
+  // To your computer, through the relay (what N28C does). The Mac answers with its full toolset, in the same chat each time.
   async function relayAsk(c, text, a, handed = false) {
-    const reply = { role: 'assistant', content: '', pending: true, at: Date.now(), via: 'Your Mac', agentName: a.name, agentShort: a.short, agentColor: a.color }; c.messages.push(reply); paintLog();
+    const reply = { role: 'assistant', content: '', pending: true, at: Date.now(), via: 'Your computer', agentName: a.name, agentShort: a.short, agentColor: a.color }; c.messages.push(reply); paintLog();
     const { data, error } = await sb.from('relay_messages').insert({ direction: 'to_desktop', kind: 'ask', agent: a.id, content: text.slice(0, 8000), meta: { from: 'portal', ...(c.macConv ? { convId: c.macConv } : {}) } }).select('id').single();
     if (error) { Object.assign(reply, { content: error.message, pending: false, error: true }); saveConvs(); return paintLog(); }
     reply.relayId = data.id; saveConvs();
-    if (handed && !macOn()) { reply.pending = false; reply.content = '➤ Handed off. Your Mac will answer when it’s on (the answer shows up here and in Nexus).'; reply.waiting = true; saveConvs(); paintLog(); }
+    if (handed && !macOn()) { reply.pending = false; reply.content = '➤ Handed off. Your computer will answer when it’s on (the answer shows up here and in Nexus).'; reply.waiting = true; saveConvs(); paintLog(); }
   }
   function handoff(i) {
     const c = conv(), q = [...c.messages.slice(0, i)].reverse().find(m => m.role === 'user'); if (!q) return;
@@ -240,7 +240,7 @@
     if (!row || row.direction !== 'to_phone' || !['reply', 'error'].includes(row.kind)) return;
     for (const c of NC.convs) {
       const m = c.messages.find(x => x.relayId === row.reply_to); if (!m) continue;
-      Object.assign(m, { content: row.content, pending: false, waiting: false, error: row.kind === 'error', via: 'Your Mac' + (row.meta?.model ? ' · ' + row.meta.model : '') });
+      Object.assign(m, { content: row.content, pending: false, waiting: false, error: row.kind === 'error', via: 'Your computer' + (row.meta?.model ? ' · ' + row.meta.model : '') });
       if (row.meta?.convId) c.macConv = row.meta.convId;
       sb.from('relay_messages').delete().in('id', [row.id, row.reply_to]).then(() => {}, () => {});
       saveConvs(); if (NC.host?.isConnected && c.id === NC.open) paintLog();

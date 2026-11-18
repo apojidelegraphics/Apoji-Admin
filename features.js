@@ -83,7 +83,7 @@
   async function runJobs(manual) {
     if (W.running || !A.user) return; W.running = true;
     try {
-      const { data, error } = await sb.rpc('admin_claim_schedules', { p_hub: DESK && W.on ? (W.st?.name || 'Mac hub') : DESK ? 'Apoji Admin (Mac)' : 'Apoji Admin (web)' });
+      const { data, error } = await sb.rpc('admin_claim_schedules', { p_hub: DESK && W.on ? (W.st?.name || 'Desktop hub') : DESK ? 'Apoji Admin (Mac)' : 'Apoji Admin (web)' });
       if (error) { if (manual) toast(sqlMsg(error.message), true); return; }
       for (const j of data || []) {
         let ok = true, res = '';
@@ -168,10 +168,10 @@
         ${t.error ? `<div class="banner warn" style="margin-top:10px">⚠️ ${esc(t.error)}</div>${t.detail ? `<div class="muted" style="font-family:var(--mono);font-size:11.5px;overflow-wrap:anywhere">${esc(t.detail)}</div>` : ''}` : ''}${st.error ? `<div class="banner warn" style="margin-top:10px">⚠️ ${esc(st.error)}</div>` : ''}${tsHelp(t)}
         ${st.url ? `<div class="hubaddr"><img src="${st.qr || ''}" alt="" width="120" height="120"><div><div class="muted">Your hub's private address (only your tailnet can open it)</div><code id="hUrl">${esc(st.url)}</code>
           <div class="row" style="margin-top:8px"><button class="btn sm" id="hCopy">Copy</button></div>
-          <p class="muted" style="margin:8px 0 0">On your phone: install Tailscale (same account), open the Apoji Admin website, go to <b>Mac hub</b> and turn on notifications. You don't need this address; the website finds it.</p></div></div>` : ''}</div>
+          <p class="muted" style="margin:8px 0 0">On your phone: install Tailscale (same account), open the Apoji Admin website, go to <b>Desktop hub</b> and turn on notifications. You don't need this address; the website finds it.</p></div></div>` : ''}</div>
       <div class="card"><h3>📱 Phone notifications</h3>
         ${tog('hChat', 'Include chat text', 'Off: phones only see “New message in #room”. Admin chat is end-to-end encrypted, so this is off by default.', st.chatText)}
-        ${(st.subs || []).length ? `<table class="cards" style="margin-top:8px"><tr><th>Device</th><th>Admin</th><th>Gets</th><th>Last sent</th><th></th></tr>${st.subs.map(s => `<tr><td>${esc(s.label)}</td><td>${esc(s.email || s.login)}</td><td class="muted">${esc(s.kinds.join(', '))}</td><td class="muted">${s.lastOk ? ago(s.lastOk) : 'never'}</td><td><button class="btn sm ghost" data-rmdev="${esc(s.id)}">Remove</button></td></tr>`).join('')}</table>` : '<p class="muted">No phones yet. Each admin turns notifications on from the website (Mac hub page) on their phone.</p>'}
+        ${(st.subs || []).length ? `<table class="cards" style="margin-top:8px"><tr><th>Device</th><th>Admin</th><th>Gets</th><th>Last sent</th><th></th></tr>${st.subs.map(s => `<tr><td>${esc(s.label)}</td><td>${esc(s.email || s.login)}</td><td class="muted">${esc(s.kinds.join(', '))}</td><td class="muted">${s.lastOk ? ago(s.lastOk) : 'never'}</td><td><button class="btn sm ghost" data-rmdev="${esc(s.id)}">Remove</button></td></tr>`).join('')}</table>` : '<p class="muted">No phones yet. Each admin turns notifications on from the website (Desktop hub page) on their phone.</p>'}
         <div class="row" style="margin-top:10px"><button class="btn" id="hTest">Send a test to my phones</button><button class="btn" id="hRun">⏰ Run due schedules now</button></div></div>
       <div class="card"><h3>🔐 Who can use it</h3>
         <p class="muted" style="margin-top:0">Everyone needs to be on your tailnet <b>and</b> signed in as an Apoji admin. You can also limit it to certain Tailscale accounts.</p>
@@ -214,7 +214,7 @@
   const b64u = s => { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); };
   async function currentSub() { if (!pushOk()) return null; const reg = await navigator.serviceWorker.getRegistration(); return reg ? reg.pushManager.getSubscription() : null; }
   async function webHub() {
-    NX.main('<h1>🖥 Mac hub</h1><p><span class="spinner"></span> Looking for your Mac…</p>', { cards: false });
+    NX.main('<h1>🖥 Desktop hub</h1><p><span class="spinner"></span> Looking for your hub computer…</p>', { cards: false });
     await loadHubRow(); if (H.row) await probe();
     if (H.reach) H.events = (await hubFetch('/api/events').catch(() => ({ events: [] }))).events || [];
     paintWebHub();
@@ -222,23 +222,23 @@
   async function paintWebHub() {
     if (A.tab !== 'hub') return;
     const r = H.row, s = r?.status || {}, on = fresh(r), sub = await currentSub().catch(() => null);
-    NX.main(`<h1>🖥 Mac hub ${!r ? '' : on ? pill('p-approved', 'ONLINE') : pill('p-declined', 'OFFLINE')}</h1>
-      <p>Everything here works from anywhere through Supabase. When this device is on <b>Tailscale</b>, it also talks to your team's Mac directly: phone notifications, running schedules right away and what's new on the Mac.</p>
-      ${H.err ? `<div class="card err">${esc(H.err)}</div>` : !r ? `<div class="card"><h3>No hub yet</h3><p class="muted" style="margin:0">Open the Apoji Admin Mac app → <b>This Mac</b> → turn on <b>Use this Mac as the hub</b>. Until then, schedules run whenever an Apoji Admin is open.</p></div>` : `
+    NX.main(`<h1>🖥 Desktop hub ${!r ? '' : on ? pill('p-approved', 'ONLINE') : pill('p-declined', 'OFFLINE')}</h1>
+      <p>Everything here works from anywhere through Supabase. When this device is on <b>Tailscale</b>, it also talks to your team's hub computer (a Mac or a PC) directly: phone notifications, running schedules right away and what's new there.</p>
+      ${H.err ? `<div class="card err">${esc(H.err)}</div>` : !r ? `<div class="card"><h3>No hub yet</h3><p class="muted" style="margin:0">Open the Apoji Admin desktop app on a Mac or PC → <b>This Mac</b> (or <b>This PC</b>) → turn on <b>Use this computer as the hub</b>. Until then, schedules run whenever an Apoji Admin is open.</p></div>` : `
       <div class="grid">
-        <div class="stat"><b style="font-size:18px;overflow-wrap:anywhere">${esc(r.name || 'Mac')}</b><span>${on ? 'online' : 'last seen ' + ago(r.updated_at)}</span></div>
+        <div class="stat"><b style="font-size:18px;overflow-wrap:anywhere">${esc(r.name || 'Hub')}</b><span>${on ? 'online' : 'last seen ' + ago(r.updated_at)}</span></div>
         <div class="stat ${s.awake?.on ? '' : 'hot'}"><b>${s.awake?.on ? '☕' : '💤'}</b><span>${esc(s.awake?.reason || (s.keepAwake ? 'Keep awake on' : 'Can sleep'))}</span></div>
         <div class="stat ${H.reach ? '' : 'hot'}"><b>${H.reach ? '🔗' : '—'}</b><span>${H.reach ? 'This device reaches it' : 'Not reachable from here'}</span></div>
         <div class="stat"><b>${s.jobs?.ran ?? 0}</b><span>schedules run${s.jobs?.last ? ' · ' + ago(s.jobs.last) : ''}</span></div></div>
-      ${!H.reach ? `<div class="banner warn">${H.reachErr ? '⚠️ ' + esc(H.reachErr) : `🔌 Can't reach ${esc(r.name || 'the Mac')} from this device. Turn on Tailscale here (same tailnet)${on ? '' : ', and make sure the Mac is awake with Apoji Admin open'}, then <button class="btn sm" id="wRetry">try again</button>`}</div>` : ''}
+      ${!H.reach ? `<div class="banner warn">${H.reachErr ? '⚠️ ' + esc(H.reachErr) : `🔌 Can't reach ${esc(r.name || 'the hub')} from this device. Turn on Tailscale here (same tailnet)${on ? '' : ', and make sure the hub computer is awake with Apoji Admin open'}, then <button class="btn sm" id="wRetry">try again</button>`}</div>` : ''}
       <div class="card"><h3>📱 Notifications on this device</h3>
         ${!pushOk() ? `<p class="muted" style="margin:0">${isIOS && !standalone() ? 'On iPhone: tap Share → <b>Add to Home Screen</b>, open Apoji Admin from there, then come back to this page.' : 'This browser can’t get push notifications.'}</p>` : `
-        <p class="muted" style="margin-top:0">Sent by your Mac over Tailscale, even when this page is closed. ${sub ? '<b class="ok">On for this device.</b>' : ''}</p>
+        <p class="muted" style="margin-top:0">Sent by your hub computer over Tailscale, even when this page is closed. ${sub ? '<b class="ok">On for this device.</b>' : ''}</p>
         <div class="chips" id="wKinds">${PUSH_KINDS.map(([k, l]) => `<label class="chip"><input type="checkbox" value="${k}" ${NX.store.get('pushKinds', PUSH_KINDS.map(x => x[0])).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div>
         <div class="row" style="margin-top:10px">${sub ? `<button class="btn" id="wSave" ${H.reach ? '' : 'disabled'}>Save choices</button><button class="btn" id="wTest" ${H.reach ? '' : 'disabled'}>Send a test</button><button class="btn ghost" id="wOff">Turn off</button>` : `<button class="btn primary" id="wOn" ${H.reach ? '' : 'disabled'}>Turn on notifications</button>`}</div>`}</div>
       <div class="card"><h3>⚡ Quick actions</h3><div class="row"><button class="btn" id="wRun">⏰ Run due schedules now</button><button class="btn" id="wPing" ${H.reach ? '' : 'disabled'}>Wake its data (refresh)</button></div>
-        <p class="muted" style="margin-bottom:0">${H.reach ? 'Goes straight to your Mac over Tailscale.' : 'Without the hub, this device runs due schedules itself.'}</p></div>
-      ${H.reach ? `<div class="card"><h3>🕘 What's new on ${esc(r.name || 'the Mac')}</h3>${H.events.length ? `<div class="feed">${H.events.map(e => `<div><span class="muted">${ago(e.at)}</span> ${esc(e.title)}${e.body ? ` <span class="muted">· ${esc(e.body)}</span>` : ''}</div>`).join('')}</div>` : '<p class="muted">Nothing yet.</p>'}</div>` : ''}
+        <p class="muted" style="margin-bottom:0">${H.reach ? 'Goes straight to your hub computer over Tailscale.' : 'Without the hub, this device runs due schedules itself.'}</p></div>
+      ${H.reach ? `<div class="card"><h3>🕘 What's new on ${esc(r.name || 'the hub')}</h3>${H.events.length ? `<div class="feed">${H.events.map(e => `<div><span class="muted">${ago(e.at)}</span> ${esc(e.title)}${e.body ? ` <span class="muted">· ${esc(e.body)}</span>` : ''}</div>`).join('')}</div>` : '<p class="muted">Nothing yet.</p>'}</div>` : ''}
       ${H.rows.length > 1 ? `<div class="card"><h3>Other hubs</h3>${H.rows.filter(x => x !== r).map(x => `<div class="row"><b>${esc(x.name)}</b><span class="muted">${fresh(x) ? 'online' : 'last seen ' + ago(x.updated_at)}</span></div>`).join('')}</div>` : ''}`}`, { cards: false });
     const kinds = () => [...document.querySelectorAll('#wKinds input:checked')].map(i => i.value);
     $('main').onclick = async e => {
@@ -259,9 +259,9 @@
           toast('🔔 Notifications are on for this device'); return paintWebHub();
         }
         if (b.id === 'wSave') { const s = await currentSub(); NX.store.set('pushKinds', kinds()); await hubFetch('/api/push/subscribe', { method: 'POST', body: { subscription: s.toJSON(), kinds: kinds(), label: deviceLabel() } }); return toast('✓ Saved'); }
-        if (b.id === 'wTest') { const r = await hubFetch('/api/push/test', { method: 'POST', body: {} }); return toast(r.sent ? '🔔 Sent. It should arrive in a few seconds.' : 'Your Mac has no devices for you yet.', !r.sent); }
+        if (b.id === 'wTest') { const r = await hubFetch('/api/push/test', { method: 'POST', body: {} }); return toast(r.sent ? '🔔 Sent. It should arrive in a few seconds.' : 'The hub has no devices for you yet.', !r.sent); }
         if (b.id === 'wOff') { const s = await currentSub(); if (s) { await hubFetch('/api/push/unsubscribe', { method: 'POST', body: { endpoint: s.endpoint } }).catch(() => {}); await s.unsubscribe(); } toast('🔕 Off for this device'); return paintWebHub(); }
-      } catch (err) { b.disabled = false; toast(err.message === 'no_hub' ? 'No hub address yet.' : err.name === 'AbortError' ? 'Your Mac didn’t answer. Is Tailscale on here?' : err.message, true); }
+      } catch (err) { b.disabled = false; toast(err.message === 'no_hub' ? 'No hub address yet.' : err.name === 'AbortError' ? 'The hub didn’t answer. Is Tailscale on here?' : err.message, true); }
     };
   }
   const deviceLabel = () => /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android phone' : /Mac/.test(navigator.userAgent) ? 'Mac browser' : 'Browser';
@@ -274,14 +274,14 @@
     const { data, error } = await sb.from('broadcasts').select('*').order('send_at', { ascending: false }).limit(60);
     if (error) return NX.main(`<h1>📡 Broadcasts</h1><div class="card err">${esc(sqlMsg(error.message))}</div>`);
     const f = prefill || {}; prefill = null;
-    NX.main(`<h1>📡 Broadcasts</h1><p>A message that pops up as a notification in everyone's Nexus Mac app (and on their phone through N28C), once per person. Nexus 2.3 and newer.</p>
+    NX.main(`<h1>📡 Broadcasts</h1><p>A message that pops up as a notification in everyone's Nexus app on Mac and PC (and on their phone through N28C), once per person. Nexus 2.3 and newer.</p>
       <div class="card"><h3>New broadcast</h3>
         <input class="field" id="bT" maxlength="80" placeholder="Title, e.g. Nexus 2.3 is out" value="${esc(f.title || '')}" style="width:100%">
         <textarea class="field" id="bB" rows="2" maxlength="400" placeholder="What should people know?" style="width:100%;margin-top:8px">${esc(f.body || '')}</textarea>
         <input class="field" id="bU" placeholder="Link (optional, https://…)" value="${esc(f.url || '')}" style="width:100%;margin-top:8px">
         <div class="tabsub" id="bAud" style="margin-top:10px">${AUD.map(([k, l]) => `<button data-aud="${k}" class="${(f.audience || 'all') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="row" id="bVerRow" ${(f.audience || 'all') === 'outdated' ? '' : 'hidden'}><label class="muted">Only apps older than <input class="field" id="bV" placeholder="2.3.0" value="${esc(f.max_version || '')}" style="width:90px"></label></div>
-        <div class="row" style="margin-top:8px"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bD" checked> 💻 Mac app</label><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bP" checked> 📱 Phone</label>
+        <div class="row" style="margin-top:8px"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bD" checked> 💻 Mac &amp; PC</label><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bP" checked> 📱 Phone</label>
           <label class="muted">Send <input class="field" type="datetime-local" id="bAt" title="Leave empty to send now"></label>
           <label class="muted">for <select class="field" id="bExp"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="30">30 days</option></select></label></div>
         <div class="bcprev" id="bPrev"><img src="icons/icon-192.png" alt=""><div><b>Nexus '28</b><div class="t"></div><div class="muted b"></div></div></div>
@@ -300,7 +300,7 @@
       if (!title) return toast('Give it a title.', true);
       if (url && !/^https:\/\//.test(url)) return toast('Links need to start with https://', true);
       if (aud === 'outdated' && !/^\d+(\.\d+){0,2}$/.test($('bV').value.trim())) return toast('Which version? e.g. 2.3.0', true);
-      if (!$('bD').checked && !$('bP').checked) return toast('Pick Mac app, phone or both.', true);
+      if (!$('bD').checked && !$('bP').checked) return toast('Pick desktop, phone or both.', true);
       if (!confirm(`${$('bAt').value ? 'Schedule' : 'Send'} “${title}” to ${AUD.find(a => a[0] === aud)[1].replace(/^\S+ /, '').toLowerCase()}?`)) return;
       const { error: er } = await sb.from('broadcasts').insert({ title, body: $('bB').value.trim(), url, audience: aud, max_version: aud === 'outdated' ? $('bV').value.trim() : '', desktop: $('bD').checked, phone: $('bP').checked,
         send_at: at.toISOString(), expires_at: new Date(at.getTime() + +$('bExp').value * 86400e3).toISOString(), created_by: A.user.id });
@@ -313,7 +313,7 @@
 
   // =========================================================== Schedules
   const SK = { announcement_on: '📣 Announcement on', announcement_off: '📣 Announcement off', maintenance_on: '🛠 Maintenance on', maintenance_off: '🛠 Maintenance off', flag_stage: '⚑ Feature flag' };
-  const MSCOPES = [['global', '🌐 Everything'], ['desktop', '💻 Mac app'], ['phone', '📱 N28C'], ['spaces', '👥 Shared Spaces'], ['paragon', '@paragon'], ['neodela', '@neodela'], ['lyte', '@lyte'], ['flash', '@flash']];
+  const MSCOPES = [['global', '🌐 Everything'], ['desktop', '💻 Desktop app (Mac & PC)'], ['websearch', '🔎 Web search'], ['phone', '📱 N28C'], ['spaces', '👥 Shared Spaces'], ['paragon', '@paragon'], ['neodela', '@neodela'], ['lyte', '@lyte'], ['flash', '@flash']];
   P.schedules = async () => {
     const [{ data, error }, { data: flags }, { data: anns }] = await Promise.all([
       sb.from('admin_schedules').select('*').order('run_at', { ascending: false }).limit(120),
@@ -324,7 +324,7 @@
     const hubOn = fresh(H.row);
     const soon = localInput(Date.now() + 60 * 60e3);
     NX.main(`<h1>⏰ Schedules</h1><p>Turn things on and off at a set time: announcements, maintenance and feature flags.</p>
-      <div class="banner ${hubOn ? '' : 'warn'}">${hubOn ? `🛰 <b>${esc(H.row.name)}</b> runs these on time (checks every 30 seconds).` : `💤 No Mac hub is online, so these run when any Apoji Admin is open. Turn on the hub in the Mac app (This Mac) to run them on time.`}<span class="sp" style="flex:1"></span><button class="btn sm" id="sRun">Run due now</button></div>
+      <div class="banner ${hubOn ? '' : 'warn'}">${hubOn ? `🛰 <b>${esc(H.row.name)}</b> runs these on time (checks every 30 seconds).` : `💤 No desktop hub is online, so these run when any Apoji Admin is open. Turn on the hub in the desktop app (This Mac or This PC) to run them on time.`}<span class="sp" style="flex:1"></span><button class="btn sm" id="sRun">Run due now</button></div>
       <div class="card"><h3>New schedule</h3>
         <div class="tabsub" id="sKind"><button data-k="ann" class="on">📣 Announcement</button><button data-k="maint">🛠 Maintenance</button><button data-k="flag">⚑ Feature flag</button></div>
         <div data-f="ann"><select class="field" id="sAnnPick" style="width:100%"><option value="">New announcement…</option>${(anns || []).map(a => `<option value="${a.id}">${a.active ? '● ' : ''}${esc(a.message.slice(0, 90))}</option>`).join('')}</select>
@@ -514,10 +514,10 @@
     if (c.ping == null) add('bad', 'ping', 'Supabase isn’t answering', 'status'); else if (c.ping > 1500) add('warn', 'slow', `Supabase is slow (${c.ping} ms)`);
     if (!A.live) add('warn', 'live', 'Live updates are off (polling)');
     if (c.h.error) add('warn', 'sql', c.h.error);
-    if (c.h.relay_backlog > 0) add('warn', 'relay:' + c.h.relay_backlog, `${c.h.relay_backlog} N28C request${c.h.relay_backlog === 1 ? '' : 's'} waiting over 2 minutes (is someone’s Mac asleep?)`, 'relay');
+    if (c.h.relay_backlog > 0) add('warn', 'relay:' + c.h.relay_backlog, `${c.h.relay_backlog} N28C request${c.h.relay_backlog === 1 ? '' : 's'} waiting over 2 minutes (is someone’s computer asleep?)`, 'relay');
     if (c.h.schedules_failed > 0) add('warn', 'sched:' + c.h.schedules_failed, `${c.h.schedules_failed} schedule${c.h.schedules_failed === 1 ? '' : 's'} failed this week`, 'schedules');
     if (c.h.maintenance_on > 0) add('info', 'maint:' + c.h.maintenance_on, `${c.h.maintenance_on} maintenance switch${c.h.maintenance_on === 1 ? ' is' : 'es are'} on`, 'maint');
-    if (c.hub && !fresh(c.hub)) add('warn', 'hub:' + c.hub.id, `Mac hub ${c.hub.name} is offline (last seen ${ago(c.hub.updated_at)})`, 'hub');
+    if (c.hub && !fresh(c.hub)) add('warn', 'hub:' + c.hub.id, `Desktop hub ${c.hub.name} is offline (last seen ${ago(c.hub.updated_at)})`, 'hub');
     if (c.hub?.status?.tailscale?.error) add('warn', 'ts', 'Hub: ' + c.hub.status.tailscale.error, 'hub');
     if (c.key?.remaining != null && c.key.limit && c.key.remaining / c.key.limit < .1) add('bad', 'key:low', 'The free AI key is almost out of credit', 'key');
     if (c.key?.error) add('warn', 'key:err', 'Free AI key: ' + c.key.error, 'key');
@@ -539,9 +539,9 @@
       if (error) { el.innerHTML = `<button class="btn sm x" data-x>✕</button><h3>📱 N28C requests waiting</h3><div class="err">${esc(NX.needSql(error.message) ? 'Run supabase/nexus-v3.1.sql (Nexus repo) in Supabase → SQL Editor to see these.' : error.message)}</div>`; return; }
       const rows = data || [];
       el.innerHTML = `<button class="btn sm x" data-x>✕</button><h3>📱 N28C requests waiting</h3>
-        <p class="muted" style="margin-top:0">Things people sent from N28C that their Mac hasn't picked up for over 2 minutes. Usually the Mac is asleep, Nexus is closed, or the phone link is off on that Mac. What they asked stays private: only who and when shows here.</p>
-        ${rows.length ? `<div class="plist">${rows.map(x => `<div><span><b>${esc(x.username ? '@' + x.username : x.email)}</b> <small>${esc(x.kind === 'request' ? (x.op || 'request').replace(/_/g, ' ') : 'question' + (x.agent ? ' to ' + x.agent : ''))} · ${ago(x.created_at)} · Mac last seen ${x.mac_seen ? ago(x.mac_seen) : 'never'}</small></span><input type="checkbox" data-rid="${x.id}" checked></div>`).join('')}</div>
-        <p class="muted">Clearing marks them handled and tells their phone the Mac didn't answer, so N28C stops waiting. They can send it again.</p>
+        <p class="muted" style="margin-top:0">Things people sent from N28C that none of their computers (Mac or PC) picked up for over 2 minutes. Usually the computer is asleep, Nexus is closed, or the phone link is off on it. What they asked stays private: only who and when shows here.</p>
+        ${rows.length ? `<div class="plist">${rows.map(x => `<div><span><b>${esc(x.username ? '@' + x.username : x.email)}</b> <small>${esc(x.kind === 'request' ? (x.op || 'request').replace(/_/g, ' ') : 'question' + (x.agent ? ' to ' + x.agent : ''))} · ${ago(x.created_at)} · computer last seen ${x.mac_seen ? ago(x.mac_seen) : 'never'}</small></span><input type="checkbox" data-rid="${x.id}" checked></div>`).join('')}</div>
+        <p class="muted">Clearing marks them handled and tells their phone their computer didn't answer, so N28C stops waiting. They can send it again.</p>
         <div class="row"><span class="sp"></span><button class="btn" data-x>Close</button><button class="btn primary" id="rClear" ${A.viewer ? 'disabled' : ''}>Clear selected</button></div>` : '<div class="empty">🟢 Nothing waiting any more.</div>'}`;
       const b = el.querySelector('#rClear'); if (b) b.onclick = async () => {
         const ids = [...el.querySelectorAll('[data-rid]:checked')].map(i => +i.dataset.rid); if (!ids.length) return;
@@ -564,7 +564,7 @@
       <div class="grid">
         <div class="stat ${c.ping == null || c.ping > 1500 ? 'hot' : ''}"><b>${c.ping == null ? '—' : c.ping + ' ms'}</b><span>Supabase response</span></div>
         <div class="stat ${A.live ? '' : 'hot'}"><b>${A.live ? '● Live' : '○ Polling'}</b><span>Realtime updates</span></div>
-        <div class="stat ${c.hub && !fresh(c.hub) ? 'hot' : ''}"><b>${!c.hub ? '—' : fresh(c.hub) ? '🛰 Online' : '💤 Offline'}</b><span>Mac hub${c.hub ? ' · ' + esc(c.hub.name) : ''}</span></div>
+        <div class="stat ${c.hub && !fresh(c.hub) ? 'hot' : ''}"><b>${!c.hub ? '—' : fresh(c.hub) ? '🛰 Online' : '💤 Offline'}</b><span>Desktop hub${c.hub ? ' · ' + esc(c.hub.name) : ''}</span></div>
         <div class="stat"><b>${h.active_today ?? '—'}</b><span>active today</span></div>
         <button class="stat ${h.relay_backlog ? 'hot' : ''}" data-open="relay"><b>${h.relay_backlog ?? '—'}</b><span>N28C requests waiting</span></button>
         <div class="stat ${h.schedules_failed ? 'hot' : ''}"><b>${h.schedules_pending ?? '—'}</b><span>schedules pending${h.schedules_failed ? ` · ${h.schedules_failed} failed` : ''}</span></div>
@@ -686,12 +686,12 @@
     NX.main(`<h1>🚀 Releases</h1><p>Downloads from GitHub and which versions people actually run (from the last 14 days of check-ins).</p>
       <div class="grid">
         <div class="stat"><b>${esc(lv || '—')}</b><span>latest Nexus</span></div>
-        <div class="stat ${total && onLatest / total < .5 ? 'hot' : ''}"><b>${total ? Math.round(onLatest / total * 100) + '%' : '—'}</b><span>of Mac apps on it (${onLatest}/${total})</span></div>
+        <div class="stat ${total && onLatest / total < .5 ? 'hot' : ''}"><b>${total ? Math.round(onLatest / total * 100) + '%' : '—'}</b><span>of desktop apps on it (${onLatest}/${total})</span></div>
         <div class="stat"><b>${latest ? dl(latest).toLocaleString() : '—'}</b><span>downloads of ${esc(lv || 'latest')}</span></div>
         <div class="stat"><b>${Array.isArray(aa) && aa[0] ? esc(aa[0].tag_name) : '—'}</b><span>latest Apoji Admin</span></div></div>
-      ${lv && total > onLatest ? `<div class="banner">⬆ ${total - onLatest} Mac app${total - onLatest === 1 ? ' is' : 's are'} on an older version.<span class="sp" style="flex:1"></span><button class="btn sm primary" id="rNudge">Nudge them to update</button></div>` : ''}
-      ${stats.error ? `<div class="card err">${esc(stats.error)}</div>` : `<div class="two"><div class="card"><h3>💻 Mac app versions</h3><div id="rDesk"></div></div><div class="card"><h3>📱 N28C versions</h3><div id="rPhone"></div></div></div>
-      <div class="card"><h3>📈 People on ${esc(lv || 'the latest version')} vs older (Mac app, 30 days)</h3><div id="rLine"></div></div>`}
+      ${lv && total > onLatest ? `<div class="banner">⬆ ${total - onLatest} desktop app${total - onLatest === 1 ? ' is' : 's are'} on an older version.<span class="sp" style="flex:1"></span><button class="btn sm primary" id="rNudge">Nudge them to update</button></div>` : ''}
+      ${stats.error ? `<div class="card err">${esc(stats.error)}</div>` : `<div class="two"><div class="card"><h3>💻 Desktop versions (Mac &amp; PC)</h3><div id="rDesk"></div></div><div class="card"><h3>📱 N28C versions</h3><div id="rPhone"></div></div></div>
+      <div class="card"><h3>📈 People on ${esc(lv || 'the latest version')} vs older (Mac &amp; PC, 30 days)</h3><div id="rLine"></div></div>`}
       ${A.level === 'high-admin' ? '<div class="card" id="rMail"><h3>✉ Email the changelog</h3><p class="muted"><span class="spinner"></span> Loading…</p></div>' : ''}
       <div class="card"><h3>Nexus '28 on GitHub</h3>${relTable(nx)}</div>
       <div class="card"><h3>Apoji Admin on GitHub</h3>${relTable(aa)}</div>`, { cards: false });

@@ -483,3 +483,11 @@ img.nx-orb, canvas.nx-orb { width: 32px; height: 32px; border-radius: 50%; flex:
 
 /* 2.1 New profile */
 .np-grid { grid-template-columns: 84px minmax(0, 1fr) !important; } .np-grid > * { min-width: 0; } .np-grid .field { width: 100%; }
+
+/* 2.2 Beta dashboard */
+.beta-f { display: grid; gap: 8px; }
+.beta-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.beta-stats div { border: 1px solid var(--line, #333); border-radius: 10px; padding: 8px; } .beta-stats b { display: block; font-size: 20px; } .beta-stats b.warn { color: #ffb547; } .beta-stats span { font-size: 12px; opacity: .7; }
+.bar2 { height: 6px; border-radius: 4px; background: rgba(255,90,110,.35); overflow: hidden; } .bar2 i { display: block; height: 100%; background: #3dffa0; }
+.beta-note { padding: 4px 0; font-size: 13px; border-top: 1px solid rgba(255,255,255,.06); }
+.field.sm { padding: 4px 8px; font-size: 12.5px; }

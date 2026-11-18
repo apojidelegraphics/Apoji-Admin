@@ -158,12 +158,12 @@
   }
 
   // ---------- layout
-  const HUB_LABEL = window.apojiDesktop ? (IS_WIN ? 'This PC' : 'This Mac') : 'Mac hub';
+  const HUB_LABEL = window.apojiDesktop ? (IS_WIN ? 'This PC' : 'This Mac') : 'Desktop hub';
   const TABS = [
     ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Team chat', 'chat'], ['tasks', '✅', 'Tasks', 'tasks'], ['notes', '📓', 'Team notes']]],
     ['INBOX', [['access', '🔑', 'Access requests', 'access'], ['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation']]],
-    ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['prompts', '✍', 'Agent prompts'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
+    ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['beta', 'β', 'Beta'], ['prompts', '✍', 'Agent prompts'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
     ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['audit', '📜', 'Audit log']]],
     ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['me', '⚙︎', 'My settings']]]
   ];

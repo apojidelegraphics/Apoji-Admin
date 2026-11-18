@@ -18,7 +18,7 @@ It's the same portal with the files built in, plus a Dock badge for unread items
 
 ## What's inside
 
-- **Dashboard**: active people (Mac app vs N28C), new accounts, Shared Space posts, versions in use, top agents, who's online and a live activity feed.
+- **Dashboard**: active people (Mac & PC app vs N28C), new accounts, Shared Space posts, versions in use, top agents, who's online and a live activity feed.
 - **Admin chat**: pinned messages, group chats, DMs, images and files, replies, reactions, edits, @mentions, read receipts (with an off switch) and online / idle / do-not-disturb / invisible status. **End-to-end encrypted**; see below.
 - **Inbox**: beta requests, feedback and bug reports (reply to people in their app, internal notes, assign, prioritize), and content reports.
 - **Users**: search, filters, bulk beta/comp, CSV export, profiles with private notes, history, suspend/ban and roles.
@@ -29,9 +29,9 @@ It's the same portal with the files built in, plus a Dock badge for unread items
 - **Saved replies**: your own snippets for feedback replies and chat (⚡).
 - **Notifications**: pop-ups, desktop notifications, a chime and an app badge. Phone notifications through your Mac hub (below).
 - **Team notes**: playbooks and how-tos, end-to-end encrypted like the chat, saved as you type, with a markdown preview and no silent overwrites.
-- **Broadcasts**: a notification in everyone's Nexus Mac app and N28C (everyone, beta testers, admins or people on older versions), now or later.
+- **Broadcasts**: a notification in everyone's Nexus app (Mac and PC) and N28C (everyone, beta testers, admins or people on older versions), now or later.
 - **Schedules**: turn announcements, maintenance and feature flags on or off at a set time.
-- **Health**: Supabase speed, live updates, the Mac hub, N28C requests waiting, failed schedules, free AI key credit, database and storage size.
+- **Health**: Supabase speed, live updates, the desktop hub, N28C requests waiting, failed schedules, free AI key credit, database and storage size.
 - **Releases**: downloads from GitHub, which versions people run and a one-click "please update" broadcast, plus **✉ Email the changelog**: send each release's notes to everyone who opted in, with EmailJS (high-admins; needs `supabase/nexus-v2.7.sql` from the Nexus repo). Setup is in the Nexus repo under `docs/EMAILJS.md`.
 - **Status page**: post incidents and updates to the public Nexus status page, and override any component.
 - **Axiom (Apex)**: high-admins only. Take Axiom offline (now, for a while or until you bring it back, with a message), switch tool kits off for everyone, read-only mode, block people or give them their own minutes, reset minutes, latest turns, prompt history with restore, who can use it, weekly minutes, providers and its prompt (stored only in Supabase).
@@ -97,7 +97,7 @@ Run `supabase/nexus-v3.1.sql` from the Nexus repo first (after `apoji-admin-1.7.
 - **Only select people use Axiom.** Axiom → Who can use it is now Off, Only unlimited, or Select people. The Owner adds people in Axiom → Select people (or approves their request).
 - **Axiom managers.** The Owner picks them in Axiom → Axiom managers. Only the Owner and managers change Axiom's settings, prompt and limits, and accept or deny access requests. High-admins can still look.
 - **Access requests** (Inbox): people ask from Nexus (Settings → Account → Request access) or N28C for Axiom, an early feature, beta testing, or something else. Approving Axiom adds them to Select people; a feature is turned on for just them; beta makes them a beta tester.
-- **Nexus chat:** chat with Nexus from the portal. When your Mac is on (phone link on), the Mac answers with every tool; otherwise the free Nexus key answers and you can hand a message off to the Mac.
+- **Nexus chat:** chat with Nexus from the portal. When your Mac or PC is on (phone link on), it answers with every tool; otherwise the free Nexus key answers and you can hand a message off to it.
 - **Users → Redeemed orders:** see each aARgon3 / Mexel order someone redeemed (with its system config) and remove it.
 - **Health:** alerts can be dismissed (until they change) and opened. "N28C requests waiting" shows who's stuck and lets Editors clear them.
 - **Feedback:** reports sent by GitHub or email (and from people who aren't signed in) land in Feedback & bugs too, marked GITHUB / EMAIL.
@@ -158,6 +158,12 @@ Run `supabase/apoji-admin-2.1.sql` (already applied to the live project).
 
 ## 2.1.1
 - **Windows notifications:** fixed (the app id now matches the Start menu shortcut, which Windows needs to show them).
+
+## 2.2
+Run `supabase/nexus-v3.7.sql` from the Nexus repo (adds `beta_events` and `admin_beta_stats`).
+- **β Beta:** a page per beta feature: who gets it (change it right there), uses this week, people in the last 30 days, 👍 / 👎 from one-tap beta feedback (and what people wrote), open bug reports (one tap to see them in Feedback), and whether it's used on Mac, PC, Test Run or a phone.
+- **Maintenance → 🔎 Web search:** one switch that turns off web search everywhere (Mac, PC, Test Run, N28C). Answers keep working.
+- **Mac and PC:** the hub page is the **Desktop hub** on the website (it can be a Mac or a PC), and the dashboard, releases, broadcasts and Nexus chat say Mac & PC.
 
 ## Develop
 
