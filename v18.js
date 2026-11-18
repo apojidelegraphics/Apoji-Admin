@@ -191,7 +191,15 @@
     log.scrollTop = log.scrollHeight;
   }
   // One model call on the free key (no tools). Axiom gets his prompt from Supabase and logs his minutes.
+  // 2.0.5: Maintenance applies here too. Admins get through unless the switch has "Admins bypass" off.
+  async function maintFor(agentId) {
+    let data = []; try { ({ data } = await sb.from('maintenance_config').select('scope,enabled,message,admin_bypass')); } catch {}
+    const hit = new Set(['global', 'all', 'app', 'everything', agentId, `nexus 28 ${agentId}`]);
+    return (data || []).find(m => (m.enabled === true || m.enabled === 'true' || m.enabled?.enabled === true) && m.admin_bypass === false && hit.has(String(m.scope).trim().toLowerCase()));
+  }
   async function ask(agentId, messages, extraSystem = '') {
+    const down = await maintFor(agentId);
+    if (down) throw new Error('🛠 ' + (down.message || `${agentInfo(agentId).name} is down for maintenance (admins don't bypass this one).`));
     const a = agentInfo(agentId), key = await freeKey();
     if (!key) throw new Error("The free Nexus key isn't set up.");
     let sys = `You are ${a.name}, an assistant in Nexus '28 by Apoji Delegraphics. You have no tools here: if something needs files, a calendar or Mac apps, say so.` + (a.about ? '\n\nAbout you: ' + a.about : '');

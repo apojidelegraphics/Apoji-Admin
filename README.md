@@ -145,6 +145,10 @@ Run `supabase/nexus-v3.4.sql` from the Nexus repo.
 - **Editing users works:** the `admin-users` function is deployed. In a user's Account card, **📷 Change picture** sits left of **Remove picture**.
 - **👑** The Owner's picture wears its crown in chat and everywhere else.
 
+## 2.0.5
+- **👑** The Owner's crown now sits on the top-left of the picture.
+- **Maintenance:** ◆ Nexus and @mentions in Team chat now stop when a switch is on with **Admins bypass** turned off (otherwise admins still get through, as before).
+
 ## Develop
 
 Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`), `npm test` tests the hub. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` most pages, `extras.js` tasks and the command palette, `features.js` the hub, notes, broadcasts, schedules, health and releases, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications). `electron/hub-core.js` is the hub API, `electron/hub.js` keep-awake, login item and menu bar.
