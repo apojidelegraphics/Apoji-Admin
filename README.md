@@ -176,6 +176,22 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, ⬇ Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.4
+Run `supabase/nexus-v3.9.sql` from the Nexus repo.
+- **Fixed:** Admin access, Testing, Training and "active on" didn't load in the Mac and Windows apps (their file wasn't packed into the app; a test now checks every page file).
+- **🧠 Training, a working mind map:** each step shows live numbers; click one to act on it. **Use** is the review queue: approve good answers (or testers' better answers) as **lessons**, with an optional one-line rule. Every agent in Nexus and Test Run looks up the matching lessons and all the rules before it answers. **Check** shows the 👍 rate this week vs last and lets you try a question to see which lessons it gets.
+
+### How model training works
+
+![How Nexus model training works: collect, clean, store, use, check, ship](docs/training-mind-map.png)
+
+1. **Collect:** beta testers share their chats (required for beta features); anyone else can opt in. Never incognito chats or Axiom.
+2. **Clean:** emails, phone numbers, keys, passwords and link tokens are stripped on the device before sending.
+3. **Store:** Supabase `training_examples` (consent in `training_consent`); only admins with Training access can read it.
+4. **Use:** approved examples become lessons the agents follow; exports for fine-tuning a small open model and for a test set.
+5. **Check:** compare the 👍 rate before and after; run the test set; beta testers try changes first.
+6. **Ship:** new prompts or models go out with feature flags (admins → beta → everyone).
+
 ## Develop
 
 Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`), `npm test` tests the hub. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` most pages, `extras.js` tasks and the command palette, `features.js` the hub, notes, broadcasts, schedules, health and releases, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications). `electron/hub-core.js` is the hub API, `electron/hub.js` keep-awake, login item and menu bar.

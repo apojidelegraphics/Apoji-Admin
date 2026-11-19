@@ -526,3 +526,9 @@ img.nx-orb, canvas.nx-orb { width: 32px; height: 32px; border-radius: 50%; flex:
 .aw-truth { list-style: none; padding: 8px 10px; margin: 6px 0; border-radius: 9px; background: rgba(0,0,0,.22); border: 1px solid var(--line); display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
 .aw-truth li.ok { color: var(--online, #3ddc84); } .aw-truth li.err { color: #ffb547; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; } .seg button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; padding: 6px 12px; cursor: pointer; } .seg button.on { background: rgba(var(--accent-rgb, 154,128,255), .18); color: var(--accent); }
+
+/* 2.4 working training map */
+.mm-node { cursor: pointer; } .mm-node:focus { outline: none; } .mm-node:hover rect:last-of-type, .mm-node:focus rect:last-of-type { fill-opacity: .3; }
+.mm-v { font: 600 13px var(--sans, system-ui); fill: #fff; } .mm-s { font: 11.5px var(--sans, system-ui); fill: var(--muted, #a89fd0); }
+.tr-days { display: flex; align-items: flex-end; gap: 3px; height: 70px; padding: 6px 0; border-bottom: 1px solid var(--line); } .tr-days i { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; opacity: .8; }
+.clean-list { line-height: 1.9; }

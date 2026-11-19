@@ -23,6 +23,15 @@ ok('Team chat header fits on phones');
 const aw = read('electron/awake.js');
 assert.ok(aw.includes('async function verify(') && aw.includes('async function reset()') && read('features.js').includes('data-hmode') && read('features.js').includes('hAwReset') && read('electron/hub.js').includes("'hub:awakeReset'") && read('electron/hub-core.js').includes("'forMinutes' in patch"));
 ok('keep awake rebuilt: confirmed by the system, for a while, battery floor, Reset');
-assert.strictEqual(pkg.version, '2.3.0'); assert.ok(read('sw.js').includes('v2.3.0') && read('sw.js').includes('./v23.js') && read('index.html').includes('v23.js') && read('README.md').includes('## 2.3'));
-ok('version 2.3.0');
+assert.ok(pkg.version >= '2.3.0'); assert.ok( read('sw.js').includes('./v23.js') && read('index.html').includes('v23.js') && read('README.md').includes('## 2.3'));
+ok('2.3 is wired into the page and the offline cache');
 console.log(`Apoji Admin 2.3: ${n} checks passed`);
+// 2.3.1: every script the page loads must be packed into the Mac and Windows apps (v23.js was missing, so Admin
+// access, Testing, Training and "active on" only worked on the website)
+{
+  const files = require('../package.json').build.files, mm = require('path');
+  const glob = g => new RegExp('^' + g.replace(/\./g, '\\.').replace(/\*\*/g, '.+').replace(/\*/g, '[^/]*') + '$');
+  const scripts = [...read('index.html').matchAll(/<script src="([^"]+)"/g)].map(m => m[1]).filter(s => !/^https?:/.test(s));
+  for (const s of scripts) assert.ok(files.some(f => glob(f).test(s)), s + ' is not packed into the desktop app');
+  console.log(`  ✓ every page script (${scripts.length}) is packed into the desktop app`);
+}

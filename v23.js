@@ -219,29 +219,89 @@
   NX.loadPics = loadPics;
 
   // =========================================================== 🧠 Training
+  // 2.4: a WORKING mind map. Each step shows live numbers; click one to see and do what happens there.
+  A.trStep = A.trStep || 'use';
   P.training = async () => {
-    if (!NX.can('training')) return NX.main(`<h1>🧠 Training</h1><div class="card"><p>Training data is limited to people who were given access.</p>${reqButton('training')}</div>${mindMap()}`, { cards: false });
-    const [{ data: st, error }, { data: rows }] = await Promise.all([sb.rpc('admin_training_stats'), sb.from('training_examples').select('id,source,agent,model,prompt,answer,rating,correction,created_at').order('created_at', { ascending: false }).limit(40)]);
-    if (error) return NX.main(`<h1>🧠 Training</h1><div class="card">${esc(sqlMsg(error.message))}</div>${mindMap()}`, { cards: false });
-    const bars = obj => { const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...e.map(x => x[1])); return e.map(([k, n]) => `<div class="tbar"><span>${esc(SURF[k]?.[1] || k)}</span><i style="width:${Math.round(n / max * 100)}%"></i><b>${n}</b></div>`).join('') || '<span class="muted">—</span>'; };
-    NX.main(`<h1>🧠 Training</h1><p>Beta testers share their chats (with personal details stripped) to help train Nexus models: it's part of getting features early. Everyone else can opt in. Incognito chats and Axiom are never collected, and anyone can delete what they gave from Nexus (Settings → Beta).</p>
-      <div class="stats4"><div class="stat"><b>${st.total}</b><span>examples (${st.week} this week)</span></div><div class="stat"><b>${st.people}</b><span>people gave some</span></div><div class="stat ${st.testers_consenting < st.testers ? 'hot' : ''}"><b>${st.testers_consenting}/${st.testers}</b><span>beta testers sharing</span></div><div class="stat"><b>${st.up}·${st.down}·${st.corrected}</b><span>👍 · 👎 · corrected</span></div></div>
-      <div class="two"><div class="card"><h3>By agent</h3>${bars(st.by_agent)}</div><div class="card"><h3>From</h3>${bars(st.by_source)}</div></div>
-      ${mindMap()}
-      <div class="card"><div class="row"><h3 style="margin:0">Latest examples</h3><span class="sp"></span><button class="btn" id="trJsonl" title="Chat-format JSONL for fine-tuning: rated 👍 or corrected answers only">⬇ Export for fine-tuning (JSONL)</button><button class="btn" id="trEval" title="Questions with 👎 or corrections: a test set for prompt changes">⬇ Export a test set</button></div>
-        ${(rows || []).map(r => `<details class="tr-ex"><summary><span class="pill">${esc(SURF[r.source]?.[0] || '')} ${esc(r.agent || '?')}</span> ${r.rating > 0 ? '👍' : r.rating < 0 ? '👎' : ''}${r.correction ? ' ✏️' : ''} ${esc(r.prompt.slice(0, 110))} <span class="muted">${ago(r.created_at)}</span></summary><div class="tr-qa"><b>Asked</b><p>${esc(r.prompt)}</p><b>${esc(r.model || 'Answer')}</b><p>${esc(r.answer)}</p>${r.correction ? `<b>Their correction</b><p>${esc(r.correction)}</p>` : ''}<button class="btn sm ghost danger" data-trdel="${r.id}">Delete this example</button></div></details>`).join('') || '<p class="muted">Nothing yet. Beta testers on Nexus 3.8 / Test Run 3.8 start sharing once they agree.</p>'}</div>`, { cards: false });
-    const exportAll = async (filter, map, file) => {
-      toast('Preparing…'); const out = [];
-      for (let off = 0; off < 50000; off += 1000) { const { data, error: er } = await sb.from('training_examples').select('agent,model,features,prompt,answer,rating,correction').order('id').range(off, off + 999); if (er) return toast(er.message, true); out.push(...data.filter(filter).map(map)); if (data.length < 1000) break; }
-      const blob = new Blob([out.map(x => JSON.stringify(x)).join('\n') + '\n'], { type: 'application/jsonl' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file; a.click(); toast(`⬇ ${out.length} examples`);
-    };
-    $('main').onclick = async e => {
+    if (!NX.can('training')) return NX.main(`<h1>🧠 Training</h1><div class="card"><p>Training data is limited to people who were given access.</p>${reqButton('training')}</div>`, { cards: false });
+    const { data: st, error } = await sb.rpc('admin_training_stats');
+    if (error) return NX.main(`<h1>🧠 Training</h1><div class="card">${esc(/admin_training_stats|lessons|approved/.test(error.message) ? 'Run supabase/nexus-v3.9.sql (Nexus repo) in Supabase → SQL Editor.' : sqlMsg(error.message))}</div>`, { cards: false });
+    const delta = st.up_rate_7d != null && st.up_rate_prev != null ? st.up_rate_7d - st.up_rate_prev : null;
+    const STEPS = [
+      { k: 'collect', t: '1 · Collect', c: '#3dffa0', x: 300, y: 75, v: `${st.total} examples · ${st.week} this week`, s: `${st.testers_consenting}/${st.testers} beta testers sharing` },
+      { k: 'clean', t: '2 · Clean', c: '#5ce1ff', x: 250, y: 225, v: 'Automatic', s: 'emails, phones, keys stripped' },
+      { k: 'store', t: '3 · Store', c: '#b18cff', x: 300, y: 375, v: `${st.people} people`, s: `👍 ${st.up} · 👎 ${st.down} · ✏️ ${st.corrected}` },
+      { k: 'use', t: '4 · Use', c: '#ffd36b', x: 640, y: 75, v: `${st.lessons} lesson${st.lessons == 1 ? "" : "s"} · ${st.rules} rule${st.rules == 1 ? "" : "s"}`, s: st.to_review ? `${st.to_review} waiting for review` : 'nothing to review' },
+      { k: 'check', t: '5 · Check', c: '#ff8a98', x: 690, y: 225, v: st.up_rate_7d != null ? `👍 ${st.up_rate_7d}% this week` : '👍 rate: not enough ratings', s: delta == null ? 'vs last week: —' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)} points vs last week` },
+      { k: 'ship', t: '6 · Ship', c: '#9be37b', x: 640, y: 375, v: 'Prompts + flags', s: 'admins → beta → everyone' }];
+    const C = { x: 470, y: 225 };
+    let lines = '', nodes = '';
+    for (const b of STEPS) {
+      const on = A.trStep === b.k, left = b.x < C.x;
+      lines += `<path d="M${C.x},${C.y} C${(C.x + b.x) / 2},${C.y} ${(C.x + b.x) / 2},${b.y} ${b.x},${b.y}" stroke="${b.c}" stroke-width="${on ? 4 : 2.5}" fill="none" opacity="${on ? 1 : .55}"/>`;
+      nodes += `<g class="mm-node ${on ? 'on' : ''}" data-step="${b.k}" tabindex="0" role="button" aria-label="${esc(b.t)}"><rect x="${b.x - 100}" y="${b.y - 34}" width="200" height="68" rx="16" fill="#120e26"/><rect x="${b.x - 100}" y="${b.y - 34}" width="200" height="68" rx="16" fill="${b.c}" fill-opacity="${on ? .28 : .14}" stroke="${b.c}" stroke-width="${on ? 2.5 : 1.2}"/>
+        <text x="${b.x}" y="${b.y - 12}" text-anchor="middle" class="mm-b" fill="${b.c}">${esc(b.t)}</text><text x="${b.x}" y="${b.y + 6}" text-anchor="middle" class="mm-v">${esc(b.v)}</text><text x="${b.x}" y="${b.y + 22}" text-anchor="middle" class="mm-s">${esc(b.s)}</text></g>`;
+    }
+    nodes += `<circle cx="${C.x}" cy="${C.y}" r="58" fill="#0f1f1a" stroke="#3dffa0" stroke-width="2"/><text x="${C.x}" y="${C.y - 4}" text-anchor="middle" class="mm-c">Training</text><text x="${C.x}" y="${C.y + 16}" text-anchor="middle" class="mm-c2">Nexus models</text>`;
+    NX.main(`<h1>🧠 Training</h1><p>Beta testers share their chats (personal details stripped) to help train Nexus models; anyone else can opt in. You review the best examples and approve them as <b>lessons</b>: every agent (desktop and Test Run) looks up matching lessons and rules before it answers.</p>
+      <div class="card mm"><svg viewBox="0 0 940 450" role="img" aria-label="How Nexus model training works. Click a step.">${lines}${nodes}</svg><p class="muted" style="margin:4px 0 0;text-align:center">Click a step</p></div>
+      <div id="trPanel"><div class="card"><span class="spinner"></span></div></div>`, { cards: false });
+    $('main').querySelector('svg').addEventListener('click', e => { const g = e.target.closest('[data-step]'); if (g) { A.trStep = g.dataset.step; P.training(); } });
+    $('main').querySelector('svg').addEventListener('keydown', e => { const g = e.target.closest('[data-step]'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); A.trStep = g.dataset.step; P.training(); } });
+    trPanel(st);
+  };
+  const exRow = (r, acts = '') => `<details class="tr-ex"><summary><span class="pill">${esc(SURF[r.source]?.[0] || '')} ${esc(r.agent || '?')}</span> ${r.rating > 0 ? '👍' : r.rating < 0 ? '👎' : ''}${r.correction ? ' ✏️' : ''}${r.approved ? ' <span class="pill p-approved">LESSON</span>' : ''} ${esc(r.prompt.slice(0, 110))} <span class="muted">${ago(r.created_at)}</span></summary>
+    <div class="tr-qa"><b>Asked</b><p>${esc(r.prompt)}</p><b>${esc(r.model || 'Answer')}</b><p>${esc(r.answer)}</p>${r.correction ? `<b>Their better answer</b><p>${esc(r.correction)}</p>` : ''}${r.lesson ? `<b>Rule</b><p>${esc(r.lesson)}</p>` : ''}<div class="row">${acts}</div></div></details>`;
+  async function trPanel(st) {
+    const el = $('trPanel'); if (!el) return;
+    const k = A.trStep, card = (h, body) => `<div class="card"><h3>${h}</h3>${body}</div>`;
+    const sel = 'id,source,agent,model,prompt,answer,rating,correction,approved,lesson,created_at';
+    if (k === 'collect') {
+      const [{ data: testers }, { data: cons }] = await Promise.all([sb.from('profiles').select('id,username,nickname').eq('is_beta_tester', true).limit(300), sb.from('training_consent').select('user_id,agreed_at,revoked_at')]);
+      const ok = new Map((cons || []).filter(c => !c.revoked_at).map(c => [c.user_id, c])), name = p => p.nickname || p.username || 'someone';
+      const yes = (testers || []).filter(p => ok.has(p.id)), no = (testers || []).filter(p => !ok.has(p.id));
+      el.innerHTML = card('1 · Collect: who shares', `<p class="muted">Beta testers must share to keep beta features (Nexus pauses them until they agree). Anyone else can opt in from Settings → Beta. Never collected: incognito chats, Axiom, files and pictures.</p>
+        <div class="two"><div><b>Sharing (${yes.length})</b><p>${yes.map(p => esc(name(p))).join(', ') || '—'}</p></div><div><b>Testers who haven't agreed (${no.length})</b><p>${no.map(p => esc(name(p))).join(', ') || 'Everyone has. 🎉'}</p><p class="muted">Their beta features are paused until they do.</p></div></div>
+        <div class="two"><div class="card"><h3>By agent</h3>${bars(st.by_agent)}</div><div class="card"><h3>From</h3>${bars(st.by_source)}</div></div>`);
+    } else if (k === 'clean') {
+      el.innerHTML = card('2 · Clean: what gets stripped first', `<p class="muted">On the person's own device, before anything is sent:</p><ul class="clean-list"><li>Email addresses → <code>[email]</code></li><li>Phone numbers → <code>[phone]</code></li><li>API keys and tokens (OpenAI, OpenRouter, GitHub, Google, AWS, JWTs) → <code>[key]</code> / <code>[token]</code></li><li>Card-like numbers → <code>[number]</code>, ID numbers → <code>[id]</code></li><li>“my password is …” → <code>[hidden]</code></li><li>Link tokens (everything after <code>?</code> in a URL)</li><li>Very short chats are skipped</li></ul><p class="muted">People can delete everything they shared from Settings → Beta at any time; you can delete single examples under Store.</p>`);
+    } else if (k === 'store') {
+      const { data: rows } = await sb.from('training_examples').select(sel).order('created_at', { ascending: false }).limit(40);
+      el.innerHTML = card('3 · Store: the latest examples', (rows || []).map(r => exRow(r, `<button class="btn sm ghost danger" data-trdel="${r.id}">Delete this example</button>`)).join('') || '<p class="muted">Nothing yet.</p>');
+    } else if (k === 'use') {
+      const [{ data: queue }, { data: lessons }] = await Promise.all([
+        sb.from('training_examples').select(sel).eq('approved', false).or('rating.neq.0,correction.not.is.null').order('created_at', { ascending: false }).limit(30),
+        sb.from('training_examples').select(sel).eq('approved', true).order('approved_at', { ascending: false }).limit(60)]);
+      el.innerHTML = card(`4 · Use: review → lessons <span class="pill p-pending">${(queue || []).length} TO REVIEW</span>`, `<p class="muted">Approve the good ones (or the ones with a better answer). Approved examples become lessons: agents see the 3 that match a question best, plus every rule you write, before they answer.</p>
+          ${(queue || []).map(r => exRow(r, `<input class="field sm" data-rule="${r.id}" placeholder="Optional rule, e.g. “Always give units”" maxlength="600" style="flex:1;min-width:200px"><button class="btn sm primary" data-approve="${r.id}">✓ Approve as a lesson</button><button class="btn sm ghost" data-skip="${r.id}">Skip</button>`)).join('') || '<p class="muted">Nothing waiting. Rated and corrected answers show up here.</p>'}`)
+        + card(`📚 Lessons (${(lessons || []).length})`, (lessons || []).map(r => exRow(r, `<button class="btn sm" data-unapprove="${r.id}">Stop using it</button>`)).join('') || '<p class="muted">None yet.</p>')
+        + card('⬇ Export', `<div class="row"><button class="btn" id="trJsonl" title="Chat-format JSONL: rated 👍 or corrected answers">Export for fine-tuning (JSONL)</button><button class="btn" id="trEval" title="Questions with 👎 or corrections">Export a test set</button></div>`);
+    } else if (k === 'check') {
+      const days = st.days || [], max = Math.max(1, ...days.map(d => d.n));
+      el.innerHTML = card('5 · Check: is it getting better?', `<div class="stats4"><div class="stat"><b>${st.up_rate_7d ?? '—'}${st.up_rate_7d != null ? '%' : ''}</b><span>👍 rate, last 7 days</span></div><div class="stat"><b>${st.up_rate_prev ?? '—'}${st.up_rate_prev != null ? '%' : ''}</b><span>the 7 days before</span></div><div class="stat"><b>${st.lessons}</b><span>lessons in use</span></div><div class="stat"><b>${st.corrected}</b><span>better answers written</span></div></div>
+        <div class="tr-days">${days.map(d => `<i style="height:${Math.round(d.n / max * 100)}%" title="${esc(d.day)}: ${d.n}"></i>`).join('') || '<span class="muted">No examples in the last 30 days.</span>'}</div><p class="muted" style="margin-top:4px">Examples per day, last 30 days</p>
+        <h3 style="margin-top:14px">Try a question</h3><p class="muted">See which lessons an agent would get for it.</p><div class="row"><input class="field" id="trTry" placeholder="How far away is the Moon?" style="flex:1"><select class="field" id="trTryA" style="width:auto"><option>flash</option><option>lyte</option><option>neodela</option><option>paragon</option></select><button class="btn primary" id="trTryGo">Look up</button></div><pre class="info" id="trTryOut" hidden></pre>`);
+    } else if (k === 'ship') {
+      el.innerHTML = card('6 · Ship', `<p>Lessons work right away, with no update needed. For bigger changes:</p><div class="row"><button class="btn" data-go="prompts">✍ Agent prompts</button><button class="btn" data-go="flags">⚑ Feature flags</button><button class="btn" data-go="testing">🧪 Testing</button><button class="btn" data-go="releases">🚀 Releases</button></div><p class="muted">Try a change with admins first, then beta testers, then everyone. Check the 👍 rate on step 5 before and after.</p>`);
+    }
+    el.onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
+      const upd = async (id, patch, msg) => { const { error: er } = await sb.from('training_examples').update(patch).eq('id', id); if (er) return toast(sqlMsg(er.message), true); toast(msg); P.training(); };
+      if (b.dataset.approve) return upd(+b.dataset.approve, { approved: true, approved_by: A.user.id, approved_at: new Date().toISOString(), lesson: el.querySelector(`[data-rule="${b.dataset.approve}"]`)?.value.trim() || null }, '✓ Approved: agents use it now');
+      if (b.dataset.skip) return upd(+b.dataset.skip, { rating: 0 }, 'Skipped');
+      if (b.dataset.unapprove) return upd(+b.dataset.unapprove, { approved: false }, 'No longer used');
+      if (b.dataset.trdel) { if (!confirm('Delete this example for good?')) return; const { error: er } = await sb.from('training_examples').delete().eq('id', +b.dataset.trdel); if (er) return toast(er.message, true); toast('Deleted'); return P.training(); }
+      if (b.dataset.go) return NX.go(b.dataset.go);
+      if (b.id === 'trTryGo') { const q = $('trTry').value.trim(); if (!q) return; const [{ data: h }, { data: r }] = await Promise.all([sb.rpc('training_lessons', { p_query: q, p_agent: $('trTryA').value, p_limit: 3 }), sb.rpc('training_rules', { p_agent: $('trTryA').value })]); const o = $('trTryOut'); o.hidden = false; o.textContent = (r || []).length || (h || []).length ? `Rules (${(r || []).length}):\n${(r || []).map(x => '• ' + x).join('\n')}\n\nMatching lessons (${(h || []).length}):\n${(h || []).map((x, i) => `${i + 1}. ${x.q}\n   → ${x.a}`).join('\n')}` : 'No lessons match this question. The agent answers on its own.'; return; }
       if (b.id === 'trJsonl') return exportAll(r => r.rating > 0 || r.correction, r => ({ messages: [{ role: 'user', content: r.prompt }, { role: 'assistant', content: r.correction || r.answer }], metadata: { agent: r.agent, features: r.features } }), `nexus-training-${new Date().toISOString().slice(0, 10)}.jsonl`);
       if (b.id === 'trEval') return exportAll(r => r.rating < 0 || r.correction, r => ({ agent: r.agent, question: r.prompt, bad_answer: r.answer, better: r.correction || null }), `nexus-test-set-${new Date().toISOString().slice(0, 10)}.jsonl`);
-      if (b.dataset.trdel) { if (!confirm('Delete this example for good?')) return; const { error: er } = await sb.from('training_examples').delete().eq('id', +b.dataset.trdel); if (er) return toast(er.message, true); toast('Deleted'); return P.training(); }
     };
-  };
+  }
+  const bars = obj => { const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...e.map(x => x[1])); return e.map(([k, n]) => `<div class="tbar"><span>${esc(SURF[k]?.[1] || k)}</span><i style="width:${Math.round(n / max * 100)}%"></i><b>${n}</b></div>`).join('') || '<span class="muted">—</span>'; };
+  async function exportAll(filter, map, file) {
+    toast('Preparing…'); const out = [];
+    for (let off = 0; off < 50000; off += 1000) { const { data, error: er } = await sb.from('training_examples').select('agent,model,features,prompt,answer,rating,correction').order('id').range(off, off + 999); if (er) return toast(er.message, true); out.push(...data.filter(filter).map(map)); if (data.length < 1000) break; }
+    const blob = new Blob([out.map(x => JSON.stringify(x)).join('\n') + '\n'], { type: 'application/jsonl' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file; a.click(); toast(`⬇ ${out.length} examples`);
+  }
 
   // The plan, as a mind map: where the data comes from → how it's cleaned → what it trains → how we check it
   function mindMap() {

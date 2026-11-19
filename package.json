@@ -1,7 +1,7 @@
 {
   "name": "apoji-admin",
   "productName": "Apoji Admin",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "The admin app for Nexus '28 and N28C, for Mac and Windows.",
   "author": "Apoji Delegraphics",
   "license": "UNLICENSED",
@@ -12,7 +12,7 @@
     "postinstall": "node scripts/postinstall.js",
     "build:brightness": "sh scripts/build-brightness.sh",
     "dist": "electron-builder --mac dmg zip --arm64 --x64 --publish never",
-    "test": "node test/hub.test.js && node test/v18.test.js && node test/v19.test.js && node test/v20.test.js && node test/v202.test.js && node test/v203.test.js && node test/v204.test.js && node test/v205.test.js && node test/v21.test.js && node test/v22.test.js && node test/v23.test.js",
+    "test": "node test/hub.test.js && node test/v18.test.js && node test/v19.test.js && node test/v20.test.js && node test/v202.test.js && node test/v203.test.js && node test/v204.test.js && node test/v205.test.js && node test/v21.test.js && node test/v22.test.js && node test/v23.test.js && node test/v24.test.js",
     "dist:win": "electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
@@ -46,6 +46,7 @@
       "extras.js",
       "v18.js",
       "v19.js",
+      "v2*.js",
       "orb.js",
       "features.js",
       "sw.js",
