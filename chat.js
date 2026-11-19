@@ -200,7 +200,7 @@
     else if (isLvl(r)) sub = `${people.filter(a => presence(a) !== 'offline').length} online · ${people.length} ${LVL[r][0]}s${isOwnerId(me()) || people.some(a => isOwnerId(a.id)) ? ' + the Owner' : ''}`;
     else if (isDm(r)) { const o = dmOther(r); const p = presence(o); sub = `<span class="prtxt ${p}">${PRES[p]}</span>${o?.status_text ? ' · ' + esc(o.status_text) : ''}${p === 'offline' && o?.last_seen && new Date(o.last_seen) > Date.now() - 30 * 864e5 ? ' · last seen ' + NX.ago(o.last_seen) : ''}`; }
     else sub = `${people.length} members · ${people.filter(a => presence(a) !== 'offline').length} online`;
-    t.innerHTML = `<button class="btn sm back" id="tBack">‹</button>${roomIcon(r, '')}<div class="ti"><b>${esc(roomName(r))}<span class="e2ee" title="End-to-end encrypted: only admins with the team passphrase can read this. Supabase only stores scrambled text.">🔒 E2EE</span></b><small>${sub}</small></div>
+    t.innerHTML = `<button class="btn sm back" id="tBack">‹</button>${roomIcon(r, '')}<div class="ti"><b>${esc(roomName(r))}<span class="e2ee" title="End-to-end encrypted: only admins with the team passphrase can read this. Supabase only stores scrambled text.">🔒<span class="e2t"> E2EE</span></span></b><small>${sub}</small></div>
       <button class="btn sm ghost" id="tPins" title="Pinned messages">📌<span id="tPinN"></span></button><button class="btn sm ghost" id="tFind" title="Search">🔍</button><button class="btn sm ghost" id="tMute" title="${muted(r) ? 'Unmute' : 'Mute'} notifications">${muted(r) ? '🔕' : '🔔'}</button>
       ${isGroup(r) ? '<button class="btn sm ghost" id="tInfo" title="Group settings">ⓘ</button>' : r === 'all' || isLvl(r) ? '<button class="btn sm ghost" id="tInfo" title="Who\'s here">👥</button>' : ''}`;
   }
@@ -306,7 +306,11 @@
     const need = [...root.querySelectorAll('[data-img]:not([data-done])')];
     need.forEach(n => { n.dataset.done = 1; const path = n.dataset.img; mediaUrl(path).then(u => {
       if (!u) { n.innerHTML = '<span class="muted">image unavailable</span>'; return; }
-      const img = new Image(); img.src = u; img.alt = ''; img.dataset.full = path; img.style.cssText = n.getAttribute('style') || ''; n.replaceWith(img);
+      const img = new Image(); img.src = u; img.alt = ''; img.dataset.full = path; img.style.cssText = n.getAttribute('style') || '';
+      // 2.3: a ⬇ Save image button on every picture (shows on hover, always on phones)
+      const w = document.createElement('span'); w.className = 'ph-wrap'; w.appendChild(img);
+      const sv = document.createElement('button'); sv.className = 'save-img'; sv.title = 'Save image'; sv.textContent = '⬇'; sv.dataset.saveimg = u; sv.dataset.name = (metaOf(findAtt(path) || {}).name || 'team-chat-image').replace(/\.\w+$/, ''); w.appendChild(sv);
+      n.replaceWith(w);
     }); });
   }
   const findAtt = path => { for (const list of Object.values(C.msgs)) for (const m of list) for (const a of m.attachments || []) if (a.path === path) return a; return null; };
@@ -353,6 +357,7 @@
     return TY.chan;
   }
   async function sendTyping(on) {
+    if (NX.A.prefs.typing_send === false && on) return;          // 2.3: My settings → "Show when I'm typing" off
     const ch = typingChan(); if (!ch?.send || !E.ready() || C.room === 'nexus') return;
     const now = Date.now();
     if (on && now - TY.lastSent < 2500) return;
@@ -363,6 +368,7 @@
   async function onTyping(p) {
     let d; try { d = JSON.parse(await E.dec(p?.x)); } catch { return; }
     if (!d || d.user === me() || !adminById(d.user) || !allRooms().includes(d.room)) return;
+    if (NX.A.prefs.typing_show === false) return;                // 2.3: "Show when others are typing" off
     const r = TY.who[d.room] = TY.who[d.room] || {};
     if (d.on) r[d.user] = Date.now() + 6000; else delete r[d.user];
     paintTyping();
@@ -508,7 +514,7 @@
         const h = msgs.scrollHeight; C.msgs[C.room] = [...(data || []).reverse(), ...list]; C.more[C.room] = (data || []).length === PAGE; paintMsgs(); msgs.scrollTop = msgs.scrollHeight - h; return;
       }
       const img = e.target.closest('img[data-full]');
-      if (img) { const lb = document.createElement('div'); lb.className = 'lightbox'; lb.innerHTML = `<img src="${img.src}" alt=""><a class="btn primary" href="${img.src}" target="_blank" rel="noopener" download>Open</a>`; lb.onclick = ev => { if (!ev.target.closest('a')) lb.remove(); }; document.body.appendChild(lb); return; }
+      if (img) { const lb = document.createElement('div'); lb.className = 'lightbox'; lb.innerHTML = `<img src="${img.src}" alt=""><div class="lb-acts"><button class="btn primary" data-saveimg="${img.src}" data-name="team-chat-image">⬇ Save image</button><a class="btn" href="${img.src}" target="_blank" rel="noopener">Open</a></div>`; lb.onclick = ev => { if (!ev.target.closest('a, button')) lb.remove(); }; document.body.appendChild(lb); return; }
       const file = e.target.closest('[data-file]');
       if (file) {
         e.preventDefault(); const a = findAtt(file.dataset.file);

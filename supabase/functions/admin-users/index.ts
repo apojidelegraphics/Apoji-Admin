@@ -1,4 +1,8 @@
 // Apoji Admin 1.7: change a user's account without knowing their password (Supabase Edge Function "admin-users").
+// 2.3: admins and mods with an approved access request ('users_edit' / 'users_create', see nexus-v3.8.sql) can use it
+// too, for regular accounts only. New action 'temp_password': a one-time password shown once to the admin; the apps
+// make the person pick their own at the next sign-in (user_metadata.must_change_password). Nobody can SEE a
+// password: Supabase only keeps a one-way hash.
 // Runs with the service role, so only this function can do it, and it checks every call:
 //   • the caller must be a high-admin Editor or the Owner (Viewers can't change anything)
 //   • only the Owner can touch the Owner account, or another high-admin's email, password or account
@@ -19,12 +23,16 @@ Deno.serve(async req => {
     const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     const { data: who } = await admin.auth.getUser(jwt);
     const me = who?.user; if (!me) return json({ ok: false, error: 'Sign in again.' }, 401);
-    const { data: myRole } = await admin.from('admin_roles').select('level, high_tier').eq('user_id', me.id).maybeSingle();
-    if (myRole?.level !== 'high-admin') return json({ ok: false, error: 'High-admins only.' }, 403);
-    const owner = myRole.high_tier === 'owner';
-
+    const { data: role0 } = await admin.from('admin_roles').select('level, high_tier').eq('user_id', me.id).maybeSingle();
+    if (!role0) return json({ ok: false, error: 'Admins only.' }, 403);
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || ''), target = String(body.user_id || '');
+    // 2.3: lower admins with an approved request act like an Editor, but never on admin accounts
+    const granted = async (perm: string) => !!(await admin.rpc('admin_has_perm', { p_perm: perm, p_uid: me.id })).data;
+    const high = role0.level === 'high-admin';
+    if (!high && !(await granted(action === 'create' ? 'users_create' : 'users_edit'))) return json({ ok: false, error: 'High-admins only. You can ask for access: Users → Request access.' }, 403);
+    const myRole = high ? role0 : { level: role0.level, high_tier: 'editor' };
+    const owner = myRole.high_tier === 'owner';
     // 2.1: make a new account (Editors and the Owner). Roles are given afterwards with admin_grant_role, as usual.
     if (action === 'create') {
       if (myRole.high_tier === 'viewer') return json({ ok: false, error: 'Viewers can look but not change accounts.' }, 403);
@@ -61,8 +69,9 @@ Deno.serve(async req => {
       can: { edit: myRole.high_tier !== 'viewer' && (tRole?.high_tier !== 'owner' || owner), credentials: myRole.high_tier !== 'viewer' && (owner || tRole?.level !== 'high-admin' || target === me.id) } });
 
     if (myRole.high_tier === 'viewer') return json({ ok: false, error: 'Viewers can look but not change accounts.' }, 403);
+    if (!high && tRole) return json({ ok: false, error: 'Only high-admins can change admin accounts.' }, 403);
     if (tRole?.level === 'high-admin' && tRole.high_tier === 'owner' && !owner) return json({ ok: false, error: 'Only the Owner can change the Owner account.' }, 403);
-    if (tRole?.level === 'high-admin' && target !== me.id && !owner && ['email', 'password', 'delete'].includes(action)) return json({ ok: false, error: "Only the Owner can change another high-admin's email, password or account." }, 403);
+    if (tRole?.level === 'high-admin' && target !== me.id && !owner && ['email', 'password', 'temp_password', 'delete'].includes(action)) return json({ ok: false, error: "Only the Owner can change another high-admin's email, password or account." }, 403);
 
     const log = (what: string, details: Record<string, unknown> = {}) => admin.from('moderation_log').insert({ action: what, performed_by: me.id, target_user_id: target, target_email: t.user.email, details }).then(() => {}, () => {});
 
@@ -81,6 +90,16 @@ Deno.serve(async req => {
       if (error) return json({ ok: false, error: error.message }, 400);
       await log('user_password_set');
       return json({ ok: true, message: 'Password changed. Tell them the new one privately, or send a reset email instead.' });
+    }
+    // 2.3: a one-time password (shown once, never stored by us); they must pick their own when they next sign in
+    if (action === 'temp_password') {
+      const W = ['moon', 'tiger', 'river', 'cloud', 'maple', 'comet', 'ember', 'pixel', 'orbit', 'cedar', 'lunar', 'storm', 'coral', 'nova', 'frost', 'delta'];
+      const r = crypto.getRandomValues(new Uint32Array(3));
+      const temp = `${W[r[0] % W.length]}-${W[r[1] % W.length]}-${1000 + (r[2] % 9000)}`.replace(/^./, c => c.toUpperCase());
+      const { error } = await admin.auth.admin.updateUserById(target, { password: temp, user_metadata: { ...(t.user.user_metadata || {}), must_change_password: true } });
+      if (error) return json({ ok: false, error: error.message }, 400);
+      await log('user_temp_password');
+      return json({ ok: true, password: temp, message: 'Temporary password set. Tell them privately; Nexus asks them to pick a new one when they sign in.' });
     }
     if (action === 'reset') {
       const anon = createClient(URL_, ANON, { auth: { persistSession: false } });

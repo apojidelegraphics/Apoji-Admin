@@ -9,7 +9,7 @@ assert.ok(feat.includes('id="hDimLv"') && feat.includes('<span>0% (dark)</span><
 ok('dim slider: 0% (dark), 55%, None');
 
 const pages = read('pages.js');
-assert.ok(pages.includes("featfix: '🛠 Feature & Fix'") && pages.includes("const isPortal = r => r.channel === 'portal'") && pages.includes("if (e.target.id === 'fbEdit') return newReport(r);") && pages.includes("sb.from('feedback_reports').update(patch).eq('id', r.id)"));
+assert.ok(pages.includes("featfix: '🛠 Unsorted") && pages.includes("const isPortal = r => r.channel === 'portal'") && pages.includes("if (e.target.id === 'fbEdit') return newReport(r);") && pages.includes("sb.from('feedback_reports').update(patch).eq('id', r.id)"));
 ok('reports written in the portal can be edited; new Feature & Fix kind');
 
 const chat = read('chat.js');

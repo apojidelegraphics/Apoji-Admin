@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('apojiDesktop', {
     set: patch => ipcRenderer.invoke('hub:set', patch),
     lid: on => ipcRenderer.invoke('hub:lid', !!on),
     lidRevoke: () => ipcRenderer.invoke('hub:lidRevoke'),
+    awakeCheck: () => ipcRenderer.invoke('hub:awakeCheck'),
+    awakeReset: () => ipcRenderer.invoke('hub:awakeReset'),
     testDim: () => ipcRenderer.invoke('hub:testDim'),
     checkBrightness: () => ipcRenderer.invoke('hub:checkBrightness'),
     push: ev => ipcRenderer.invoke('hub:push', ev),

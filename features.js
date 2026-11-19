@@ -143,10 +143,19 @@
     const state = !on ? pill('p-closed', 'OFF') : st.serving ? pill('p-approved', 'ONLINE') : pill('p-pending', 'NOT ON TAILNET');
     NX.main(NX.pc(`<h1>🖥 This Mac ${state}</h1><p>Make this Mac your team's hub. Over <b>Tailscale</b> (only your tailnet can reach it) it sends notifications to admins' phones, runs schedules on time and stays awake. The website and Supabase keep working everywhere either way.</p>
       <div class="card">${tog('hOn', '🛰 Use this Mac as the hub', 'Runs in the menu bar when you close the window. ⌘Q quits.', on)}</div>
-      <div class="card"><h3>☕ Keep this Mac awake <span class="sp"></span>${st.keepAwake ? `<span class="pill ${st.awake?.on ? 'p-approved' : 'p-pending'}">${st.awake?.on ? 'ON' : 'NOT RIGHT NOW'}</span>` : ''}</h3>
-        <p class="muted" style="margin-top:-4px">Works with or without the hub. ${st.keepAwake ? esc(st.awake?.reason || '') : 'Off: this Mac sleeps like normal.'}</p>
-        ${tog('hAwake', 'Keep this Mac awake', 'Stops idle sleep and system sleep while Apoji Admin is running (it stays in the menu bar when you close the window).', st.keepAwake)}
-        ${tog('hDisp', 'Keep the screen on too', 'Otherwise the screen can still turn off and lock while the Mac stays awake.', st.keepDisplay, !st.keepAwake)}
+      <div class="card"><h3>☕ Keep this Mac awake <span class="sp"></span>${st.keepAwake ? `<span class="pill ${st.awake?.on ? 'p-approved' : 'p-pending'}">${st.awake?.on ? 'CONFIRMED' : 'NOT RIGHT NOW'}</span>` : ''}</h3>
+        <p class="muted" style="margin-top:-4px">Works with or without the hub, while Apoji Admin is running (it stays in the menu bar when you close the window).</p>
+        ${(() => { const mode = !st.keepAwake ? 'off' : st.keepDisplay ? 'screen' : 'awake', a = st.awake || {}, t = a.truth || {}, floor = st.batteryFloor ?? 20, until = a.until || st.until;
+          const lines = [];
+          if (mode !== 'off') lines.push(a.on ? `<li class="ok">✓ ${NX.WIN ? 'Windows' : 'macOS'} confirms Apoji Admin is keeping it awake${st.keepDisplay ? ' with the screen on' : ''}.</li>` : `<li class="err">⚠ ${esc(t.problem || a.reason || 'Not awake right now.')}</li>`);
+          if (until) lines.push(`<li>⏱ Until ${new Date(until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}, then it lets go.</li>`);
+          if (a.battery != null) lines.push(`<li>🔋 ${a.battery}%${a.onBattery ? ' on battery' : ' plugged in'}${floor > 0 ? ` · stops below ${floor}% on battery` : ''}</li>`);
+          if ((t.holders || []).length) lines.push(`<li>Also keeping it awake: ${t.holders.map(esc).join(', ')}</li>`);
+          if (mode === 'off') lines.push('<li>This Mac sleeps the way it normally does.</li>');
+          return `<div class="seg hseg">${[['off', 'Off'], ['awake', 'Awake'], ['screen', 'Awake + screen on']].map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" data-hmode="${k}">${l}</button>`).join('')}</div>
+            ${mode !== 'off' ? `<div class="row" style="margin:8px 0;gap:10px;flex-wrap:wrap"><label class="muted">For <select class="field" id="hFor" style="width:auto">${[[0, 'Until I turn it off'], [60, '1 hour'], [120, '2 hours'], [240, '4 hours'], [480, '8 hours']].map(([v, l]) => `<option value="${v}" ${!until && !v ? 'selected' : ''}>${l}</option>`).join('')}${until ? `<option value="-1" selected>Until ${new Date(until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</option>` : ''}</select></label>
+              <label class="muted">On battery, stop at <select class="field" id="hFloor" style="width:auto">${[[0, 'Never'], [10, '10%'], [20, '20%'], [30, '30%'], [50, '50%']].map(([v, l]) => `<option value="${v}" ${+floor === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>` : ''}
+            <ul class="aw-truth">${lines.join('')}</ul><div class="row"><button class="btn sm" id="hAwReset" title="Clear anything Apoji Admin or Nexus left behind and apply these settings again">↺ Reset</button><button class="btn sm ghost" id="hAwCheck">Check again</button></div>`; })()}
         ${st.keepAwake && st.keepDisplay ? (() => { const br = st.dim === false ? 100 : Math.round(100 - (st.dimLevel ?? 0.45) * 100); return `<div class="dimbox"><div class="row"><b>🌙 Dim when I step away</b><span class="sp"></span><span class="muted" id="hDimVal">${br >= 100 ? 'None' : `Screen at ${br}%`}</span></div>
           <input type="range" id="hDimLv" min="0" max="100" step="5" value="${br}" list="hDimTicks"><datalist id="hDimTicks"><option value="0"></option><option value="55"></option><option value="100"></option></datalist>
           <div class="dimticks"><span>0% (dark)</span><span style="left:55%">55%</span><span>None</span></div>
@@ -184,6 +193,8 @@
     $('main').onchange = e => {
       const id = e.target.id, v = e.target.checked;
       if (id === 'hDimAfter') return set({ dimAfter: +e.target.value });
+      if (id === 'hFor') { if (+e.target.value >= 0) return set({ forMinutes: +e.target.value }); return; }
+      if (id === 'hFloor') return set({ batteryFloor: +e.target.value });
       if (id === 'hDimLv') { const br = +e.target.value; return set(br >= 100 ? { dim: false } : { dim: true, dimLevel: (100 - br) / 100 }); }
       const map = { hOn: 'enabled', hAwake: 'keepAwake', hDisp: 'keepDisplay', hDim: 'dim', hPlug: 'pluggedOnly', hLogin: 'openAtLogin', hChat: 'chatText', hRestrict: 'restrict' };
       if (map[id]) set({ [map[id]]: v }).then(() => { if (id === 'hOn' && v) toast('🛰 Hub on. Look for it in the menu bar.'); });
@@ -191,6 +202,9 @@
     $('main').onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.id === 'hChk') { b.disabled = true; paintDeskHub(await D.hub.status(true)); beat(); }
+      if (b.dataset.hmode) { const m = b.dataset.hmode; paintDeskHub(await D.hub.set({ keepAwake: m !== 'off', keepDisplay: m === 'screen' })); return; }
+      if (b.id === 'hAwCheck') { b.disabled = true; paintDeskHub(await (D.hub.awakeCheck ? D.hub.awakeCheck() : D.hub.status())); return; }
+      if (b.id === 'hAwReset') { b.disabled = true; b.textContent = 'Resetting…'; const r = await D.hub.awakeReset?.(); paintDeskHub(r?.status || await D.hub.status()); toast(r?.ok ? '✓ Cleared and applied again' : r?.error || 'Couldn’t reset', !r?.ok); return; }
       if (b.id === 'hDimTry') { const r = await D.hub.testDim?.(); b.textContent = r?.ok ? 'Dimming…' : 'Can’t'; setTimeout(() => { b.textContent = 'Try it'; }, 4200); return; }
       if (b.id === 'hDimCheck') { b.textContent = 'Checking…'; await D.hub.checkBrightness?.(); return paintDeskHub(await D.hub.status()); }
       if (b.id === 'hLidOn' || b.id === 'hLidOff' || b.id === 'hLidRevoke') {

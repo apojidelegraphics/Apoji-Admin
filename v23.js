@@ -1,0 +1,273 @@
+// Apoji Admin 2.3 (needs supabase/nexus-v3.8.sql from the Nexus repo):
+//   • permissions + access requests — mods and admins ask for one thing; the Owner and the high-admins they picked approve
+//   • "active on" — which apps someone uses right now (Mac app, Windows app, Test Run, N28C, Apoji Admin), and when a
+//     Test Run person gets the app
+//   • 🧪 Testing — "needs testing" checklists that beta testers tick off in Nexus and Test Run
+//   • 🧠 Training — the data beta testers share to train Nexus models, a mind map of the plan, and a JSONL export
+//   • ⬇ Save image — for pictures in chats and bug reports
+(function () {
+  const { sb, $, esc, ago, when, toast } = NX;
+  const A = NX.A, P = NX.pages;
+  const SQL38 = 'Run supabase/nexus-v3.8.sql (Nexus repo) in Supabase → SQL Editor to turn this on.';
+  const needSql = m => /admin_my_perms|user_presence|test_items|training_|admin_perm|presence_ping|PGRST20|42P01|42883|does not exist/i.test(String(m || ''));
+  const sqlMsg = m => needSql(m) ? SQL38 : m;
+
+  // =========================================================== permissions
+  const PERMS = {
+    users_edit: ['✏️ Edit user accounts', 'Change names, usernames, pictures, emails and passwords of regular accounts'],
+    users_create: ['＋ Make new profiles', 'Create Nexus accounts from the Users page'],
+    changelog: ['✉ Email the changelog', 'Send release emails from Releases'],
+    axiom: ['🔺 Axiom', 'See and change Axiom (Apex) settings'],
+    testing: ['🧪 Manage test checklists', 'Add, edit and archive what testers check'],
+    training: ['🧠 Training data', 'See and export the examples beta testers share'],
+    roles: ['🛡 Admin roles', 'Give and take admin roles'],
+    maintenance: ['🛠 Maintenance', 'Turn parts of Nexus off for everyone'],
+    flags: ['⚑ Feature flags', 'Move features between admins, beta testers and everyone']
+  };
+  NX.PERMS = PERMS;
+  A.perms = { all: A.level === 'high-admin', approve: false, perms: [], pending: [] };
+  NX.can = perm => !!(A.perms?.all || A.owner || (A.perms?.perms || []).some(p => p.perm === perm));
+  NX.loadPerms = async () => {
+    try { const { data, error } = await sb.rpc('admin_my_perms'); if (error) throw error; A.perms = data || A.perms; A.perms38 = true; }
+    catch { A.perms = { all: A.level === 'high-admin' && !A.viewer, approve: !!A.owner, perms: [], pending: [] }; A.perms38 = false; }
+    return A.perms;
+  };
+  // ask for one permission (a small sheet with a reason)
+  NX.requestPerm = async (perm) => {
+    const [label, what] = PERMS[perm] || [perm, ''];
+    if ((A.perms?.pending || []).includes(perm)) return toast('You already asked. The Owner or an approver will decide.');
+    const why = await NX.ask(`Ask for access: ${label}`, { note: `${what}. The Owner (or a high-admin they picked) gets your request and can give it for a while or for good.`, placeholder: 'Why do you need it? (optional)', ok: 'Send request', multiline: true });
+    if (why === null) return;
+    const { data, error } = await sb.rpc('admin_request_perm', { p_perm: perm, p_why: why || '' });
+    if (error || !data?.ok) return toast(error ? sqlMsg(error.message) : data?.error || 'Couldn’t send it.', true);
+    await NX.loadPerms(); toast('✓ Request sent');
+  };
+  const reqButton = perm => `<button class="btn sm" data-reqperm="${perm}">${(A.perms?.pending || []).includes(perm) ? '⏳ Asked for access' : '🔑 Request access'}</button>`;
+  NX.reqButton = reqButton;
+  document.addEventListener('click', e => { const b = e.target.closest('[data-reqperm]'); if (b) { e.preventDefault(); NX.requestPerm(b.dataset.reqperm).then(() => { b.textContent = '⏳ Asked for access'; }); } });
+
+  // =========================================================== "active on"
+  const SURF = { mac: ['🍎', 'Mac app'], windows: ['🪟', 'Windows app'], linux: ['🐧', 'Linux app'], test_run: ['🧪', 'Test Run'], phone: ['📱', 'N28C'], admin: ['🛡', 'Apoji Admin'] };
+  const LIVE = 4 * 60e3;
+  NX.SURF = SURF;
+  NX.presenceFor = async ids => {
+    if (!ids.length) return {};
+    const { data, error } = await sb.from('user_presence').select('user_id,surface,version,seen_at,first_seen').in('user_id', ids);
+    if (error) return {};
+    const out = {}; for (const r of data || []) (out[r.user_id] ||= []).push(r); return out;
+  };
+  // chips: 🟢 when they're using it right now
+  NX.surfaceChips = (rows = [], { full = false } = {}) => (rows || []).slice().sort((a, b) => new Date(b.seen_at) - new Date(a.seen_at)).map(r => {
+    const [ic, name] = SURF[r.surface] || ['•', r.surface], live = Date.now() - new Date(r.seen_at) < LIVE;
+    return `<span class="surf ${live ? 'live' : ''}" title="${esc(name)}${r.version ? ' ' + esc(r.version) : ''} · ${live ? 'active now' : 'last seen ' + ago(r.seen_at)}">${ic}${full ? ' ' + esc(name) : ''}${full && r.version ? ` <small>${esc(r.version)}</small>` : ''}${live ? '<i></i>' : ''}</span>`;
+  }).join('') || '<span class="muted">—</span>';
+  // the Software card in someone's profile
+  NX.softwareCard = async uid => {
+    const [{ data: rows, error }, { data: ev }] = await Promise.all([
+      sb.from('user_presence').select('surface,version,seen_at,first_seen').eq('user_id', uid),
+      sb.from('user_events').select('kind,detail,created_at').eq('user_id', uid).order('created_at', { ascending: true }).limit(30)]);
+    if (error) return `<div class="card"><h3>💻 What they use</h3><p class="muted" style="margin:0">${esc(sqlMsg(error.message))}</p></div>`;
+    const list = (rows || []).slice().sort((a, b) => new Date(a.first_seen) - new Date(b.first_seen));
+    const live = list.filter(r => Date.now() - new Date(r.seen_at) < LIVE);
+    const story = list.map(r => `${SURF[r.surface]?.[1] || r.surface} (${new Date(r.first_seen).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })})`).join(' → ');
+    const got = (ev || []).find(e => e.kind === 'got_app');
+    return `<div class="card"><h3>💻 What they use ${live.length ? `<span class="pill p-approved">ACTIVE NOW · ${live.map(r => SURF[r.surface]?.[1]).join(', ').toUpperCase()}</span>` : ''}</h3>
+      ${list.length ? `<table class="cards"><tr><th>App</th><th>Version</th><th>Last seen</th><th>Since</th></tr>${list.map(r => `<tr><td>${SURF[r.surface]?.[0] || ''} ${esc(SURF[r.surface]?.[1] || r.surface)}</td><td class="muted">${esc(r.version || '—')}</td><td>${Date.now() - new Date(r.seen_at) < LIVE ? '<b class="ok">now</b>' : ago(r.seen_at)}</td><td class="muted">${when(r.first_seen).split(',')[0]}</td></tr>`).join('')}</table>
+        <p class="muted" style="margin:8px 0 0">${esc(story)}${got ? ` · 🎉 got the ${got.detail?.surface === 'windows' ? 'Windows' : 'Mac'} app ${ago(got.created_at)}` : ''}</p>` : '<p class="muted" style="margin:0">Nothing yet. Apps report in once they’re on Nexus 3.8, Test Run 3.8 or Apoji Admin 2.3.</p>'}</div>`;
+  };
+  // this portal reports in too, every 2 minutes while open
+  const ping = () => { if (A.user) sb.rpc('presence_ping', { p_surface: 'admin', p_version: (window.apojiDesktop ? 'app ' : 'web ') + (NX.VERSION || '2.3.0') }).then(() => {}, () => {}); };
+  setTimeout(ping, 4000); setInterval(ping, 120e3);
+  // 🎉 a Test Run person just installed the app; 🔑 someone asked for admin access
+  setTimeout(() => {
+    try {
+      sb.channel('v23-events').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_events' }, async p => {
+        if (p.new?.kind !== 'got_app') return;
+        const { data } = await sb.from('profiles').select('username,nickname').eq('id', p.new.user_id).maybeSingle();
+        NX.notify?.({ kind: 'requests', title: `🎉 ${data?.nickname || data?.username || 'A Test Run user'} got the ${p.new.detail?.surface === 'windows' ? 'Windows' : 'Mac'} app`, body: 'They moved from Test Run to the desktop app.', onClick: () => NX.go('users', { arg: p.new.user_id }) });
+      }).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_perm_requests' }, p => {
+        if (!A.perms?.approve) return;
+        const who = NX.adminById?.(p.new.user_id);
+        NX.notify?.({ kind: 'requests', title: '🔑 Admin access request', body: `${who ? NX.nameOf(who) : 'An admin'} asked for ${PERMS[p.new.perm]?.[0] || p.new.perm}${p.new.why ? ': ' + p.new.why : ''}`, tab: 'perms' });
+      }).subscribe();
+    } catch {}
+  }, 3000);
+
+  // =========================================================== ⬇ save image
+  NX.saveImage = async (src, name = 'image') => {
+    try {
+      const blob = src.startsWith('blob:') || src.startsWith('data:') || /^https?:/.test(src) ? await (await fetch(src)).blob() : null;
+      if (!blob) throw new Error('nothing to save');
+      const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/\+.*/, '');
+      const url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = `${String(name).replace(/[^\w .-]+/g, '').slice(0, 60) || 'image'}.${ext}`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000); toast('⬇ Saved');
+    } catch (e) { toast('Couldn’t save that picture: ' + e.message, true); }
+  };
+  document.addEventListener('click', e => { const b = e.target.closest('[data-saveimg]'); if (!b) return; e.preventDefault(); e.stopPropagation(); const img = b.dataset.saveimg ? { src: b.dataset.saveimg } : b.closest('.ph, .lightbox, .fb-pic')?.querySelector('img'); if (img?.src) NX.saveImage(img.src, b.dataset.name || 'nexus-image'); }, true);
+
+  // =========================================================== 🔐 Admin access (requests, grants, approvers)
+  P.perms = async () => {
+    await NX.loadPerms();
+    if (!A.perms38) return NX.main(`<h1>🔐 Admin access</h1><div class="card">${SQL38}</div>`);
+    const approve = A.perms.approve;
+    const [{ data: reqs }, { data: grants }, { data: apprs }] = await Promise.all([
+      sb.from('admin_perm_requests').select('*').order('created_at', { ascending: false }).limit(100),
+      sb.from('admin_permissions').select('*').order('granted_at', { ascending: false }),
+      sb.from('admin_perm_approvers').select('user_id')]);
+    const name = id => { const a = NX.adminById?.(id); return a ? NX.nameOf(a) : 'someone'; };
+    const pend = (reqs || []).filter(r => r.status === 'pending'), mine = (reqs || []).filter(r => r.user_id === A.user.id);
+    const myPerms = A.perms.all ? Object.keys(PERMS) : (A.perms.perms || []).map(p => p.perm);
+    const highs = (A.admins || []).filter(a => a.level === 'high-admin' && (A.tiers || {})[a.id] !== 'owner');
+    NX.main(`<h1>🔐 Admin access</h1><p>The Owner and high-admins can do everything. Mods and admins ask for one thing at a time here, and the Owner (or a high-admin they picked as an approver) says yes, for a while or for good.</p>
+      ${approve && pend.length ? `<div class="card"><h3>Waiting for you <span class="pill p-pending">${pend.length}</span></h3>${pend.map(r => `<div class="perm-req"><div><b>${esc(name(r.user_id))}</b> wants <b>${esc(PERMS[r.perm]?.[0] || r.perm)}</b><div class="muted">${esc(r.why || 'No reason given')} · ${ago(r.created_at)}</div></div>
+        <select class="field sm" data-days="${r.id}"><option value="7">for 7 days</option><option value="30">for 30 days</option><option value="0">for good</option></select><button class="btn sm primary" data-ok="${r.id}">Approve</button><button class="btn sm" data-no="${r.id}">Decline</button></div>`).join('')}</div>` : ''}
+      <div class="card"><h3>What you can do</h3>${A.perms.all ? '<p class="muted" style="margin:0">Everything (you’re the Owner or a high-admin).</p>' : `<div class="perm-grid">${Object.entries(PERMS).map(([k, [l, w]]) => { const has = myPerms.includes(k), g = (A.perms.perms || []).find(p => p.perm === k);
+          return `<div class="perm ${has ? 'has' : ''}"><b>${esc(l)}</b><span class="muted">${esc(w)}</span>${has ? `<span class="pill p-approved">YES${g?.expires_at ? ' · until ' + new Date(g.expires_at).toLocaleDateString() : ''}</span>` : reqButton(k)}</div>`; }).join('')}</div>`}
+        ${mine.length ? `<p class="muted" style="margin:10px 0 0">Your requests: ${mine.slice(0, 6).map(r => `${esc(PERMS[r.perm]?.[0] || r.perm)} <span class="pill p-${r.status === 'approved' ? 'approved' : r.status === 'declined' ? 'declined' : 'pending'}">${r.status.toUpperCase()}</span>`).join(' · ')}</p>` : ''}</div>
+      ${approve ? `<div class="card"><h3>Who has extra access</h3>${(grants || []).length ? `<table class="cards"><tr><th>Admin</th><th>Access</th><th>Until</th><th></th></tr>${grants.map(g => `<tr><td>${esc(name(g.user_id))}</td><td>${esc(PERMS[g.perm]?.[0] || g.perm)}</td><td class="muted">${g.expires_at ? when(g.expires_at) : 'for good'}</td><td><button class="btn sm ghost" data-revoke="${g.user_id}|${g.perm}">Take away</button></td></tr>`).join('')}</table>` : '<p class="muted" style="margin:0">Nobody yet.</p>'}
+        <div class="row" style="margin-top:10px"><select class="field" id="gWho">${(A.admins || []).filter(a => a.level !== 'high-admin').map(a => `<option value="${a.id}">${esc(NX.nameOf(a))} (${a.level})</option>`).join('')}</select><select class="field" id="gPerm">${Object.entries(PERMS).map(([k, [l]]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select><select class="field" id="gDays"><option value="7">7 days</option><option value="30">30 days</option><option value="0">for good</option></select><button class="btn primary" id="gGo">Give access</button></div></div>` : ''}
+      ${A.owner ? `<div class="card"><h3>Approvers <span class="muted">(only you can change this)</span></h3><p class="muted">High-admins who can approve requests and give access, besides you.</p>${highs.map(a => `<label class="row" style="gap:8px;padding:3px 0"><input type="checkbox" data-appr="${a.id}" ${(apprs || []).some(x => x.user_id === a.id) ? 'checked' : ''}> ${esc(NX.nameOf(a))}</label>`).join('') || '<p class="muted">No other high-admins yet.</p>'}</div>` : ''}`, { cards: false });
+    const done = (r, ok = '✓ Done') => { const d = r.data; if (r.error || !d?.ok) return toast(r.error ? sqlMsg(r.error.message) : d?.error || 'Couldn’t do that.', true); toast(ok); P.perms(); };
+    $('main').onclick = async e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.ok) return done(await sb.rpc('admin_decide_perm', { p_id: +b.dataset.ok, p_ok: true, p_days: +document.querySelector(`[data-days="${b.dataset.ok}"]`).value || null }), '✓ Approved');
+      if (b.dataset.no) return done(await sb.rpc('admin_decide_perm', { p_id: +b.dataset.no, p_ok: false }), 'Declined');
+      if (b.dataset.revoke) { const [u, p] = b.dataset.revoke.split('|'); if (!confirm('Take this access away?')) return; return done(await sb.rpc('admin_revoke_perm', { p_user: u, p_perm: p }), 'Taken away'); }
+      if (b.id === 'gGo') return done(await sb.rpc('admin_grant_perm', { p_user: $('gWho').value, p_perm: $('gPerm').value, p_days: +$('gDays').value || null }), '✓ Access given');
+    };
+    $('main').onchange = async e => { const c = e.target.closest('[data-appr]'); if (c) done(await sb.rpc('admin_set_approver', { p_user: c.dataset.appr, p_on: c.checked }), c.checked ? '✓ Approver added' : 'Approver removed'); };
+  };
+
+  // =========================================================== 🧪 Testing ("needs testing" checklists)
+  const PLAT = { all: '🌐 Everywhere', mac: '🍎 Mac', windows: '🪟 Windows', web: '🧪 Test Run', phone: '📱 N28C', admin: '🛡 Apoji Admin' };
+  const ST = { pass: ['✅', 'Pass'], fail: ['❌', 'Fail'], skip: ['⏭', 'Skip'] };
+  A.testRel = A.testRel || '';
+  P.testing = async () => {
+    const [{ data: items, error }, { data: res }] = await Promise.all([
+      sb.from('test_items').select('*').eq('archived', false).order('release', { ascending: false }).order('sort').order('id'),
+      sb.from('test_results').select('*')]);
+    if (error) return NX.main(`<h1>🧪 Testing</h1><div class="card">${esc(sqlMsg(error.message))}</div>`);
+    const rels = [...new Set((items || []).map(i => i.release))];
+    if (!A.testRel || !rels.includes(A.testRel)) A.testRel = rels[0] || '';
+    const list = (items || []).filter(i => i.release === A.testRel), byItem = {};
+    for (const r of res || []) (byItem[r.item_id] ||= []).push(r);
+    const can = NX.can('testing'), people = id => { const a = NX.adminById?.(id); return a ? NX.nameOf(a) : 'a tester'; };
+    const tally = rs => ({ pass: rs.filter(r => r.status === 'pass').length, fail: rs.filter(r => r.status === 'fail').length, skip: rs.filter(r => r.status === 'skip').length });
+    const all = tally(list.flatMap(i => byItem[i.id] || [])), untested = list.filter(i => !(byItem[i.id] || []).length).length;
+    const plats = Object.keys(PLAT).filter(p => list.some(i => i.platform === p) || (byItem && list.some(i => (byItem[i.id] || []).some(r => r.platform === p))));
+    NX.main(`<h1>🧪 Testing</h1><p>What beta testers should check for each release. They tick items off in Nexus (Settings → Beta → Needs testing) and in Test Run (⋯ → Needs testing), with a note and a screenshot if something's wrong.</p>
+      <div class="row" style="margin-bottom:10px"><select class="field" id="tRel">${rels.map(r => `<option ${r === A.testRel ? 'selected' : ''}>${esc(r)}</option>`).join('') || '<option value="">No releases yet</option>'}</select>
+        <span class="sp"></span>${can ? '<button class="btn" id="tFill">✨ Fill from the release notes</button><button class="btn primary" id="tAdd">＋ Add an item</button>' : reqButton('testing')}</div>
+      ${list.length ? `<div class="stats4"><div class="stat"><b>${list.length}</b><span>to test</span></div><div class="stat"><b class="ok">${all.pass}</b><span>passes</span></div><div class="stat ${all.fail ? 'hot' : ''}"><b>${all.fail}</b><span>fails</span></div><div class="stat"><b>${untested}</b><span>not tested yet</span></div></div>` : ''}
+      ${list.length ? `<div class="card"><h3>By platform</h3><table class="cards test-grid"><tr><th>Item</th>${plats.map(p => `<th>${PLAT[p]}</th>`).join('')}</tr>${list.map(i => { const rs = byItem[i.id] || [];
+          return `<tr class="click" data-titem="${i.id}"><td><b>${esc(i.title)}</b>${i.platform !== 'all' ? ` <span class="muted">${PLAT[i.platform]}</span>` : ''}</td>${plats.map(p => { const here = rs.filter(r => (r.platform || 'all') === p || (p === i.platform && !r.platform)); const t = tally(here);
+            return `<td>${!here.length ? '<span class="muted">·</span>' : `${t.pass ? `<span class="tg pass">✅${t.pass}</span>` : ''}${t.fail ? `<span class="tg fail">❌${t.fail}</span>` : ''}${t.skip ? `<span class="tg skip">⏭${t.skip}</span>` : ''}`}</td>`; }).join('')}</tr>`; }).join('')}</table></div>` : `<div class="card empty">Nothing to test yet${can ? '. Add items, or fill them from the release notes.' : '.'}</div>`}
+      <div id="tDetail"></div>`, { cards: false });
+    const detail = id => {
+      const i = list.find(x => x.id === +id); if (!i) return; const rs = byItem[i.id] || [];
+      $('tDetail').innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">${esc(i.title)}</h3><span class="muted">${PLAT[i.platform]}</span><span class="sp"></span>${can ? `<button class="btn sm" data-tedit="${i.id}">Edit</button><button class="btn sm ghost" data-tarch="${i.id}">Archive</button>` : ''}</div>
+        ${i.steps ? `<p style="white-space:pre-wrap">${esc(i.steps)}</p>` : ''}
+        ${rs.length ? rs.map(r => `<div class="test-res ${r.status}"><span>${ST[r.status][0]} <b>${esc(people(r.user_id))}</b> <span class="muted">${esc(PLAT[r.platform] || r.platform || '')} · ${ago(r.updated_at)}</span></span>${r.note ? `<div>${esc(r.note)}</div>` : ''}${r.image ? `<div class="fb-pic" data-fbimg="${esc(r.image)}"><span class="spinner"></span></div>` : ''}${r.status === 'fail' ? `<button class="btn sm" data-tbug="${i.id}|${r.user_id}">🐞 Make it a bug report</button>` : ''}</div>`).join('') : '<p class="muted">No results yet.</p>'}</div>`;
+      loadPics($('tDetail'));
+    };
+    const editItem = async it => {
+      const { el, close } = NX.modal(`<h3>${it ? 'Edit item' : 'Add a test item'}</h3><div class="acct-grid"><label>Release</label><input class="field" id="tiR" value="${esc(it?.release || A.testRel || '')}" placeholder="3.8.0">
+        <label>Where</label><select class="field" id="tiP">${Object.entries(PLAT).map(([k, l]) => `<option value="${k}" ${(it?.platform || 'all') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <label>What to check</label><input class="field" id="tiT" value="${esc(it?.title || '')}" maxlength="200" placeholder="The highlight orb shows up when you select text">
+        <label>Steps</label><textarea class="field" id="tiS" rows="4" maxlength="2000" placeholder="1. Open Edge&#10;2. Select a sentence&#10;3. The orb should appear above it">${esc(it?.steps || '')}</textarea></div>
+        <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="tiGo">Save</button></div>`);
+      el.querySelector('#tiGo').onclick = async () => {
+        const row = { release: el.querySelector('#tiR').value.trim(), platform: el.querySelector('#tiP').value, title: el.querySelector('#tiT').value.trim(), steps: el.querySelector('#tiS').value.trim() };
+        if (!row.release || !row.title) return toast('Give it a release and a title.', true);
+        const { error: er } = it ? await sb.from('test_items').update(row).eq('id', it.id) : await sb.from('test_items').insert({ ...row, created_by: A.user.id, sort: list.length });
+        if (er) return toast(sqlMsg(er.message), true); A.testRel = row.release; close(); toast('✓ Saved'); P.testing();
+      };
+    };
+    $('main').onchange = e => { if (e.target.id === 'tRel') { A.testRel = e.target.value; P.testing(); } };
+    $('main').onclick = async e => {
+      const b = e.target.closest('button'), row = e.target.closest('[data-titem]');
+      if (b?.id === 'tAdd') return editItem(null);
+      if (b?.id === 'tFill') {
+        try {
+          const ch = await (await fetch('https://apojidelegraphics.github.io/Nexus-28/whats-new/changes.json', { cache: 'no-store' })).json(); const latest = ch[0];
+          const have = new Set(list.map(i => i.title));
+          const rows = (latest.highlights || []).map((h, k) => ({ release: latest.version, platform: /windows|\bPC\b/i.test(h) && !/mac/i.test(h) ? 'windows' : /test run/i.test(h) ? 'web' : /N28C|phone/i.test(h) ? 'phone' : 'all', title: h.replace(/^\W+\s*/, '').replace(/[:.].*$/, '').slice(0, 200), steps: h.slice(0, 2000), sort: k, created_by: A.user.id })).filter(r => !have.has(r.title));
+          if (!rows.length) return toast('Nothing new in the release notes.');
+          const { error: er } = await sb.from('test_items').insert(rows); if (er) throw er; A.testRel = latest.version; toast(`✓ Added ${rows.length} items for ${latest.version}`); return P.testing();
+        } catch (er) { return toast('Couldn’t read the release notes: ' + sqlMsg(er.message), true); }
+      }
+      if (b?.dataset.tedit) return editItem(list.find(x => x.id === +b.dataset.tedit));
+      if (b?.dataset.tarch) { const { error: er } = await sb.from('test_items').update({ archived: true }).eq('id', +b.dataset.tarch); if (er) return toast(er.message, true); toast('Archived'); return P.testing(); }
+      if (b?.dataset.tbug) {
+        const [iid, uid] = b.dataset.tbug.split('|'), it = list.find(x => x.id === +iid), r = (byItem[iid] || []).find(x => x.user_id === uid);
+        const { data, error: er } = await sb.from('feedback_reports').insert({ user_id: uid, kind: 'bug', title: `Test failed: ${it.title}`.slice(0, 160), body: `${r?.note || ''}\n\nRelease ${it.release} · ${PLAT[r?.platform] || r?.platform || ''}\nSteps:\n${it.steps}`.slice(0, 8000), source: 'desktop', channel: 'portal', info: 'Added in Apoji Admin from Testing', status: 'new', priority: 'normal', attachments: r?.image ? [r.image] : [] }).select('id').single();
+        if (er) return toast(er.message, true); toast('🐞 Bug report made'); return NX.go('feedback', { arg: data.id });
+      }
+      if (row) detail(row.dataset.titem);
+    };
+  };
+
+  // pictures stored in the private feedback-files bucket → signed links (shared by Feedback and Testing)
+  async function loadPics(root) {
+    for (const el of root.querySelectorAll('[data-fbimg]:not([data-done])')) {
+      el.dataset.done = 1;
+      const { data } = await sb.storage.from('feedback-files').createSignedUrl(el.dataset.fbimg, 3600);
+      el.innerHTML = data?.signedUrl ? `<img src="${data.signedUrl}" alt="Screenshot" data-full><button class="btn sm save-img" data-saveimg="${data.signedUrl}" data-name="${esc(el.dataset.fbimg.split('/').pop().replace(/\.\w+$/, ''))}" title="Save image">⬇ Save image</button>` : '<span class="muted">Picture unavailable</span>';
+    }
+  }
+  NX.loadPics = loadPics;
+
+  // =========================================================== 🧠 Training
+  P.training = async () => {
+    if (!NX.can('training')) return NX.main(`<h1>🧠 Training</h1><div class="card"><p>Training data is limited to people who were given access.</p>${reqButton('training')}</div>${mindMap()}`, { cards: false });
+    const [{ data: st, error }, { data: rows }] = await Promise.all([sb.rpc('admin_training_stats'), sb.from('training_examples').select('id,source,agent,model,prompt,answer,rating,correction,created_at').order('created_at', { ascending: false }).limit(40)]);
+    if (error) return NX.main(`<h1>🧠 Training</h1><div class="card">${esc(sqlMsg(error.message))}</div>${mindMap()}`, { cards: false });
+    const bars = obj => { const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...e.map(x => x[1])); return e.map(([k, n]) => `<div class="tbar"><span>${esc(SURF[k]?.[1] || k)}</span><i style="width:${Math.round(n / max * 100)}%"></i><b>${n}</b></div>`).join('') || '<span class="muted">—</span>'; };
+    NX.main(`<h1>🧠 Training</h1><p>Beta testers share their chats (with personal details stripped) to help train Nexus models: it's part of getting features early. Everyone else can opt in. Incognito chats and Axiom are never collected, and anyone can delete what they gave from Nexus (Settings → Beta).</p>
+      <div class="stats4"><div class="stat"><b>${st.total}</b><span>examples (${st.week} this week)</span></div><div class="stat"><b>${st.people}</b><span>people gave some</span></div><div class="stat ${st.testers_consenting < st.testers ? 'hot' : ''}"><b>${st.testers_consenting}/${st.testers}</b><span>beta testers sharing</span></div><div class="stat"><b>${st.up}·${st.down}·${st.corrected}</b><span>👍 · 👎 · corrected</span></div></div>
+      <div class="two"><div class="card"><h3>By agent</h3>${bars(st.by_agent)}</div><div class="card"><h3>From</h3>${bars(st.by_source)}</div></div>
+      ${mindMap()}
+      <div class="card"><div class="row"><h3 style="margin:0">Latest examples</h3><span class="sp"></span><button class="btn" id="trJsonl" title="Chat-format JSONL for fine-tuning: rated 👍 or corrected answers only">⬇ Export for fine-tuning (JSONL)</button><button class="btn" id="trEval" title="Questions with 👎 or corrections: a test set for prompt changes">⬇ Export a test set</button></div>
+        ${(rows || []).map(r => `<details class="tr-ex"><summary><span class="pill">${esc(SURF[r.source]?.[0] || '')} ${esc(r.agent || '?')}</span> ${r.rating > 0 ? '👍' : r.rating < 0 ? '👎' : ''}${r.correction ? ' ✏️' : ''} ${esc(r.prompt.slice(0, 110))} <span class="muted">${ago(r.created_at)}</span></summary><div class="tr-qa"><b>Asked</b><p>${esc(r.prompt)}</p><b>${esc(r.model || 'Answer')}</b><p>${esc(r.answer)}</p>${r.correction ? `<b>Their correction</b><p>${esc(r.correction)}</p>` : ''}<button class="btn sm ghost danger" data-trdel="${r.id}">Delete this example</button></div></details>`).join('') || '<p class="muted">Nothing yet. Beta testers on Nexus 3.8 / Test Run 3.8 start sharing once they agree.</p>'}</div>`, { cards: false });
+    const exportAll = async (filter, map, file) => {
+      toast('Preparing…'); const out = [];
+      for (let off = 0; off < 50000; off += 1000) { const { data, error: er } = await sb.from('training_examples').select('agent,model,features,prompt,answer,rating,correction').order('id').range(off, off + 999); if (er) return toast(er.message, true); out.push(...data.filter(filter).map(map)); if (data.length < 1000) break; }
+      const blob = new Blob([out.map(x => JSON.stringify(x)).join('\n') + '\n'], { type: 'application/jsonl' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file; a.click(); toast(`⬇ ${out.length} examples`);
+    };
+    $('main').onclick = async e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.id === 'trJsonl') return exportAll(r => r.rating > 0 || r.correction, r => ({ messages: [{ role: 'user', content: r.prompt }, { role: 'assistant', content: r.correction || r.answer }], metadata: { agent: r.agent, features: r.features } }), `nexus-training-${new Date().toISOString().slice(0, 10)}.jsonl`);
+      if (b.id === 'trEval') return exportAll(r => r.rating < 0 || r.correction, r => ({ agent: r.agent, question: r.prompt, bad_answer: r.answer, better: r.correction || null }), `nexus-test-set-${new Date().toISOString().slice(0, 10)}.jsonl`);
+      if (b.dataset.trdel) { if (!confirm('Delete this example for good?')) return; const { error: er } = await sb.from('training_examples').delete().eq('id', +b.dataset.trdel); if (er) return toast(er.message, true); toast('Deleted'); return P.training(); }
+    };
+  };
+
+  // The plan, as a mind map: where the data comes from → how it's cleaned → what it trains → how we check it
+  function mindMap() {
+    // left column top→bottom (1 Collect, 2 Clean, 3 Store), right column top→bottom (4 Use, 5 Check, 6 Ship)
+    const C = { x: 470, y: 225 }, W = 106;
+    const branches = [
+      { t: '1 · Collect', c: '#3dffa0', x: 300, y: 75, kids: ['Beta testers (required)', 'Anyone who opts in', '👍 / 👎 on answers', '✏️ Corrected answers', 'Never: incognito, Axiom'] },
+      { t: '2 · Clean', c: '#5ce1ff', x: 260, y: 225, kids: ['Strip emails, phones, keys', 'Drop very short chats', 'Users can delete theirs'] },
+      { t: '3 · Store', c: '#b18cff', x: 300, y: 375, kids: ['Supabase training_examples', 'Consent in training_consent', 'Admins with access only'] },
+      { t: '4 · Use', c: '#ffd36b', x: 640, y: 75, kids: ['Test set for prompts', 'Nexus help knowledge', 'Fine-tune a small open model'] },
+      { t: '5 · Check', c: '#ff8a98', x: 680, y: 225, kids: ['Compare 👍 rate before/after', 'Run the test set', 'Beta testers try it first'] },
+      { t: '6 · Ship', c: '#9be37b', x: 640, y: 375, kids: ['New prompt or model', 'Feature flag: admins → beta → all', 'Release notes'] }
+    ];
+    let lines = '', nodes = '';
+    for (const b of branches) {
+      const left = b.x < C.x, edge = b.x + (left ? -W / 2 : W / 2);
+      lines += `<path d="M${C.x},${C.y} C${(C.x + b.x) / 2},${C.y} ${(C.x + b.x) / 2},${b.y} ${b.x},${b.y}" stroke="${b.c}" stroke-width="3" fill="none" opacity=".75"/>`;
+      b.kids.forEach((k, i) => {
+        const ky = b.y + (i - (b.kids.length - 1) / 2) * 21, kx = edge + (left ? -34 : 34);
+        lines += `<path d="M${edge},${b.y} C${(edge + kx) / 2},${b.y} ${(edge + kx) / 2},${ky} ${kx},${ky}" stroke="${b.c}" stroke-width="1.4" fill="none" opacity=".55"/>`;
+        nodes += `<text x="${kx + (left ? -6 : 6)}" y="${ky + 4}" text-anchor="${left ? 'end' : 'start'}" class="mm-k">${esc(k)}</text>`;
+      });
+      nodes += `<rect x="${b.x - W / 2}" y="${b.y - 15}" width="${W}" height="30" rx="15" fill="#120e26"/><rect x="${b.x - W / 2}" y="${b.y - 15}" width="${W}" height="30" rx="15" fill="${b.c}" fill-opacity=".2" stroke="${b.c}"/><text x="${b.x}" y="${b.y + 5}" text-anchor="middle" class="mm-b" fill="${b.c}">${b.t}</text>`;
+    }
+    nodes += `<circle cx="${C.x}" cy="${C.y}" r="58" fill="#0f1f1a" stroke="#3dffa0" stroke-width="2"/><text x="${C.x}" y="${C.y - 4}" text-anchor="middle" class="mm-c">Training</text><text x="${C.x}" y="${C.y + 16}" text-anchor="middle" class="mm-c2">Nexus models</text>`;
+    return `<div class="card mm"><h3>🗺 How model training works</h3><svg viewBox="0 0 940 450" role="img" aria-label="Mind map of how Nexus model training works: collect, clean, store, use, check, ship">${lines}${nodes}</svg></div>`;
+  }
+  NX.trainingMap = mindMap;
+})();

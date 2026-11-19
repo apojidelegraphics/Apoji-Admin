@@ -165,6 +165,17 @@ Run `supabase/nexus-v3.7.sql` from the Nexus repo (adds `beta_events` and `admin
 - **Maintenance → 🔎 Web search:** one switch that turns off web search everywhere (Mac, PC, Test Run, N28C). Answers keep working.
 - **Mac and PC:** the hub page is the **Desktop hub** on the website (it can be a Mac or a PC), and the dashboard, releases, broadcasts and Nexus chat say Mac & PC.
 
+## 2.3
+Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The updated `admin-users` function is already deployed.
+- **🔐 Admin access:** mods and admins ask for one thing at a time (edit accounts, make profiles, the changelog email, Axiom, test checklists, training data, roles, maintenance, feature flags). The Owner, and the high-admins the Owner picks as approvers, approve it for 7 days, 30 days or for good, or give it directly. The database checks every one, not just the page.
+- **Active on:** the Users list shows which apps each person uses (🍎 Mac app, 🪟 Windows app, 🧪 Test Run, 📱 N28C, 🛡 Apoji Admin), with 🟢 when they're on right now. Their profile has a **What they use** card with versions and when they started on each, and you get a 🎉 notification when a Test Run person installs the app.
+- **Feedback & bugs:** tabs for 🐞 Bugs, ✨ Feature ideas and 💬 Feedback (old "Feature & Fix" reports wait under 🛠 Unsorted with one-tap sorting). Reports can have screenshots (from Nexus, N28C or ＋ New report here), with ⬇ Save image.
+- **🧪 Testing:** "needs testing" checklists per release and platform (fill them from the release notes in one tap). Beta testers tick ✅ / ❌ / ⏭ in Nexus and Test Run; a fail can become a bug report in one tap.
+- **🧠 Training:** what beta testers share to train Nexus models (it's required to be a beta tester), a mind map of the plan, and JSONL exports for fine-tuning and for a test set.
+- **Temporary passwords:** nobody can see someone's password (Supabase only keeps a one-way hash), so the Account card can make a one-time password instead; Nexus, Test Run and N28C ask them to pick their own when they sign in.
+- **Team chat:** typing indicator switches in My settings, ⬇ Save image on every picture, and the header fits on phones.
+- **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
+
 ## Develop
 
 Static files, no build step for the website. `npm install && npm start` runs the Mac app from source (`electron/`), `npm test` tests the hub. `crypto.js` is the encryption, `chat.js` the chat, `pages.js` most pages, `extras.js` tasks and the command palette, `features.js` the hub, notes, broadcasts, schedules, health and releases, `charts.js` small SVG charts and `admin.js` the shell (sign-in, theme, presence, realtime, notifications). `electron/hub-core.js` is the hub API, `electron/hub.js` keep-awake, login item and menu bar.

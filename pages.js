@@ -106,8 +106,10 @@
 
   // =========================================================== Feedback & bugs inbox
   const FB_STATUS = [['new', 'New'], ['triaged', 'Triaged'], ['working', 'Working on it'], ['fixed', 'Fixed'], ['wontfix', "Won't fix"], ['closed', 'Closed']];
-  const FB_KIND = { bug: '🐞 Bug', feature: '✨ Idea', featfix: '🛠 Feature & Fix', feedback: '💬 Feedback', beta: '🧪 Beta', other: '• Other' };
-  const PORTAL_KINDS = ['bug', 'featfix', 'feature', 'feedback', 'other'];      // what you can pick when writing one here
+  const FB_KIND = { bug: '🐞 Bug', feature: '✨ Feature idea', featfix: '🛠 Unsorted (old Feature & Fix)', feedback: '💬 Feedback', beta: '🧪 Beta bug', other: '• Other' };
+  // 2.3: bugs and feature ideas are kept apart (tabs at the top); old "Feature & Fix" reports wait to be sorted
+  const FB_GROUP = { bugs: ['bug', 'beta'], features: ['feature'], other: ['feedback', 'other'], unsorted: ['featfix'] };
+  const PORTAL_KINDS = ['bug', 'feature', 'feedback', 'other'];      // what you can pick when writing one here
   // 2.0: write a bug or feedback straight from the portal (it lands in this inbox like any other report)
   const isPortal = r => r.channel === 'portal' || r.info === 'Added in Apoji Admin';
   // 2.0.2: the same form edits a report that was written here (r = the report)
@@ -120,11 +122,14 @@
       <input class="field" id="nrT" placeholder="Title" maxlength="160" style="width:100%;margin-top:8px">
       <textarea class="field" id="nrB" rows="6" maxlength="8000" placeholder="What happened, steps to reproduce, what you expected…" style="width:100%;margin-top:8px"></textarea>
       <input class="field" id="nrV" placeholder="App version (optional), e.g. 3.3.0" maxlength="40" style="width:100%;margin-top:8px">
+      ${ed ? '' : '<div class="row" style="margin-top:8px"><button class="btn sm" id="nrPicB" type="button">📎 Add pictures</button><input type="file" id="nrPic" accept="image/*" multiple hidden><span class="muted" id="nrPicN">Up to 4 screenshots</span></div>'}
       ${ed ? '' : '<label class="muted" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="nrMe" checked> Assign to me</label>'}
       <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" id="nrX">Cancel</button><button class="btn primary" id="nrGo">${ed ? 'Save changes' : 'Add report'}</button></div>`);
     if (ed) { el.querySelector('#nrF').value = r.feature || ''; el.querySelector('#nrT').value = r.title || ''; el.querySelector('#nrB').value = r.body || ''; el.querySelector('#nrV').value = r.app_version || ''; }
     el.querySelector('#nrT').focus();
     el.querySelector('#nrX').onclick = close;
+    let pics = [];
+    if (!ed) { el.querySelector('#nrPicB').onclick = () => el.querySelector('#nrPic').click(); el.querySelector('#nrPic').onchange = e => { pics = [...e.target.files].filter(f => f.type.startsWith('image/') && f.size < 6e6).slice(0, 4); el.querySelector('#nrPicN').textContent = pics.length ? `${pics.length} picture${pics.length > 1 ? 's' : ''} ready` : 'Up to 4 screenshots'; }; }
     el.querySelector('#nrGo').onclick = async () => {
       const v = id => el.querySelector(id).value.trim(), title = v('#nrT');
       if (!title) return toast('Give it a title.', true);
@@ -142,6 +147,9 @@
       if (error && /channel/i.test(error.message)) ({ data, error } = await sb.from('feedback_reports').insert({ ...row, channel: 'app' }).select('id').single());   // before nexus-v3.3.sql
       if (error && /kind/i.test(error.message) && row.kind === 'featfix') error = { message: 'Run supabase/nexus-v3.3.2.sql (Nexus repo) to turn on Feature & Fix.' };
       if (error) { b.disabled = false; b.textContent = 'Add report'; return toast(error.message, true); }
+      // 2.3: pictures go to the private feedback-files bucket (your folder), then onto the report
+      if (pics.length) { const paths = []; for (const f of pics) { const path = `${A.user.id}/${data.id}-${Date.now()}-${paths.length}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`; const up = await sb.storage.from('feedback-files').upload(path, f, { contentType: f.type }); if (!up.error) paths.push(path); else toast('A picture didn’t upload: ' + (NX.needSql(up.error.message) || /bucket/i.test(up.error.message) ? 'run supabase/nexus-v3.8.sql' : up.error.message), true); }
+        if (paths.length) await sb.from('feedback_reports').update({ attachments: paths }).eq('id', data.id); }
       const pri = el.querySelector('#nrP').value, me = el.querySelector('#nrMe').checked;
       if (pri !== 'normal' || me) await sb.from('feedback_reports').update({ priority: pri, ...(me ? { assignee: A.user.id, status: 'triaged' } : {}) }).eq('id', data.id);
       close(); toast('✓ Report added'); NX.refreshCounts?.();
@@ -152,7 +160,7 @@
     const f = A.fb = A.fb || { status: 'open', kind: 'all', q: '', mine: false };
     let q = sb.from('feedback_reports').select('*').order('updated_at', { ascending: false }).limit(300);
     if (f.status === 'open') q = q.in('status', ['new', 'triaged', 'working']); else if (f.status !== 'all') q = q.eq('status', f.status);
-    if (f.kind !== 'all') q = q.eq('kind', f.kind);
+    if (FB_GROUP[f.kind]) q = q.in('kind', FB_GROUP[f.kind]); else if (f.kind !== 'all') q = q.eq('kind', f.kind);
     if (f.mine) q = q.eq('assignee', A.user.id);
     if (f.feature) q = q.eq('feature', f.feature);   // from Beta → See bug reports
     if (f.q) q = q.or(`title.ilike.%${f.q.replace(/[%,()]/g, '')}%,email.ilike.%${f.q.replace(/[%,()]/g, '')}%,body.ilike.%${f.q.replace(/[%,()]/g, '')}%`);
@@ -161,16 +169,18 @@
     const sel = A.arg ? +A.arg : null;
     main(`<h1>Feedback & bugs</h1><p>Everything people send from Feedback in the app, including the ones they also sent by GitHub or email. Reply and they see it in the app; internal notes stay between admins.</p>
       <div class="row" style="margin-bottom:10px"><div class="tabsub" id="fS" style="margin:0">${[['open', 'Open'], ...FB_STATUS, ['all', 'All']].map(([k, l]) => `<button data-s="${k}" class="${f.status === k ? 'on' : ''}">${l}${k === 'new' && A.counts.feedback ? `<b>${A.counts.feedback}</b>` : ''}</button>`).join('')}</div></div>
-      <div class="row" style="margin-bottom:12px"><select class="field" id="fK"><option value="all">All kinds</option>${Object.entries(FB_KIND).map(([k, l]) => `<option value="${k}" ${f.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <div class="tabsub" id="fG" style="margin:0 0 10px">${[['all', 'Everything'], ['bugs', '🐞 Bugs & fixes'], ['features', '✨ Feature ideas'], ['other', '💬 Feedback'], ['unsorted', '🛠 Unsorted']].map(([k, l]) => `<button data-g="${k}" class="${f.kind === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="row" style="margin-bottom:12px"><select class="field" id="fK" hidden><option value="all">All kinds</option>${Object.entries(FB_KIND).map(([k, l]) => `<option value="${k}" ${f.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <input class="field" id="fQ" placeholder="Search title, email, text" value="${esc(f.q)}" style="flex:1;min-width:160px"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="fM" ${f.mine ? 'checked' : ''}> Assigned to me</label>
         ${f.feature ? `<button class="btn sm" id="fFeat" title="Show everything">β ${esc(f.feature)} ✕</button>` : ''}<button class="btn" id="fCsv">Export CSV</button><button class="btn primary" id="fNew">＋ New report</button></div>
       <div class="inbox ${sel ? 'open' : ''}" id="inbox"><div class="ilist" id="ilist">${data.map(r => `<button class="iitem ${r.id === sel ? 'on' : ''} ${r.status === 'new' ? 'unread' : ''}" data-fb="${r.id}">
           <span class="row" style="gap:6px"><span class="pill p-${esc(r.status)}">${esc(r.status.toUpperCase())}</span>${r.priority !== 'normal' ? `<span class="pill p-${esc(r.priority)}">${esc(r.priority.toUpperCase())}</span>` : ''}<span class="muted">${FB_KIND[r.kind] || r.kind}</span><span class="sp"></span><span class="muted">${ago(r.updated_at)}</span></span>
-          <b>${esc(r.title)}</b><span class="muted">${r.channel && r.channel !== 'app' ? `<span class="pill" style="font-size:10px">${r.channel === 'github' ? 'GITHUB' : r.channel === 'portal' ? 'PORTAL' : 'EMAIL'}</span> ` : ''}${esc(r.username || r.email || (r.user_id ? 'Someone' : 'Not signed in'))} · ${esc(r.source)} ${esc(r.app_version)}${r.assignee ? ' · ' + esc(nameOf(NX.adminById(r.assignee))) : ''}</span></button>`).join('') || '<div class="empty">Inbox zero. 🎉</div>'}</div>
+          <b>${esc(r.title)}${(r.attachments || []).length ? ' <span title="Has pictures">📎</span>' : ''}</b><span class="muted">${r.channel && r.channel !== 'app' ? `<span class="pill" style="font-size:10px">${r.channel === 'github' ? 'GITHUB' : r.channel === 'portal' ? 'PORTAL' : 'EMAIL'}</span> ` : ''}${esc(r.username || r.email || (r.user_id ? 'Someone' : 'Not signed in'))} · ${esc(r.source)} ${esc(r.app_version)}${r.assignee ? ' · ' + esc(nameOf(NX.adminById(r.assignee))) : ''}</span></button>`).join('') || '<div class="empty">Inbox zero. 🎉</div>'}</div>
         <div class="idetail" id="idetail">${sel ? '<div class="card"><span class="spinner"></span></div>' : '<div class="card empty">Pick something on the left.</div>'}</div></div>`, { cards: false });
     if (sel) fbDetail(sel);
     $('main').onclick = e => {
       const s = e.target.closest('[data-s]'); if (s) { f.status = s.dataset.s; A.arg = null; return P.feedback(); }
+      const g = e.target.closest('[data-g]'); if (g) { f.kind = g.dataset.g; A.arg = null; return P.feedback(); }
       if (e.target.closest('#fFeat')) { f.feature = ''; return P.feedback(); }
       const it = e.target.closest('[data-fb]'); if (it) { A.arg = it.dataset.fb; history.replaceState(null, '', '#feedback/' + it.dataset.fb); document.querySelectorAll('.iitem').forEach(x => x.classList.toggle('on', x === it)); $('inbox').classList.add('open'); return fbDetail(+it.dataset.fb); }
       if (e.target.id === 'fNew') return newReport();
@@ -191,13 +201,16 @@
         <select class="field" id="fbPr">${['low', 'normal', 'high', 'urgent'].map(p => `<option value="${p}" ${r.priority === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)} priority</option>`).join('')}</select>
         <select class="field" id="fbAs"><option value="">Unassigned</option>${A.admins.map(a => `<option value="${esc(a.id)}" ${r.assignee === a.id ? 'selected' : ''}>${esc(nameOf(a))}${a.id === A.user.id ? ' (me)' : ''}</option>`).join('')}</select>
         <span class="sp"></span>${isPortal(r) ? '<button class="btn sm" id="fbEdit" title="Written in the portal, so you can change it">✎ Edit</button>' : ''}<button class="btn sm" id="fbTask" title="Make a task for this">✅ Task</button><button class="btn sm danger" id="fbDel">Delete</button></div>
+      ${r.kind === 'featfix' ? '<div class="banner">🛠 This came in as “Feature & Fix”. Which is it? <span class="sp" style="flex:1"></span><button class="btn sm" data-sortk="bug">🐞 A bug</button><button class="btn sm" data-sortk="feature">✨ A feature idea</button></div>' : ''}
       <div class="quote" style="margin-bottom:10px">${esc(r.body || '(no details)')}</div>
+      ${(r.attachments || []).length ? `<div class="fb-pics">${r.attachments.map(p => `<div class="fb-pic" data-fbimg="${esc(p)}"><span class="spinner"></span></div>`).join('')}</div>` : ''}
       ${r.info ? `<details><summary class="muted" style="cursor:pointer">App details</summary><pre class="info">${esc(r.info)}</pre></details>` : ''}
       <div class="thread-r">${(replies || []).map(x => `<div class="r ${x.is_staff ? 'staff' : ''} ${x.internal ? 'internal' : ''}"><small>${x.internal ? '🔒 Internal note · ' : ''}${esc(x.author_name || (x.is_staff ? 'Admin' : r.username || 'Them'))} · ${when(x.created_at)}</small>${esc(x.body)}</div>`).join('') || '<div class="muted">No replies yet.</div>'}</div>
       <textarea class="field" id="fbTxt" rows="3" data-name="${esc(r.username || 'there')}" placeholder="Reply to ${esc(r.username || 'them')} (they see it in the app)…"></textarea>
       <div class="row" style="margin-top:8px"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="fbInt"> Internal note (admins only)</label><span class="sp"></span>
         <button class="btn" id="fbSaved" title="Saved replies">⚡</button><button class="btn" data-quick="Thanks! We've got it and we're looking into it.">Quick: got it</button><button class="btn" data-quick="This is fixed in the next update. Thanks for reporting it!">Quick: fixed</button><button class="btn primary" id="fbSend">Send</button></div></div>`;
     const save = async patch => { const { error: er } = await sb.from('feedback_reports').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id); toast(er ? er.message : '✓ Saved', !!er); NX.refreshCounts(); };
+    NX.loadPics?.(el);
     $('fbSt').onchange = e => save({ status: e.target.value });
     $('fbPr').onchange = e => save({ priority: e.target.value });
     $('fbAs').onchange = e => save({ assignee: e.target.value || null });
@@ -207,6 +220,8 @@
       if (e.target.dataset.quick) { $('fbTxt').value = e.target.dataset.quick; $('fbTxt').focus(); return; }
       if (e.target.id === 'fbSaved') return NX.replies.picker(e.target, $('fbTxt'));
       if (e.target.id === 'fbEdit') return newReport(r);
+      if (e.target.dataset.sortk) { await save({ kind: e.target.dataset.sortk }); return P.feedback(); }
+      const pic = e.target.closest('.fb-pic img'); if (pic) { const lb = document.createElement('div'); lb.className = 'lightbox'; lb.innerHTML = `<img src="${pic.src}" alt=""><div class="lb-acts"><button class="btn primary" data-saveimg="${pic.src}" data-name="bug-report-${r.id}">⬇ Save image</button></div>`; lb.onclick = ev => { if (!ev.target.closest('button')) lb.remove(); }; document.body.appendChild(lb); return; }
       if (e.target.id === 'fbTask') return NX.tasks.modal({ title: r.title.slice(0, 200), link_kind: 'feedback', link_id: String(id), link_label: r.title.slice(0, 200), priority: r.priority === 'urgent' || r.priority === 'high' ? r.priority : 'normal', assignee: r.assignee || A.user.id });
       if (e.target.id === 'fbDel') { if (!confirm('Delete this report and its replies?')) return; const { error: er } = await sb.from('feedback_reports').delete().eq('id', id); if (er) return toast(er.message, true); A.arg = null; NX.refreshCounts(); return P.feedback(); }
       if (e.target.id === 'fbSend') {
@@ -350,17 +365,18 @@
     let r; try { r = await rpc('admin_list_users', { p_search: u.q, p_filter: u.filter, p_limit: per, p_offset: u.page * per, p_sort: u.sort }); }
     catch (e) { return main(`<h1>Users</h1><div class="card err">${esc(e.message)}</div>`); }
     const users = r.users || [], pages = Math.max(1, Math.ceil(r.total / per));
+    const pres = await (NX.presenceFor?.(users.map(x => x.id)) || {});    // 2.3: which apps they use (🟢 = right now)
     const badge = x => `${x.admin_level ? NX.levelPill(x.admin_level, x.id) + ' ' : ''}${x.beta ? '<span class="pill" style="color:var(--cyan)">BETA</span> ' : ''}${x.comped ? '<span class="pill" style="color:var(--gold)">COMPED</span> ' : ''}${x.status !== 'active' ? `<span class="pill p-declined">${esc(x.status.toUpperCase())}</span>` : ''}`;
     main(`<h1>Users <span class="muted" style="font-size:14px;font-weight:400">${r.total.toLocaleString()}</span></h1><p>Everyone with a Nexus account. Click someone for their profile, notes and history.</p>
       <div class="tabsub" id="uF">${UF.map(([k, l]) => `<button data-f="${k}" class="${u.filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="row" style="margin-bottom:10px"><input class="field" id="uQ" placeholder="Search email, username or nickname" value="${esc(u.q)}" style="flex:1;min-width:200px">
         <select class="field" id="uS"><option value="new" ${u.sort === 'new' ? 'selected' : ''}>Newest first</option><option value="active" ${u.sort === 'active' ? 'selected' : ''}>Recently active</option><option value="email" ${u.sort === 'email' ? 'selected' : ''}>Email A–Z</option></select>
-        <button class="btn" id="uCsv">Export CSV</button>${A.level === 'high-admin' && A.tier !== 'viewer' ? '<button class="btn primary" id="uNew">＋ New profile</button>' : ''}</div>
+        <button class="btn" id="uCsv">Export CSV</button>${(A.level === 'high-admin' && A.tier !== 'viewer') || NX.can?.('users_create') ? '<button class="btn primary" id="uNew">＋ New profile</button>' : NX.reqButton ? NX.reqButton('users_create').replace('Request access', 'Ask to make profiles') : ''}</div>
       <div class="banner" id="uBulk" ${u.sel.size ? '' : 'hidden'}><b>${u.sel.size} selected</b><span class="sp" style="flex:1"></span><button class="btn sm" data-bulk="beta_on">Make beta</button><button class="btn sm" data-bulk="beta_off">Remove beta</button>${A.level !== 'mod' ? '<button class="btn sm" data-bulk="comp_on">Comp</button><button class="btn sm" data-bulk="comp_off">Un-comp</button>' : ''}<button class="btn sm ghost" data-bulk="clear">Clear</button></div>
-      <div class="card"><table class="cards"><tr><th><input type="checkbox" id="uAll"></th><th>Person</th><th>Joined</th><th>Last active</th><th>Status</th><th class="num">Notes</th></tr>
+      <div class="card"><table class="cards"><tr><th><input type="checkbox" id="uAll"></th><th>Person</th><th>Joined</th><th>Last active</th><th>Active on</th><th>Status</th><th class="num">Notes</th></tr>
         ${users.map(x => `<tr class="click ${u.sel.has(x.id) ? 'sel' : ''}" data-uid="${esc(x.id)}"><td><input type="checkbox" data-pick="${esc(x.id)}" ${u.sel.has(x.id) ? 'checked' : ''}></td>
           <td><div class="row" style="gap:10px;flex-wrap:nowrap">${av({ id: x.id, nickname: x.nickname || x.username, email: x.email, avatar_url: x.avatar_url })}<span style="min-width:0"><b>${esc(x.nickname || x.username || '(no username)')}</b><div class="muted" style="overflow:hidden;text-overflow:ellipsis">${esc(x.email)}${x.username && x.nickname ? ' · @' + esc(x.username) : ''}</div></span></div></td>
-          <td class="muted">${when(x.created_at).split(',')[0]}</td><td class="muted">${ago(x.last_active_at || x.last_sign_in_at)}</td><td>${badge(x) || '<span class="muted">—</span>'}</td><td class="num">${x.notes || ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">Nobody matches.</td></tr>'}</table>
+          <td class="muted">${when(x.created_at).split(',')[0]}</td><td class="muted">${ago(x.last_active_at || x.last_sign_in_at)}</td><td class="surfs">${NX.surfaceChips ? NX.surfaceChips(pres[x.id]) : ''}</td><td>${badge(x) || '<span class="muted">—</span>'}</td><td class="num">${x.notes || ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Nobody matches.</td></tr>'}</table>
         <div class="row" style="margin-top:10px"><span class="muted">Page ${u.page + 1} of ${pages}</span><span class="sp"></span><button class="btn sm" id="uPrev" ${u.page ? '' : 'disabled'}>‹ Prev</button><button class="btn sm" id="uNext" ${u.page + 1 < pages ? '' : 'disabled'}>Next ›</button></div></div>
       <div class="card"><h3>Look up by exact email</h3><form class="row" id="lf"><input class="field" id="le" type="email" placeholder="name@example.com" style="flex:1;min-width:220px"><button class="btn primary">Open profile</button></form></div>`);
     if (A.arg) { const id = A.arg; A.arg = null; userDrawer(id); }
@@ -402,14 +418,17 @@
     const p = lk?.profile || {}, m = lk?.moderation, high = A.level === 'high-admin', email = base.email;
     const tTier = lk?.admin_level === 'high-admin' ? (A.tiers || {})[uid] || 'editor' : '';
     // 1.7: change their account without knowing their password (Supabase function admin-users; Editors and the Owner)
-    const canEdit = high && !A.viewer && (tTier !== 'owner' || A.owner), canCreds = canEdit && (A.owner || lk?.admin_level !== 'high-admin' || uid === A.user.id);
+    // 2.3: mods/admins with approved "Edit user accounts" access can change regular accounts
+    const granted = !high && NX.can?.('users_edit') && !lk?.admin_level;
+    const canEdit = (high && !A.viewer && (tTier !== 'owner' || A.owner)) || granted, canCreds = canEdit && (granted || A.owner || lk?.admin_level !== 'high-admin' || uid === A.user.id);
     const acctCard = () => `<div class="card" id="acctCard"><h3>Account ${tTier === 'owner' ? '<span class="pill owner-pill">👑 OWNER</span>' : ''}</h3>
-      ${!canEdit ? `<p class="muted" style="margin:0">${A.viewer ? 'Viewers can look but not change accounts.' : 'Only the Owner can change the Owner account.'}</p>` : `
+      ${!canEdit ? `<p class="muted" style="margin:0">${A.viewer ? 'Viewers can look but not change accounts.' : high ? 'Only the Owner can change the Owner account.' : lk?.admin_level ? 'Only high-admins can change admin accounts.' : 'Changing accounts needs access.'}</p>${!high && !lk?.admin_level && NX.reqButton ? '<div class="row" style="margin-top:8px">' + NX.reqButton('users_edit') + '</div>' : ''}` : `
       <div class="acct-grid">
         <label>Name</label><div class="row"><input class="field" id="acNick" value="${esc(base.nickname || '')}" placeholder="Nickname" maxlength="40"><button class="btn sm" data-ac="nick">Save</button></div>
         <label>Username</label><div class="row"><input class="field" id="acUser" value="${esc(base.username || '')}" placeholder="username" maxlength="24"><button class="btn sm" data-ac="user">Save</button></div>
         ${canCreds ? `<label>Email</label><div class="row"><input class="field" id="acEmail" value="${esc(email)}" type="email"><button class="btn sm" data-ac="email">Change</button></div>
-        <label>Password</label><div class="row"><button class="btn sm" data-ac="reset">✉ Send reset email</button><input class="field" id="acPw" type="password" placeholder="or set a new one (8+)" autocomplete="new-password"><button class="btn sm" data-ac="pw">Set</button></div>` : '<label>Email & password</label><span class="muted">Only the Owner can change another high-admin\'s email or password.</span>'}
+        <label>Password</label><div class="row"><button class="btn sm" data-ac="reset">✉ Send reset email</button><input class="field" id="acPw" type="password" placeholder="or set a new one (8+)" autocomplete="new-password"><button class="btn sm" data-ac="pw">Set</button></div>
+        <label></label><div class="row"><button class="btn sm" data-ac="temp" title="A one-time password you tell them; Nexus asks them to pick their own at the next sign-in">🔑 Make a temporary password</button><span class="muted" style="font-size:12px">Nobody can see someone's current password (it's stored scrambled, one-way).</span></div>` : '<label>Email & password</label><span class="muted">Only the Owner can change another high-admin\'s email or password.</span>'}
         <label>Picture</label><div class="row"><button class="btn sm" data-ac="pic">📷 Change picture</button>${base.avatar_url ? '<button class="btn sm" data-ac="nopic">Remove picture</button>' : ''}<input type="file" id="acPicF" accept="image/*" hidden></div>
       </div>
       ${canCreds && uid !== A.user.id ? '<div class="row" style="margin-top:10px"><span class="sp"></span><button class="btn sm danger" data-ac="del">Delete account…</button></div>' : ''}
@@ -427,6 +446,7 @@
     el.innerHTML = `<button class="btn sm x" data-x>✕</button>
       <div class="row" style="gap:14px;margin-bottom:6px;flex-wrap:nowrap">${av({ id: uid, nickname: base.nickname || base.username, avatar_url: base.avatar_url }, 'lg')}<div style="min-width:0"><h1 style="margin:0">${esc(base.nickname || base.username || '(no username)')}</h1>
         <div class="muted">${esc(email)}${base.username ? ' · @' + esc(base.username) : ''}</div><div style="margin-top:4px">${lk?.admin_level ? NX.levelPill(lk.admin_level, uid) + ' ' : ''}${p.is_beta_tester ? '<span class="pill" style="color:var(--cyan)">BETA</span> ' : ''}${p.is_comped ? '<span class="pill" style="color:var(--gold)">COMPED</span> ' : ''}${d.reports_against ? `<span class="pill" style="color:var(--danger)">${d.reports_against} OPEN REPORT${d.reports_against === 1 ? '' : 'S'}</span>` : ''}</div></div></div>
+      <div id="swCard"></div>
       <div class="card"><div class="kv"><span>Joined</span><span>${when(base.created_at)}</span><span>Last active</span><span>${ago(base.last_active_at || base.last_sign_in_at)}${lastVer ? ` · desktop v${esc(lastVer)}` : ''}${lastPhone ? ' · uses N28C' : ''}</span>
         <span>Status</span><span>${m && m.status !== 'active' ? `<b class="err">${esc(m.status)}</b>${m.reason ? ' · ' + esc(m.reason) : ''}${m.suspended_until ? ' · until ' + when(m.suspended_until) : ''}` : 'Active'}</span>
         <span>Chats used</span><span>${(lk?.chat_usage || []).map(c => `${esc(c.assistant_name)}: ${c.count} <button class="btn sm" data-reset="${esc(c.assistant_name)}">reset</button>`).join(' · ') || '—'}</span>
@@ -470,6 +490,7 @@
       try { const image = await NX.avatarData(e.target.files[0]); if (await acct({ action: 'avatar', image })) { await NX.loadAdmins?.(); userDrawer(uid); } }
       catch (err) { toast(err.message || 'That picture can’t be used.', true); }
     };
+    NX.softwareCard?.(uid).then(h => { const c = el.querySelector("#swCard"); if (c) c.outerHTML = h; }).catch(() => {});   // 2.3: what they use
     el.onclick = async e => {
       const b = e.target.closest('button,a'); if (!b) return;
       try {
@@ -487,6 +508,15 @@
           if (a === 'nopic') return (await acct({ action: 'profile', remove_avatar: true }, b)) && userDrawer(uid);
           if (a === 'email') { const v = $('acEmail').value.trim(); if (v === email || !confirm(`Change ${email}'s sign-in email to ${v}?`)) return; return (await acct({ action: 'email', email: v }, b)) && userDrawer(uid); }
           if (a === 'reset') { if (!confirm(`Email a password reset link to ${email}?`)) return; return acct({ action: 'reset', redirect: 'https://apojidelegraphics.github.io/Nexus-28/companion/' }, b); }
+          if (a === 'temp') {
+            if (!confirm(`Give ${email} a temporary password? Their current password stops working right away.`)) return;
+            b.disabled = true; const { data, error } = await sb.functions.invoke('admin-users', { body: { user_id: uid, action: 'temp_password' } }); b.disabled = false;
+            if (error || !data?.ok) return toast((error && (await error.context?.json?.().catch(() => null))?.error) || data?.error || error?.message || 'Couldn’t make one.', true);
+            const { el: m } = NX.modal(`<h3>🔑 Temporary password</h3><p>Tell ${esc(base.nickname || base.username || email)} this privately. It works once: Nexus asks them to pick their own as soon as they sign in. It won't be shown again.</p>
+              <div class="temp-pw"><code id="tpw">${esc(data.password)}</code><button class="btn sm" id="tpwCopy">Copy</button></div><div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn primary" data-close>Done</button></div>`);
+            m.querySelector('#tpwCopy').onclick = () => { navigator.clipboard?.writeText(data.password); toast('Copied'); };
+            return;
+          }
           if (a === 'pw') { const v = $('acPw').value; if (v.length < 8) return toast('Use at least 8 characters.', true); if (!confirm(`Set a new password for ${email}?`)) return; if (await acct({ action: 'password', password: v }, b)) $('acPw').value = ''; return; }
           if (a === 'del') { const t = await NX.ask(`Delete ${email}?`, { note: 'Their account, Shared Space posts and everything synced to it go for good. Type DELETE to confirm.', placeholder: 'DELETE', ok: 'Delete forever', danger: true }); if (t !== 'DELETE') return t !== null && toast('Not deleted. Type DELETE exactly.', true); if (await acct({ action: 'delete', confirm: 'DELETE' }, b)) { close(); if (A.tab === 'users') P.users(); } return; }
         }
@@ -663,6 +693,7 @@
           <div class="row">${NXCrypto.ready() ? '<span class="ok">✓ Unlocked on this device</span><span class="sp"></span><button class="btn" id="eLock">Lock on this device</button>' : '<span class="muted">Locked on this device.</span><span class="sp"></span><button class="btn primary" id="eOpen">Unlock in Admin chat</button>'}</div>
           ${A.level === 'high-admin' && NXCrypto.ready() ? '<div class="row" style="margin-top:10px"><button class="btn" id="eOld">Encrypt messages from before</button><span class="muted" id="eOldN"></span></div>' : ''}</div>`;
     const privacy = `<div class="card"><h3>Privacy & theme</h3>${tog('rr', 'Read receipts', "Others see when you've read their messages. Turn it off and you won't see theirs either.", p.read_receipts !== false)}
+      ${tog('tySend', 'Show when I’m typing', 'Others see “… is typing” while you write in Team chat.', p.typing_send !== false)}${tog('tyShow', 'Show when others are typing', 'See “… is typing” under the messages.', p.typing_show !== false)}
           <p class="muted" style="margin:10px 0 0">${t ? `<i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);margin-right:6px"></i><b style="color:var(--text)">${esc(t.name || 'Your theme')}</b> · ` : ''}The portal uses the theme you picked in the Mac app (Settings → General → Theme). Change it there and it shows up here next time you open the portal.</p></div>`;
     const keys = `<div class="card"><h3>⌨ Shortcuts</h3><p class="muted" style="margin:0 0 8px">Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>) to jump anywhere: pages, admins, users, feedback and tasks. <kbd>G</kbd> then a letter goes to a page, <kbd>N</kbd> makes a task.</p><button class="btn" id="keysHelp">See all shortcuts</button></div>`;
     main(`<h1>My settings</h1><p>Your picture, status and how the portal notifies you.</p>
@@ -673,6 +704,7 @@
     $('main').onchange = async e => {
       const id = e.target.id;
       if (N[id]) { await NX.savePrefs({ notify: { ...A.prefs.notify, [N[id]]: e.target.checked } }); toast('✓ Saved'); }
+      if (id === 'tySend' || id === 'tyShow') { const k = id === 'tySend' ? 'typing_send' : 'typing_show'; await NX.savePrefs({ [k]: e.target.checked }); return toast(e.target.checked ? '✓ On' : 'Off'); }
       if (id === 'rr') { await NX.savePrefs({ read_receipts: e.target.checked }); toast(e.target.checked ? '✓ Read receipts on' : 'Read receipts off'); }
       if (id === 'picF' && e.target.files[0]) uploadAvatar(e.target.files[0]);
       if (id === 'nick') { const v = e.target.value.trim(); const { error } = await sb.from('profiles').update({ nickname: v || null }).eq('id', A.user.id); if (error) return toast(error.message, true); await NX.loadAdmins(); NX.paintHeader(); toast('✓ Saved'); }

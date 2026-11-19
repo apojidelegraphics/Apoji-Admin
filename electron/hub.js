@@ -24,7 +24,8 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
 
   // ---------- keep this Mac awake + lid-closed mode (1.9: awake.js, shared with Nexus '28; works without the hub)
   const awake = require('./awake').createAwake({ app: 'admin', getCfg: () => hub.cfg, power: powerMonitor, blocker: powerSaveBlocker,
-    onChange: st => { hub.state.awake = { on: st.on, onBattery: st.onBattery, display: !!hub.cfg.keepDisplay && st.on, verified: st.on, reason: st.reason, short: st.short, lid: st.lid, lidText: st.lidText }; hub.changed(); } });
+    onChange: st => { hub.state.awake = { on: st.on, onBattery: st.onBattery, display: !!hub.cfg.keepDisplay && st.on, verified: st.on, reason: st.reason, short: st.short, lid: st.lid, lidText: st.lidText, truth: st.truth, until: st.until, floor: st.floor, battery: st.battery, wanted: st.wanted }; hub.changed(); },
+    onExpire: () => { if (hub.cfg.keepAwake) { hub.set({ keepAwake: false, until: null }); paintTray(); } } });
   const applyAwake = () => awake.apply();
   // 2.0: "keep the screen on" still dims after a while away (dimmer.js, shared with Nexus '28)
   let dimmer = null;
@@ -65,7 +66,8 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
       { label: `📱 ${st.devices} phone${st.devices === 1 ? '' : 's'} get notifications`, enabled: false },
       { type: 'separator' },
       { label: 'Open Apoji Admin', click: () => showWin('hub') },
-      { label: 'Keep this Mac awake', type: 'checkbox', checked: hub.cfg.keepAwake, click: m => setAndApply({ keepAwake: m.checked }) },
+      { label: process.platform === 'win32' ? 'Keep this PC awake' : 'Keep this Mac awake', type: 'checkbox', checked: hub.cfg.keepAwake, click: m => setAndApply({ keepAwake: m.checked }) },
+      { label: 'Keep awake for…', enabled: hub.cfg.keepAwake, submenu: [[0, 'Until I turn it off'], [60, '1 hour'], [120, '2 hours'], [240, '4 hours'], [480, '8 hours']].map(([v, l]) => ({ label: l, type: 'radio', checked: v ? false : !hub.cfg.until, click: () => setAndApply({ forMinutes: v }) })) },
       { label: 'Only while plugged in', type: 'checkbox', checked: hub.cfg.pluggedOnly, enabled: hub.cfg.keepAwake, click: m => setAndApply({ pluggedOnly: m.checked }) },
       { label: 'Keep the screen on too', type: 'checkbox', checked: !!hub.cfg.keepDisplay, enabled: hub.cfg.keepAwake, click: m => setAndApply({ keepDisplay: m.checked }) },
       { label: 'Dim the screen when away', type: 'checkbox', checked: hub.cfg.dim !== false, enabled: hub.cfg.keepAwake && !!hub.cfg.keepDisplay, click: m => setAndApply({ dim: m.checked }) },
@@ -95,6 +97,9 @@ function setupHub({ getWin, showWin, sbUrl, sbKey }) {
 
   ipcMain.handle('hub:status', async (_e, fresh) => withQr(fresh ? await hub.refresh() : hub.status()));
   ipcMain.handle('hub:set', (_e, patch) => setAndApply(patch || {}));
+  // 2.3: check what's really keeping this computer awake (without changing anything), and clear leftovers
+  ipcMain.handle('hub:awakeCheck', async () => { await awake.status(); hub.state.awake = { ...(hub.state.awake || {}), ...awake.state(), display: !!hub.cfg.keepDisplay && awake.state().on }; return withQr(hub.status()); });
+  ipcMain.handle('hub:awakeReset', async () => { try { await awake.reset(); return { ok: true, status: await withQr(hub.status()) }; } catch (e) { return { ok: false, error: e.message }; } });
   ipcMain.handle('hub:lid', async (_e, on) => { try { return { ok: true, status: await lidMode(on) }; } catch (e) { return { ok: false, error: e.message }; } });
   ipcMain.handle('hub:lidRevoke', async () => { try { hub.set({ lidMode: false }); await awake.revoke(); await applyAwake(); return { ok: true, status: await withQr(hub.status()) }; } catch (e) { return { ok: false, error: e.message }; } });
   ipcMain.handle('hub:push', (_e, ev) => hub.cfg.enabled ? hub.push(ev || {}) : { sent: 0, off: true });

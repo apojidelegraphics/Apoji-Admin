@@ -10,7 +10,7 @@ assert.ok(f.includes("sb.rpc('admin_apex_people'") && f.includes('const manage =
 assert.ok(f.indexOf('ax-power') < f.indexOf('id="axStage"') && f.indexOf('id="axStage"') < f.indexOf('Tool kits <span'), 'online first, who-can-use second, kits after');
 assert.ok(f.includes('data-dismiss') && f.includes("sb.rpc('admin_relay_stuck')"), 'health alerts dismiss + details');
 const hub = read('electron/hub.js'), aw = read('electron/awake.js');
-assert.ok(hub.includes("require('./awake').createAwake") && /wantAwake = !!c\.keepAwake && !\(plugOnly && b\.onBattery\) && !lowBat/.test(aw), 'keep awake no longer needs the hub');
+assert.ok(hub.includes("require('./awake').createAwake") && /wantAwake = !!c\.keepAwake( && !expired)? && !\(plugOnly && b\.onBattery\) && !lowBat/.test(aw), 'keep awake no longer needs the hub');
 assert.ok(aw.includes("['-d']") && aw.includes('disablesleep'));
 const css = read('admin.css');
 assert.ok(css.includes('#hdr { flex-wrap: nowrap') && css.includes('.me-chip > span:not(.av)') && css.includes('html.standalone nav'));
