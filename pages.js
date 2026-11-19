@@ -482,6 +482,8 @@
         <td class="muted">${esc([o.config_os, o.config_chip, o.config_network, o.config_service_tier].filter(Boolean).join(' · ') || '—')}</td><td class="muted">${o.redeemed_at ? when(o.redeemed_at) : '—'}</td>
         <td>${canRm ? `<button class="btn sm danger" data-unredeem="${esc(o.order_id)}">Remove</button>` : ''}</td></tr>`).join('')}</table>
         <p class="muted" style="margin:6px 0 0">Removing un-redeems it: their perks from it stop, and the order can be redeemed again (by them or anyone with the number).</p>` : '<p class="muted" style="margin:0">No aARgon3 or Mexel orders redeemed.</p>';
+      // 2.5: redeem an order for them (high-admins, or anyone given “Redeem orders for people”)
+      if (NX.redeemFor && !A.viewer && (high || NX.can?.('redeem'))) box.insertAdjacentHTML('beforeend', `<div class="row" style="margin-top:10px"><input class="field" id="ordIn" placeholder="Order number, e.g. MRH33QFL-RA6C" style="flex:1;font-family:var(--mono)"><button class="btn primary" id="ordGo">🧾 Redeem for them</button></div>`);
       NX.labelTables();
     };
     paintOrders();
@@ -494,6 +496,7 @@
     el.onclick = async e => {
       const b = e.target.closest('button,a'); if (!b) return;
       try {
+        if (b.id === 'ordGo') { const inp = el.querySelector('#ordIn'); try { b.disabled = true; const r = await NX.redeemFor(uid, inp.value); toast(`✓ Redeemed ${r.order}${r.plan ? ' (' + r.plan + ')' : ''} for ${email}`); return paintOrders(); } catch (er) { b.disabled = false; return toast(er.message, true); } }
         if (b.dataset.unredeem) { if (!confirm(`Un-redeem order ${b.dataset.unredeem} from ${email}?`)) return; await rpc('admin_remove_redemption', { p_user: uid, p_order: b.dataset.unredeem }); toast('✓ Order removed'); return paintOrders(); }
         if (b.dataset.space) { e.preventDefault(); return spaceDrawer(b.dataset.space); }
         if (b.hasAttribute('data-mktask')) return NX.tasks.modal({ title: '', link_kind: 'user', link_id: uid, link_label: `${base.nickname || base.username || ''} (${email})`.trim() });

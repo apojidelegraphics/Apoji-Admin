@@ -537,3 +537,22 @@ img.nx-orb, canvas.nx-orb { width: 32px; height: 32px; border-radius: 50%; flex:
 #trTree { height: min(560px, 70vh); --mt-bg: var(--panel, #141029); --mt-text: var(--text); --mt-muted: var(--muted); --mt-accent: var(--accent); --mt-line: rgba(var(--rgb), .3); --mt-tip-bg: var(--panel2, #1b1636); }
 #trTree .mt-n.mt-on rect.mt-box { stroke-width: 3.2; fill-opacity: .38; }
 .mm-hint { margin: 2px 0 6px; text-align: center; font-size: 12.5px; }
+/* 2.5 cage: driver age, wear, advice */
+.at-bar.cage-age { display: inline-block; width: 110px; height: 7px; margin-top: 0; vertical-align: middle; margin-right: 6px; }
+.cage-advice { margin-top: 10px; padding: 8px 12px; border-radius: 10px; background: rgba(255, 196, 0, .08); border: 1px solid rgba(255, 196, 0, .28); font-size: 14px; }
+/* 2.5 Training push, auto-sort, Free API usage, release gate, assignment, Terms, Tree/Graph */
+.mm-tree { position: relative; } .mm-tools { position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; gap: 4px; }
+.mm-tools .btn.on { background: rgba(var(--rgb), .22); border-color: var(--accent); }
+.push-pick { max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.push-row { gap: 10px; padding: 6px 8px; border-radius: 9px; background: rgba(var(--rgb), .05); align-items: flex-start; cursor: pointer; } .push-row input { margin-top: 4px; }
+.push-item { padding: 10px 0; border-top: 1px solid var(--line); } .push-item.undone { opacity: .6; } .push-item .row { flex-wrap: wrap; gap: 8px; }
+.pill.auto-good { background: rgba(61,220,132,.15); color: #6be3a0; } .pill.auto-wrong { background: rgba(255,90,110,.15); color: #ff8a98; }
+.pill.auto-private { background: rgba(255,196,0,.15); color: #ffd36b; } .pill.auto-unsure { background: rgba(160,160,190,.15); color: var(--muted); }
+.meter { margin: 10px 0; } .meter .at-bar { height: 8px; border-radius: 5px; }
+.card.gate.ok { border-color: rgba(61,220,132,.45); } .card.gate.bad { border-color: rgba(255,90,110,.5); } .card.gate ul { margin: 6px 0 0; padding-left: 18px; }
+.assign-list { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; } .assign-list .row { gap: 8px; align-items: flex-start; }
+.terms-card { line-height: 1.6; } .terms-card h3 { font-size: 15px; margin: 16px 0 6px; } .terms-card p { margin: 6px 0; } .terms-card ul { padding-left: 20px; margin: 6px 0; }
+.terms-sec.terms-hl { border-left: 3px solid var(--accent); padding-left: 12px; background: rgba(var(--rgb), .05); border-radius: 6px; }
+.terms-ask { max-height: 50vh; overflow: auto; }
+.acct-grid .assign-list label.as-row { display: flex; gap: 8px; align-items: flex-start; color: var(--text); font-size: 14px; text-transform: none; letter-spacing: 0; margin: 0; padding: 2px 0; text-align: left; justify-content: flex-start; }
+.assign-list label.as-row input { margin-top: 3px; flex: none; }

@@ -513,6 +513,7 @@
     const [h, _hub, key] = await Promise.all([sb.rpc('admin_health'), loadHubRow().catch(() => null), freeKey()]);
     return { ping, h: h.error ? { error: sqlMsg(h.error.message) } : h.data || {}, hub: H.row, key };
   }
+  NX.freeKeyCredit = () => freeKey();   // 2.5: Free API usage shows it too
   async function freeKey() {
     try {
       const { data } = await sb.from('app_content').select('content').eq('key', 'openrouter_api_key').maybeSingle();
@@ -670,6 +671,8 @@
     };
     $('mSend').onclick = async () => {
       const ver = rel().version, people = R.recipients;
+      const gate = NX.releaseGate ? await NX.releaseGate(ver).catch(() => null) : null;   // 2.5: the release gate
+      if (gate?.items && !gate.ready && !confirm(`⛔ ${ver} isn't ready by the Testing page: ${gate.failing} failing, ${gate.untested} untested. Email the changelog anyway?`)) return;
       if (!confirm(`Email the v${ver} changelog to ${people.length} subscriber${people.length === 1 ? '' : 's'}? Each counts toward your EmailJS monthly limit.`)) return;
       MAIL.sending = true; MAIL.stop = false; let sent = [], failed = 0, lastErr = '';
       const prog = () => { if ($('mProg')) $('mProg').innerHTML = `Sent ${sent.length} of ${people.length}${failed ? ` · ${failed} failed (${esc(lastErr)})` : ''} <button class="btn sm ghost" id="mStop">Stop</button>`; if ($('mStop')) $('mStop').onclick = () => { MAIL.stop = true; }; };

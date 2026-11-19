@@ -105,6 +105,25 @@
   const hhmmss = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const stillHere = () => C.host && document.body.contains(C.host);
 
+  // 2.5: driver age → wear, the odds of the next attempt, and what to do about it
+  function wearRows(c) {
+    const ageH = (+c.driver_age_days || 0) * 24, pct = Math.min(100, Math.round(ageH / 48 * 100));
+    const wear = c.wearing ? `<span class="pill p-declined">WEARING DOWN</span> −1% every 2 h${c.next_wear_at ? ` · next ${new Date(c.next_wear_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}` : ''}`
+      : c.lockdown ? 'Paused by the lockdown' : ageH < 48 ? `Starts in ${Math.max(1, Math.ceil(48 - ageH))} h (at 2 days old)` : c.down ? 'Paused while the cage is down' : '—';
+    const odds = c.attempt_chance != null ? Math.round(c.attempt_chance * 100) : null;
+    return `<span>Driver age</span><span><span class="at-bar cage-age"><i style="width:${pct}%;background:${pct >= 100 ? 'var(--danger)' : pct >= 75 ? 'var(--gold)' : 'var(--online)'}"></i></span> ${(+c.driver_age_days || 0).toFixed(1)} days</span>
+      <span>Wear</span><span>${wear}</span>
+      ${odds != null ? `<span>Next attempt</span><span><b style="color:${odds >= 40 ? 'var(--danger)' : odds >= 15 ? 'var(--gold)' : 'var(--online)'}">${odds}%</b> chance it gets through</span>` : ''}`;
+  }
+  function advice(c, openN, out) {
+    if (out) return '';
+    if (c.update_done_at) return '⬆ Drivers are installing. The wear stops when they finish.';
+    if (openN) return `🩹 Patch the open breach${openN === 1 ? '' : 'es'} first: two open breaches (or integrity under 30%) can let him out.`;
+    if (c.integrity <= 35) return '🚨 Integrity is low. Lock the cage down now, then update the drivers.';
+    if (c.wearing) return '⬆ The drivers are 2+ days old and the walls are wearing down. Update the drivers to stop it.';
+    if ((+c.driver_age_days || 0) >= 1.5) return '⏳ The drivers turn 2 days old soon. Update them before the wear starts.';
+    return '';
+  }
   async function mount(host, pre) {
     C.host = host; clearInterval(C.timer);
     const { data: r, error } = pre || await sb.rpc('apex_cage_view', { p_events: 60 });
@@ -131,7 +150,9 @@
         <div style="flex:1;min-width:240px"><h3 style="margin:0">${out ? '🕳 The cell is empty' : c.down ? '⛔ The cage is down for maintenance' : open.length ? `⚠️ ${open.length} breach${open.length === 1 ? '' : 'es'} open` : c.lockdown ? '🔒 Lockdown: every wall at maximum' : '🟢 Holding'}</h3>
           <div class="kv" style="margin-top:8px"><span>Warden drivers</span><span><b>${esc(c.driver_version)}</b> · installed ${ago(c.driver_installed_at)}${c.outdated ? ' <span class="pill p-declined">OUTDATED</span>' : ''}</span>
             <span>Security level</span><span><span class="lvls">${[1, 2, 3, 4, 5].map(n => `<button data-lvl="${n}" class="${n <= c.security_level ? 'on' : ''}" ${dis} title="Level ${n}"></button>`).join('')}</span> ${c.security_level}/5</span>
-            <span>This week</span><span>${r.attempts_week} attempt${r.attempts_week === 1 ? '' : 's'} · ${r.breaches_week} got through${c.escapes ? ` · ${c.escapes} escape${c.escapes === 1 ? '' : 's'} ever` : ''}</span></div>
+            <span>This week</span><span>${r.attempts_week} attempt${r.attempts_week === 1 ? '' : 's'} · ${r.breaches_week} got through${c.escapes ? ` · ${c.escapes} escape${c.escapes === 1 ? '' : 's'} ever` : ''}</span>
+            ${wearRows(c)}</div>
+          ${advice(c, open.length, out) ? `<div class="cage-advice">${advice(c, open.length, out)}</div>` : ''}
           ${installing ? `<div class="cage-upd"><div class="row"><b>⬆ Installing ${esc(c.update_to)}</b><span class="sp"></span><span class="muted" id="cgLeft">${Math.ceil(left / 60e3)} min left</span></div><div class="at-bar"><i id="cgBar" style="width:${Math.min(100, 100 - left / total * 100).toFixed(1)}%"></i></div></div>` : ''}
           <div class="row" style="margin-top:12px;flex-wrap:wrap">
             <button class="btn primary" id="cgUpd" ${installing || !m ? 'disabled' : ''}>⬆ Update drivers</button>
@@ -143,7 +164,7 @@
         <div class="cage-log">${ev.map(e => `<details class="ce ${e.kind} ${e.kind === 'attempt' ? (e.succeeded ? 'won' : 'lost') : ''}" ${(e.kind === 'attempt' && e === ev.find(x => x.kind === 'attempt')) || (e.kind === 'escape' && out) ? 'open' : ''}>
           <summary><span class="ci">${ICON[e.kind] || '•'}</span><span class="ct">${esc(e.title)}${e.kind === 'attempt' ? ` <span class="pill ${e.succeeded ? 'p-declined' : 'p-approved'}">${e.succeeded ? 'GOT THROUGH' : 'FAILED'}</span>` : ''}${e.kind === 'breach' && e.resolved_at ? ' <span class="pill p-closed">PATCHED</span>' : ''}</span><time>${ago(e.created_at)}</time></summary>
           ${e.detail || e.vector ? `<div class="cd">${e.vector ? `<small class="muted">Vector: ${esc(e.vector)}</small><br>` : ''}${esc(e.detail) || '<i class="muted">No log. He left nothing behind.</i>'}${e.by_email ? `<br><small class="muted">by ${esc(e.by_email)}</small>` : ''}</div>` : e.kind === 'attempt' ? '<div class="cd"><i class="muted">No log. He left nothing behind.</i></div>' : ''}</details>`).join('') || '<div class="empty">Nothing yet. He’s waiting.</div>'}</div></div>
-      <p class="muted">Attempts come in a few times a day. Whether one gets through depends on the drivers’ age, the security level and lockdowns, never on what he writes.</p>`;
+      <p class="muted">Attempts come in a few times a day. Whether one gets through depends on the drivers’ age, the security level, integrity and lockdowns, never on what he writes. Once the drivers are 2 days old the walls wear down on their own (−1% integrity every 2 hours, and the security level drops one step a day) until you update them. A lockdown pauses the wear.</p>`;
 
     const again = () => mount(host);
     const act = async (p, msg) => { const { data, error: er } = await sb.rpc('apex_cage_action', { p }); if (er || data?.success === false) return fail(er, data); toast(msg); again(); };

@@ -176,6 +176,19 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, ⬇ Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.5
+
+Needs `supabase/nexus-v3.10.sql` from the Nexus repo.
+
+- **🧠 Training → 6 · Ship: push lessons.** Approved lessons reach admins first (try them with Check → Try a question). Push them to beta testers, then everyone: each push sends a notification (“🧠 Nexus learned 3 new things”) and shows the 👍 rate before and after. **Undo** stops them right away. Only the Owner and the high-admins the Owner picks (Admin access → 🚀 Push lessons) can push.
+- **✨ Auto-sort** pre-labels the review queue with the free model: looks good, looks wrong, personal info, unsure.
+- **🌳 Tree / ◉ Graph** on the Training map. Graph is Obsidian-style: dots that settle into place, hover to see connections.
+- **📊 Free API usage:** Nexus speech (Groq) against the free daily limits, Test Run, and the free key's credit.
+- **🧪 Testing:** 👥 Assign to testers (matched by the apps they use; each gets a notice), and the **release gate** (every test needs a ✅; shown on Testing and Releases, and asked before emailing the changelog).
+- **🧾 Redeem an order for a customer** from their drawer in Users (high-admins, or anyone given “Redeem orders for people”).
+- **🔺 Axiom's cage:** once the drivers are 2 days old, integrity wears down (−1% every 2 hours) and the security level slips a step a day until you update them. The cage shows the driver age, the wear, the odds of the next attempt and what to do.
+- **⚖ Terms:** the Terms & Conditions (`terms-data.js`, the same file as Nexus's `renderer/terms-data.js`; keep them the same). Admins agree to the admin part once per version.
+
 ## 2.4.1
 
 - **Training is now a mind map like Notion's**: "Training" in the middle, steps 1–3 on the right and 4–6 on the left, and each step's details branching off it. Click a step to open what you can do there (review, lessons, try a question…), use its ○ to fold it, drag to move and scroll to zoom. Folds are remembered while you move around the portal.

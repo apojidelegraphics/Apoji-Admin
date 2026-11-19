@@ -221,6 +221,7 @@
   // =========================================================== 🧠 Training
   // 2.4: a WORKING mind map. Each step shows live numbers; click one to see and do what happens there.
   A.trStep = A.trStep || 'use';
+  A.trMode = A.trMode || NX.store?.get('trMode', 'tree') || 'tree';   // 2.5: Tree or Graph
   P.training = async () => {
     if (!NX.can('training')) return NX.main(`<h1>🧠 Training</h1><div class="card"><p>Training data is limited to people who were given access.</p>${reqButton('training')}</div>`, { cards: false });
     const { data: st, error } = await sb.rpc('admin_training_stats');
@@ -240,17 +241,18 @@
         leaf('s-up', `👍 ${st.up} good`), leaf('s-down', `👎 ${st.down} not good`), leaf('s-fix', `✏️ ${st.corrected} better answers written`),
         { id: 's-agent', label: 'By agent', collapsed: true, children: counts(st.by_agent, 'ag:') }] },
       { id: 'use', label: '4 · Use', sub: `${pl(st.lessons, 'lesson')} · ${pl(st.rules, 'rule')}`, color: '#ffd36b', children: [
-        leaf('u-review', st.to_review ? `${st.to_review} waiting for review` : 'Nothing to review', { step: 'use' }), leaf('u-match', 'Agents see the 3 best-matching lessons'), leaf('u-rules', 'and every rule, on every answer'), leaf('u-where', 'Desktop agents and Test Run')] },
+        leaf('u-review', st.to_review ? `${st.to_review} waiting for review` : 'Nothing to review', { step: 'use' }), leaf('u-match', 'Agents see the 3 best-matching lessons'), leaf('u-rules', 'and every rule, on every answer'), leaf('u-where', 'Admins first, then push (6 · Ship)', { step: 'ship' })] },
       { id: 'check', label: '5 · Check', sub: st.up_rate_7d != null ? `👍 ${st.up_rate_7d}% this week` : 'Not enough ratings yet', color: '#ff8a98', children: [
         leaf('k-prev', st.up_rate_prev != null ? `${st.up_rate_prev}% the week before` : 'Week before: no ratings'), leaf('k-delta', delta == null ? 'Change: —' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)} points`), leaf('k-try', 'Try a question', { step: 'check' })] },
-      { id: 'ship', label: '6 · Ship', sub: 'Prompts, flags, fine-tuning', color: '#9be37b', children: [
+      { id: 'ship', label: '6 · Ship', sub: 'Push lessons, prompts, flags', color: '#9be37b', children: [
+        leaf('p-push', '🚀 Push lessons: admins → beta → everyone', { step: 'ship' }),
         leaf('p-prompts', '✍ Agent prompts', { go: 'prompts' }), leaf('p-flags', '⚑ Feature flags: admins → beta → everyone', { go: 'flags' }), leaf('p-jsonl', '⬇ Export for fine-tuning (JSONL)', { step: 'store' })] }];
     STEPS.forEach((s, i) => { s.open = true; s.step = s.id; s.side = i < 3 ? 'right' : 'left'; s.collapsed = A.trFold?.[s.id] ?? s.id === 'clean'; });
     NX.main(`<h1>🧠 Training</h1><p>Beta testers share their chats (personal details stripped) to help train Nexus models; anyone else can opt in. You review the best examples and approve them as <b>lessons</b>: every agent (desktop and Test Run) looks up matching lessons and rules before it answers.</p>
-      <div class="card mm-tree"><div id="trTree"></div><p class="muted mm-hint">Click a step to see what you can do there · its ○ folds it · drag to move, scroll to zoom</p></div>
+      <div class="card mm-tree"><div class="mm-tools"><button class="btn sm ${A.trMode === 'graph' ? '' : 'on'}" data-tmode="tree" title="Mind map (Notion-style)">🌳 Tree</button><button class="btn sm ${A.trMode === 'graph' ? 'on' : ''}" data-tmode="graph" title="Graph (Obsidian-style)">◉ Graph</button></div><div id="trTree"></div><p class="muted mm-hint">Click a step to see what you can do there · its ○ folds it · drag to move, scroll to zoom</p></div>
       <div id="trPanel"><div class="card"><span class="spinner"></span></div></div>`, { cards: false });
     const tree = { id: 'root', label: 'Training', sub: 'Nexus models', color: '#3dffa0', children: STEPS };
-    const mt = MindTree.create($('trTree'), {
+    const mt = MindTree.create($('trTree'), { mode: A.trMode,
       onOpen: n => {
         if (n.go) return NX.go(n.go);
         const step = n.step || n.branch?.step; if (!step) return;
@@ -264,9 +266,10 @@
     // remember folds between visits
     $('trTree').addEventListener('pointerup', () => setTimeout(() => { A.trFold = Object.fromEntries(mt.nodes.filter(n => n.depth === 1).map(n => [n.id, !!n.collapsed])); }, 0));
     NX.trainingTree = mt;
+    $('main').querySelector('.mm-tools').onclick = e => { const b = e.target.closest('[data-tmode]'); if (!b) return; A.trMode = b.dataset.tmode; NX.store.set('trMode', A.trMode); mt.setMode(A.trMode); document.querySelectorAll('.mm-tools [data-tmode]').forEach(x => x.classList.toggle('on', x === b)); };
     trPanel(st);
   };
-  const exRow = (r, acts = '') => `<details class="tr-ex"><summary><span class="pill">${esc(SURF[r.source]?.[0] || '')} ${esc(r.agent || '?')}</span> ${r.rating > 0 ? '👍' : r.rating < 0 ? '👎' : ''}${r.correction ? ' ✏️' : ''}${r.approved ? ' <span class="pill p-approved">LESSON</span>' : ''} ${esc(r.prompt.slice(0, 110))} <span class="muted">${ago(r.created_at)}</span></summary>
+  const exRow = (r, acts = '') => `<details class="tr-ex"><summary><span class="pill">${esc(SURF[r.source]?.[0] || '')} ${esc(r.agent || '?')}</span> ${r.rating > 0 ? '👍' : r.rating < 0 ? '👎' : ''}${r.correction ? ' ✏️' : ''}${r.approved ? ' <span class="pill p-approved">LESSON</span>' : ''}${NX.autoLabel ? ' ' + NX.autoLabel(r) : ''} ${esc(r.prompt.slice(0, 110))} <span class="muted">${ago(r.created_at)}</span></summary>
     <div class="tr-qa"><b>Asked</b><p>${esc(r.prompt)}</p><b>${esc(r.model || 'Answer')}</b><p>${esc(r.answer)}</p>${r.correction ? `<b>Their better answer</b><p>${esc(r.correction)}</p>` : ''}${r.lesson ? `<b>Rule</b><p>${esc(r.lesson)}</p>` : ''}<div class="row">${acts}</div></div></details>`;
   async function trPanel(st) {
     const el = $('trPanel'); if (!el) return;
@@ -285,10 +288,12 @@
       const { data: rows } = await sb.from('training_examples').select(sel).order('created_at', { ascending: false }).limit(40);
       el.innerHTML = card('3 · Store: the latest examples', (rows || []).map(r => exRow(r, `<button class="btn sm ghost danger" data-trdel="${r.id}">Delete this example</button>`)).join('') || '<p class="muted">Nothing yet.</p>');
     } else if (k === 'use') {
+      const qq = cols => sb.from('training_examples').select(cols).eq('approved', false).or('rating.neq.0,correction.not.is.null').order('created_at', { ascending: false }).limit(30);
       const [{ data: queue }, { data: lessons }] = await Promise.all([
-        sb.from('training_examples').select(sel).eq('approved', false).or('rating.neq.0,correction.not.is.null').order('created_at', { ascending: false }).limit(30),
+        qq(sel + ',auto_label,auto_note').then(r => r.error ? qq(sel) : r),   // 2.5: auto-sort labels (nexus-v3.10.sql)
         sb.from('training_examples').select(sel).eq('approved', true).order('approved_at', { ascending: false }).limit(60)]);
-      el.innerHTML = card(`4 · Use: review → lessons <span class="pill p-pending">${(queue || []).length} TO REVIEW</span>`, `<p class="muted">Approve the good ones (or the ones with a better answer). Approved examples become lessons: agents see the 3 that match a question best, plus every rule you write, before they answer.</p>
+      NX.trQueue = queue || [];
+      el.innerHTML = card(`4 · Use: review → lessons <span class="pill p-pending">${(queue || []).length} TO REVIEW</span>${NX.trainingAutoSort && (queue || []).length ? ' <button class="btn sm" id="trAuto" title="The free model pre-sorts the queue: looks good, looks wrong, personal info">✨ Auto-sort</button>' : ''}`, `<p class="muted">Approved lessons go to admins first; push them to beta testers and everyone from <b>6 · Ship</b>. Approve the good ones (or the ones with a better answer). Approved examples become lessons: agents see the 3 that match a question best, plus every rule you write, before they answer.</p>
           ${(queue || []).map(r => exRow(r, `<input class="field sm" data-rule="${r.id}" placeholder="Optional rule, e.g. “Always give units”" maxlength="600" style="flex:1;min-width:200px"><button class="btn sm primary" data-approve="${r.id}">✓ Approve as a lesson</button><button class="btn sm ghost" data-skip="${r.id}">Skip</button>`)).join('') || '<p class="muted">Nothing waiting. Rated and corrected answers show up here.</p>'}`)
         + card(`📚 Lessons (${(lessons || []).length})`, (lessons || []).map(r => exRow(r, `<button class="btn sm" data-unapprove="${r.id}">Stop using it</button>`)).join('') || '<p class="muted">None yet.</p>')
         + card('⬇ Export', `<div class="row"><button class="btn" id="trJsonl" title="Chat-format JSONL: rated 👍 or corrected answers">Export for fine-tuning (JSONL)</button><button class="btn" id="trEval" title="Questions with 👎 or corrections">Export a test set</button></div>`);
@@ -298,7 +303,8 @@
         <div class="tr-days">${days.map(d => `<i style="height:${Math.round(d.n / max * 100)}%" title="${esc(d.day)}: ${d.n}"></i>`).join('') || '<span class="muted">No examples in the last 30 days.</span>'}</div><p class="muted" style="margin-top:4px">Examples per day, last 30 days</p>
         <h3 style="margin-top:14px">Try a question</h3><p class="muted">See which lessons an agent would get for it.</p><div class="row"><input class="field" id="trTry" placeholder="How far away is the Moon?" style="flex:1"><select class="field" id="trTryA" style="width:auto"><option>flash</option><option>lyte</option><option>neodela</option><option>paragon</option></select><button class="btn primary" id="trTryGo">Look up</button></div><pre class="info" id="trTryOut" hidden></pre>`);
     } else if (k === 'ship') {
-      el.innerHTML = card('6 · Ship', `<p>Lessons work right away, with no update needed. For bigger changes:</p><div class="row"><button class="btn" data-go="prompts">✍ Agent prompts</button><button class="btn" data-go="flags">⚑ Feature flags</button><button class="btn" data-go="testing">🧪 Testing</button><button class="btn" data-go="releases">🚀 Releases</button></div><p class="muted">Try a change with admins first, then beta testers, then everyone. Check the 👍 rate on step 5 before and after.</p>`);
+      setTimeout(() => { const b = $('trPush'); if (b && NX.trainingShip) NX.trainingShip(b); }, 0);   // 2.5: push lessons (rollout with undo)
+      el.innerHTML = '<div id="trPush"><div class="card"><span class="spinner"></span></div></div>' + card('6 · Ship', `<p>Lessons work right away, with no update needed. For bigger changes:</p><div class="row"><button class="btn" data-go="prompts">✍ Agent prompts</button><button class="btn" data-go="flags">⚑ Feature flags</button><button class="btn" data-go="testing">🧪 Testing</button><button class="btn" data-go="releases">🚀 Releases</button></div><p class="muted">Try a change with admins first, then beta testers, then everyone. Check the 👍 rate on step 5 before and after.</p>`);
     }
     el.onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
@@ -308,6 +314,7 @@
       if (b.dataset.unapprove) return upd(+b.dataset.unapprove, { approved: false }, 'No longer used');
       if (b.dataset.trdel) { if (!confirm('Delete this example for good?')) return; const { error: er } = await sb.from('training_examples').delete().eq('id', +b.dataset.trdel); if (er) return toast(er.message, true); toast('Deleted'); return P.training(); }
       if (b.dataset.go) return NX.go(b.dataset.go);
+      if (b.id === 'trAuto') { b.disabled = true; return NX.trainingAutoSort(NX.trQueue || [], () => trPanel(st)); }
       if (b.id === 'trTryGo') { const q = $('trTry').value.trim(); if (!q) return; const [{ data: h }, { data: r }] = await Promise.all([sb.rpc('training_lessons', { p_query: q, p_agent: $('trTryA').value, p_limit: 3 }), sb.rpc('training_rules', { p_agent: $('trTryA').value })]); const o = $('trTryOut'); o.hidden = false; o.textContent = (r || []).length || (h || []).length ? `Rules (${(r || []).length}):\n${(r || []).map(x => '• ' + x).join('\n')}\n\nMatching lessons (${(h || []).length}):\n${(h || []).map((x, i) => `${i + 1}. ${x.q}\n   → ${x.a}`).join('\n')}` : 'No lessons match this question. The agent answers on its own.'; return; }
       if (b.id === 'trJsonl') return exportAll(r => r.rating > 0 || r.correction, r => ({ messages: [{ role: 'user', content: r.prompt }, { role: 'assistant', content: r.correction || r.answer }], metadata: { agent: r.agent, features: r.features } }), `nexus-training-${new Date().toISOString().slice(0, 10)}.jsonl`);
       if (b.id === 'trEval') return exportAll(r => r.rating < 0 || r.correction, r => ({ agent: r.agent, question: r.prompt, bad_answer: r.answer, better: r.correction || null }), `nexus-test-set-${new Date().toISOString().slice(0, 10)}.jsonl`);
