@@ -176,6 +176,11 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, ⬇ Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.4.1
+
+- **Training is now a mind map like Notion's**: "Training" in the middle, steps 1–3 on the right and 4–6 on the left, and each step's details branching off it. Click a step to open what you can do there (review, lessons, try a question…), use its ○ to fold it, drag to move and scroll to zoom. Folds are remembered while you move around the portal.
+- The map is drawn by `mindtree.js`, the same file Nexus '28 uses for its chats mind map (keep the two copies the same).
+
 ## 2.4
 Run `supabase/nexus-v3.9.sql` from the Nexus repo.
 - **Fixed:** Admin access, Testing, Training and "active on" didn't load in the Mac and Windows apps (their file wasn't packed into the app; a test now checks every page file).

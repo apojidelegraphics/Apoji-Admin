@@ -532,3 +532,8 @@ img.nx-orb, canvas.nx-orb { width: 32px; height: 32px; border-radius: 50%; flex:
 .mm-v { font: 600 13px var(--sans, system-ui); fill: #fff; } .mm-s { font: 11.5px var(--sans, system-ui); fill: var(--muted, #a89fd0); }
 .tr-days { display: flex; align-items: flex-end; gap: 3px; height: 70px; padding: 6px 0; border-bottom: 1px solid var(--line); } .tr-days i { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; opacity: .8; }
 .clean-list { line-height: 1.9; }
+/* 2.4.1 Training mind map (mindtree.js, shared with Nexus) */
+.mm-tree { padding: 6px; }
+#trTree { height: min(560px, 70vh); --mt-bg: var(--panel, #141029); --mt-text: var(--text); --mt-muted: var(--muted); --mt-accent: var(--accent); --mt-line: rgba(var(--rgb), .3); --mt-tip-bg: var(--panel2, #1b1636); }
+#trTree .mt-n.mt-on rect.mt-box { stroke-width: 3.2; fill-opacity: .38; }
+.mm-hint { margin: 2px 0 6px; text-align: center; font-size: 12.5px; }

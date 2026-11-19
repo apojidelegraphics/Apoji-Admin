@@ -226,27 +226,44 @@
     const { data: st, error } = await sb.rpc('admin_training_stats');
     if (error) return NX.main(`<h1>🧠 Training</h1><div class="card">${esc(/admin_training_stats|lessons|approved/.test(error.message) ? 'Run supabase/nexus-v3.9.sql (Nexus repo) in Supabase → SQL Editor.' : sqlMsg(error.message))}</div>`, { cards: false });
     const delta = st.up_rate_7d != null && st.up_rate_prev != null ? st.up_rate_7d - st.up_rate_prev : null;
+    const pl = (k, w) => `${k} ${k == 1 ? w : w === 'person' ? 'people' : w + 's'}`, leaf = (id, label, extra = {}) => ({ id, label, ...extra });
+    const counts = (obj, pre, names = {}) => Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => leaf(pre + k, `${names[k] || k}: ${v}`));
+    // 2.4.1: a Notion-style mind map. Click a step (or its ○) to fold it; click a step's name to open what you can do there.
     const STEPS = [
-      { k: 'collect', t: '1 · Collect', c: '#3dffa0', x: 300, y: 75, v: `${st.total} examples · ${st.week} this week`, s: `${st.testers_consenting}/${st.testers} beta testers sharing` },
-      { k: 'clean', t: '2 · Clean', c: '#5ce1ff', x: 250, y: 225, v: 'Automatic', s: 'emails, phones, keys stripped' },
-      { k: 'store', t: '3 · Store', c: '#b18cff', x: 300, y: 375, v: `${st.people} people`, s: `👍 ${st.up} · 👎 ${st.down} · ✏️ ${st.corrected}` },
-      { k: 'use', t: '4 · Use', c: '#ffd36b', x: 640, y: 75, v: `${st.lessons} lesson${st.lessons == 1 ? "" : "s"} · ${st.rules} rule${st.rules == 1 ? "" : "s"}`, s: st.to_review ? `${st.to_review} waiting for review` : 'nothing to review' },
-      { k: 'check', t: '5 · Check', c: '#ff8a98', x: 690, y: 225, v: st.up_rate_7d != null ? `👍 ${st.up_rate_7d}% this week` : '👍 rate: not enough ratings', s: delta == null ? 'vs last week: —' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)} points vs last week` },
-      { k: 'ship', t: '6 · Ship', c: '#9be37b', x: 640, y: 375, v: 'Prompts + flags', s: 'admins → beta → everyone' }];
-    const C = { x: 470, y: 225 };
-    let lines = '', nodes = '';
-    for (const b of STEPS) {
-      const on = A.trStep === b.k, left = b.x < C.x;
-      lines += `<path d="M${C.x},${C.y} C${(C.x + b.x) / 2},${C.y} ${(C.x + b.x) / 2},${b.y} ${b.x},${b.y}" stroke="${b.c}" stroke-width="${on ? 4 : 2.5}" fill="none" opacity="${on ? 1 : .55}"/>`;
-      nodes += `<g class="mm-node ${on ? 'on' : ''}" data-step="${b.k}" tabindex="0" role="button" aria-label="${esc(b.t)}"><rect x="${b.x - 100}" y="${b.y - 34}" width="200" height="68" rx="16" fill="#120e26"/><rect x="${b.x - 100}" y="${b.y - 34}" width="200" height="68" rx="16" fill="${b.c}" fill-opacity="${on ? .28 : .14}" stroke="${b.c}" stroke-width="${on ? 2.5 : 1.2}"/>
-        <text x="${b.x}" y="${b.y - 12}" text-anchor="middle" class="mm-b" fill="${b.c}">${esc(b.t)}</text><text x="${b.x}" y="${b.y + 6}" text-anchor="middle" class="mm-v">${esc(b.v)}</text><text x="${b.x}" y="${b.y + 22}" text-anchor="middle" class="mm-s">${esc(b.s)}</text></g>`;
-    }
-    nodes += `<circle cx="${C.x}" cy="${C.y}" r="58" fill="#0f1f1a" stroke="#3dffa0" stroke-width="2"/><text x="${C.x}" y="${C.y - 4}" text-anchor="middle" class="mm-c">Training</text><text x="${C.x}" y="${C.y + 16}" text-anchor="middle" class="mm-c2">Nexus models</text>`;
+      { id: 'collect', label: '1 · Collect', sub: `${pl(st.total, 'example')} · ${st.week} this week`, color: '#3dffa0', children: [
+        leaf('c-testers', `${st.testers_consenting}/${st.testers} beta testers sharing`), leaf('c-opt', `${pl(st.consenting, 'person')} opted in`),
+        { id: 'c-src', label: 'By app', collapsed: true, children: counts(st.by_source, 'src:', Object.fromEntries(Object.entries(SURF).map(([k, v]) => [k, v[0] + ' ' + v[1]]))) },
+        leaf('c-never', 'Never: incognito, Axiom, files, pictures')] },
+      { id: 'clean', label: '2 · Clean', sub: 'Automatic, before saving', color: '#5ce1ff', children: [
+        leaf('k-email', 'Emails → [email]'), leaf('k-key', 'API keys and tokens → [key]'), leaf('k-phone', 'Phone numbers → [phone]'), leaf('k-num', 'Card-like numbers → [number]'), leaf('k-pw', 'Passwords → [hidden]'), leaf('k-url', 'Links lose their ?tokens')] },
+      { id: 'store', label: '3 · Store', sub: `${pl(st.people, 'person')} · Supabase`, color: '#b18cff', children: [
+        leaf('s-up', `👍 ${st.up} good`), leaf('s-down', `👎 ${st.down} not good`), leaf('s-fix', `✏️ ${st.corrected} better answers written`),
+        { id: 's-agent', label: 'By agent', collapsed: true, children: counts(st.by_agent, 'ag:') }] },
+      { id: 'use', label: '4 · Use', sub: `${pl(st.lessons, 'lesson')} · ${pl(st.rules, 'rule')}`, color: '#ffd36b', children: [
+        leaf('u-review', st.to_review ? `${st.to_review} waiting for review` : 'Nothing to review', { step: 'use' }), leaf('u-match', 'Agents see the 3 best-matching lessons'), leaf('u-rules', 'and every rule, on every answer'), leaf('u-where', 'Desktop agents and Test Run')] },
+      { id: 'check', label: '5 · Check', sub: st.up_rate_7d != null ? `👍 ${st.up_rate_7d}% this week` : 'Not enough ratings yet', color: '#ff8a98', children: [
+        leaf('k-prev', st.up_rate_prev != null ? `${st.up_rate_prev}% the week before` : 'Week before: no ratings'), leaf('k-delta', delta == null ? 'Change: —' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)} points`), leaf('k-try', 'Try a question', { step: 'check' })] },
+      { id: 'ship', label: '6 · Ship', sub: 'Prompts, flags, fine-tuning', color: '#9be37b', children: [
+        leaf('p-prompts', '✍ Agent prompts', { go: 'prompts' }), leaf('p-flags', '⚑ Feature flags: admins → beta → everyone', { go: 'flags' }), leaf('p-jsonl', '⬇ Export for fine-tuning (JSONL)', { step: 'store' })] }];
+    STEPS.forEach((s, i) => { s.open = true; s.step = s.id; s.side = i < 3 ? 'right' : 'left'; s.collapsed = A.trFold?.[s.id] ?? s.id === 'clean'; });
     NX.main(`<h1>🧠 Training</h1><p>Beta testers share their chats (personal details stripped) to help train Nexus models; anyone else can opt in. You review the best examples and approve them as <b>lessons</b>: every agent (desktop and Test Run) looks up matching lessons and rules before it answers.</p>
-      <div class="card mm"><svg viewBox="0 0 940 450" role="img" aria-label="How Nexus model training works. Click a step.">${lines}${nodes}</svg><p class="muted" style="margin:4px 0 0;text-align:center">Click a step</p></div>
+      <div class="card mm-tree"><div id="trTree"></div><p class="muted mm-hint">Click a step to see what you can do there · its ○ folds it · drag to move, scroll to zoom</p></div>
       <div id="trPanel"><div class="card"><span class="spinner"></span></div></div>`, { cards: false });
-    $('main').querySelector('svg').addEventListener('click', e => { const g = e.target.closest('[data-step]'); if (g) { A.trStep = g.dataset.step; P.training(); } });
-    $('main').querySelector('svg').addEventListener('keydown', e => { const g = e.target.closest('[data-step]'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); A.trStep = g.dataset.step; P.training(); } });
+    const tree = { id: 'root', label: 'Training', sub: 'Nexus models', color: '#3dffa0', children: STEPS };
+    const mt = MindTree.create($('trTree'), {
+      onOpen: n => {
+        if (n.go) return NX.go(n.go);
+        const step = n.step || n.branch?.step; if (!step) return;
+        A.trStep = step; trPanel(st); document.querySelectorAll('#trTree .mt-n').forEach(g => g.classList.toggle('mt-on', g.dataset.id === step));
+        if (n.depth > 1) $('trPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+      tip: n => n.depth === 1 ? `<b>${esc(n.label)}</b><small>${esc(n.sub || '')}</small><small>Click to see what you can do here</small>` : n.go ? '<small>Opens that page</small>' : n.step ? '<small>Click to open it below</small>' : ''
+    });
+    mt.set(tree);
+    document.querySelector(`#trTree .mt-n[data-id="${A.trStep}"]`)?.classList.add('mt-on');
+    // remember folds between visits
+    $('trTree').addEventListener('pointerup', () => setTimeout(() => { A.trFold = Object.fromEntries(mt.nodes.filter(n => n.depth === 1).map(n => [n.id, !!n.collapsed])); }, 0));
+    NX.trainingTree = mt;
     trPanel(st);
   };
   const exRow = (r, acts = '') => `<details class="tr-ex"><summary><span class="pill">${esc(SURF[r.source]?.[0] || '')} ${esc(r.agent || '?')}</span> ${r.rating > 0 ? '👍' : r.rating < 0 ? '👎' : ''}${r.correction ? ' ✏️' : ''}${r.approved ? ' <span class="pill p-approved">LESSON</span>' : ''} ${esc(r.prompt.slice(0, 110))} <span class="muted">${ago(r.created_at)}</span></summary>
