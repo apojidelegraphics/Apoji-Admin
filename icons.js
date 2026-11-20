@@ -1,8 +1,10 @@
-// Apoji Admin 2.6: our own icon set instead of emojis. One line style (24 × 24, 1.8 stroke, round ends, currentColor),
+// Our own icon set instead of emojis (Apoji Admin 2.6; Nexus '28, N28C and Test Run 3.11). Shared: apoji-admin/icons.js
+// = nexus-desktop/renderer/icons.js (keep the two the same). One line style One line style (24 × 24, 1.8 stroke, round ends, currentColor),
 // drawn for Apoji Admin. Emojis in the interface (menu, headings, buttons, tags, cards, toasts) are swapped for these as
 // pages draw; emojis people type (team chat, notes, reports, reactions, training examples) are left alone.
 //   NX.icon(name) → '<svg …>' · NX.iconize(el) · NX.ICONS (the set) · NX.EMOJI_ICONS (emoji → icon)
-(function () {
+(function (NX) {          // Apoji Admin has NX; the Nexus apps use window.NexusIcons
+  const W = typeof window !== 'undefined' ? window : globalThis;
   const I = {
     // people & roles
     user: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.8-3.8 3.8-6 7.5-6s6.7 2.2 7.5 6"/>',
@@ -101,7 +103,50 @@
     dot: '<circle cx="12" cy="12" r="5.5" fill="currentColor" stroke="none"/>',
     upload: '<path d="M12 15.5V4M7 8.5 12 3.5l5 5M4.5 15.5V19a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-3.5"/>',
     download: '<path d="M12 3.5V15M7 10.5l5 5 5-5M4.5 15.5V19a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-3.5"/>',
-    command: '<path d="M9 9V6.5A2.5 2.5 0 1 0 6.5 9H9zm0 0h6m-6 0v6m6-6V6.5A2.5 2.5 0 1 1 17.5 9H15zm0 0v6m0 0h-6m6 0v2.5a2.5 2.5 0 1 0 2.5-2.5H15zm-6 0v2.5A2.5 2.5 0 1 1 6.5 15H9z"/>'
+    command: '<path d="M9 9V6.5A2.5 2.5 0 1 0 6.5 9H9zm0 0h6m-6 0v6m6-6V6.5A2.5 2.5 0 1 1 17.5 9H15zm0 0v6m0 0h-6m6 0v2.5a2.5 2.5 0 1 0 2.5-2.5H15zm-6 0v2.5A2.5 2.5 0 1 1 6.5 15H9z"/>',
+    // 3.11 (Nexus '28, N28C, Test Run): the rest of the emojis the apps used
+    cards: '<rect x="3.5" y="6" width="11" height="15" rx="2" transform="rotate(-8 9 13.5)"/><rect x="9.5" y="3.5" width="11" height="15" rx="2"/><path d="M15 8.5v5M12.5 11h5"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+    cloud: '<path d="M7 18.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.5 1.6A3.8 3.8 0 0 1 17.5 18.5z"/>',
+    rain: '<path d="M7 14.5a4.2 4.2 0 0 1-.6-8.4 5.6 5.6 0 0 1 10.8 1.5 3.5 3.5 0 0 1 .3 6.9z"/><path d="M8 17.5 7 20M12 17.5 11 20M16 17.5 15 20"/>',
+    snow: '<path d="M7 13.5a4.2 4.2 0 0 1-.6-8.4 5.6 5.6 0 0 1 10.8 1.5 3.5 3.5 0 0 1 .3 6.9z"/><path d="M8 17v.1M12 18.5v.1M16 17v.1M10 20.5v.1M14 20.5v.1"/>',
+    storm: '<path d="M7 13.5a4.2 4.2 0 0 1-.6-8.4 5.6 5.6 0 0 1 10.8 1.5 3.5 3.5 0 0 1 .3 6.9z"/><path d="m12.5 13.5-2.5 4h3.5l-2 4"/>',
+    partly: '<path d="M8.5 4.5v1M3.8 6.3l.7.7M2.5 11h1M10.5 8.8a3.5 3.5 0 0 0-5.4 4"/><path d="M9 20a3.8 3.8 0 0 1-.5-7.6 5 5 0 0 1 9.6 1.3A3.2 3.2 0 0 1 17.8 20z"/>',
+    fog: '<path d="M4 9h13M7 12.5h13M4 16h12M8 19.5h9"/><path d="M6.5 9a5.5 5.5 0 0 1 10.6-1.8"/>',
+    thermo: '<path d="M10 14.2V5a2 2 0 0 1 4 0v9.2a3.8 3.8 0 1 1-4 0z"/><path d="M12 10v6.5"/>',
+    incognito: '<path d="M3 12.5h18M5.5 12.5 7.3 6a1.5 1.5 0 0 1 1.9-1l2.8 1 2.8-1a1.5 1.5 0 0 1 1.9 1l1.8 6.5"/><circle cx="7.5" cy="17" r="2.5"/><circle cx="16.5" cy="17" r="2.5"/><path d="M10 17h4"/>',
+    note: '<path d="M6 3.5h9l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z"/><path d="M15 3.5V8h4M8.5 12h7M8.5 15.5h7M8.5 19h4"/>',
+    folder: '<path d="M3 7a1.5 1.5 0 0 1 1.5-1.5h4.3l2 2.2h8.7A1.5 1.5 0 0 1 21 9.2v9.3a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/>',
+    bulb: '<path d="M9 17.5h6M9.8 20.5h4.4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V17h5.2v-1.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
+    trophy: '<path d="M7.5 4h9v5a4.5 4.5 0 0 1-9 0z"/><path d="M7.5 6H4.5a3 3 0 0 0 3 4M16.5 6h3a3 3 0 0 1-3 4M12 13.5V17M8.5 20.5h7M9.5 17h5v3.5h-5z"/>',
+    medal: '<path d="M8 3h3l1.5 5M16 3h-3l-1.5 5"/><circle cx="12" cy="14.5" r="5.5"/><path d="m12 11.8.9 1.9 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3z"/>',
+    palette: '<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-.9 2-1.8 0-1.4-1.2-1.7-1.2-3 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4C21 6.4 17 3 12 3z"/><circle cx="7.5" cy="11.5" r="1.1"/><circle cx="10" cy="7.5" r="1.1"/><circle cx="14.5" cy="7.5" r="1.1"/>',
+    repeat: '<path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H19M16 3l3 3-3 3M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H5M8 21l-3-3 3-3"/>',
+    grad: '<path d="m2.5 9 9.5-4.5L21.5 9 12 13.5z"/><path d="M6.5 11v4.5c1.4 1.4 3.4 2 5.5 2s4.1-.6 5.5-2V11M21.5 9v5"/>',
+    phoneoff: '<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M3.5 3.5l17 17M11 18.5h2"/>',
+    money: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.8"/><path d="M6 9.5v.1M18 14.5v.1"/>',
+    smile: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 14c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2M9 9.5v.5M15 9.5v.5"/>',
+    image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="9.5" r="1.7"/><path d="m4 17 5-4.5 3.5 3 3-2.5 4 3.5"/>',
+    thread: '<circle cx="12" cy="12" r="5"/><path d="M8.5 8.5c2 1.5 5 1.5 7 0M8 13c2.5 1.5 5.5 1.5 8 0M15.5 15.5c1.5 2 3 4 5 5"/>',
+    swords: '<path d="M14.5 4H20v5.5L9 20.5 5.5 20.5v-3.5z"/><path d="M4 4h5.5l3 3M20 20.5h-3.5l-3-3M6 15l3 3M15 15l3 3"/>',
+    access: '<circle cx="12" cy="4.5" r="1.8"/><path d="M5 8h14M12 8v6M8.5 21l3.5-7 3.5 7"/>',
+    speak: '<circle cx="9" cy="9" r="3.5"/><path d="M2.5 20c.6-3.3 3.2-5.5 6.5-5.5s5.9 2.2 6.5 5.5M16.5 6c1 .8 1.5 1.9 1.5 3s-.5 2.2-1.5 3M19 3.5c1.6 1.4 2.5 3.3 2.5 5.5s-.9 4.1-2.5 5.5"/>',
+    pause: '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.8v6.4M14 8.8v6.4"/>',
+    play: '<circle cx="12" cy="12" r="8.5"/><path d="m10 8.5 5.5 3.5-5.5 3.5z"/>',
+    question: '<circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 16.8v.2"/>',
+    scissors: '<circle cx="6.5" cy="6.5" r="2.5"/><circle cx="6.5" cy="17.5" r="2.5"/><path d="M8.5 8 20 18.5M8.5 16 20 5.5"/>',
+    hat: '<path d="M3 17.5c2.5 1.6 5.5 2.5 9 2.5s6.5-.9 9-2.5"/><path d="M6.5 17V8.5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2V17M6.5 13.5h11"/>',
+    door: '<path d="M5 21V4a1 1 0 0 1 1-1h9.5a1 1 0 0 1 1 1v17M3 21h18M13.5 12v.1"/>',
+    infinity: '<path d="M12 12c-2-2.6-3.6-4-5.5-4a4 4 0 0 0 0 8c1.9 0 3.5-1.4 5.5-4zm0 0c2 2.6 3.6 4 5.5 4a4 4 0 0 0 0-8c-1.9 0-3.5 1.4-5.5 4z"/>',
+    heart: '<path d="M12 20s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.6-7.5 10-7.5 10z"/>',
+    paw: '<ellipse cx="12" cy="16" rx="4" ry="3.5"/><circle cx="6" cy="10.5" r="1.8"/><circle cx="9.5" cy="6.5" r="1.8"/><circle cx="14.5" cy="6.5" r="1.8"/><circle cx="18" cy="10.5" r="1.8"/>',
+    abacus: '<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M3.5 8.5h17M3.5 15.5h17"/><circle cx="8" cy="8.5" r="1.3"/><circle cx="12" cy="8.5" r="1.3"/><circle cx="10" cy="15.5" r="1.3"/><circle cx="15.5" cy="15.5" r="1.3"/>',
+    plane: '<path d="M10.5 13.5 3 11l1.5-1.5 7.5 1L16.5 6a2 2 0 0 1 3 0 2 2 0 0 1 0 3L15 13.5l1 7.5-1.5 1.5L12 15l-3.5 3.5V21L7 22.5 5.5 19 2 17.5 3.5 16H6z"/>',
+    news: '<path d="M4.5 5h12v14a1.5 1.5 0 0 0 1.5 1.5H5.5a1 1 0 0 1-1-1z"/><path d="M16.5 9h3v10a1.5 1.5 0 0 1-3 0M7.5 8.5h6M7.5 12h6M7.5 15.5h4"/>',
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+    eagle: '<path d="M2.5 9c3 0 5.5 1 7.5 3l2-4c1-2 3-3 5-3l4 2-3 1.5c0 4-3 7.5-7 8.5l-2 4-2-3c-2.5-1-4-3.5-4.5-6z"/><path d="M15.5 6.5v.1"/>',
+    telescope: '<path d="m3 13.5 12.5-7 2 3.5L5 17z"/><path d="m15.5 6.5 3-1.7 2 3.5-3 1.7M10.5 14.5 8 21M11.5 14l3.5 7"/>',
+    trash2: '<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13.5h9l1-13.5"/>'
   };
   const DOT = { '🟢': 'var(--online, #3ddc84)', '🔴': 'var(--danger, #ff5a6e)', '🟠': '#ff9f43', '🟡': 'var(--gold, #ffd36b)', '🔵': '#5ca8ff', '⚪': 'var(--muted, #9a92bd)' };
   const E = {
@@ -115,6 +160,11 @@
     '🌐': 'globe', '🌍': 'globe', '🔎': 'search', '🔍': 'search', '🩹': 'bandage', '🔥': 'flame', '📄': 'doc', '👁': 'eye', '⏭': 'skip', '⚖': 'scale', '📅': 'calendar',
     '🗓': 'calendar', '🔋': 'battery', '🌙': 'moon', '🔌': 'plug', '🗄': 'archive', '🗂': 'folders', '⏻': 'power', '🧰': 'toolbox', '🏁': 'finish', '🤖': 'robot',
     '📷': 'camera', '🔊': 'speaker', '🎙': 'mic', '🕳': 'hole', '💨': 'wind', '🌳': 'tree', '📚': 'books', '🗺': 'map', '📋': 'clipboard', '📏': 'ruler', '★': 'star', '⭐': 'star', '⌘': 'command',
+    '🃏': 'cards', '☀': 'sun', '🌞': 'sun', '☼': 'sun', '☾': 'moon', '🌧': 'rain', '🌦': 'rain', '🌨': 'snow', '❄': 'snow', '⛈': 'storm', '🌤': 'partly', '⛅': 'partly', '☁': 'cloud', '🌫': 'fog', '🌡': 'thermo',
+    '🕶': 'incognito', '📝': 'note', '📁': 'folder', '💡': 'bulb', '🏆': 'trophy', '🥇': 'medal', '🥈': 'medal', '🥉': 'medal', '🎖': 'medal', '📥': 'inbox', '📤': 'upload', '🎨': 'palette',
+    '🔁': 'repeat', '🔄': 'repeat', '🎓': 'grad', '📴': 'phoneoff', '💸': 'money', '🙂': 'smile', '😊': 'smile', '🖼': 'image', '🧵': 'thread', '⚔': 'swords', '♿': 'access', '🗣': 'speak',
+    '🗨': 'chat', '⏸': 'pause', '❓': 'question', '✂': 'scissors', '🎩': 'hat', '🚪': 'door', '👀': 'eye', '♾': 'infinity', '💞': 'heart', '♥': 'heart', '❤': 'heart', '🐾': 'paw', '🧮': 'abacus',
+    '✈': 'plane', '📰': 'news', '🎯': 'target', '🦅': 'eagle', '🔭': 'telescope', '📐': 'ruler', '⌛': 'hourglass', '✎': 'pencil', '📲': 'phone', '🏠': 'door', '🔖': 'pin', '📦': 'archive', '🎵': 'speaker', '🎶': 'speaker', '📞': 'phone', '⚗': 'flask',
     ...Object.fromEntries(Object.keys(DOT).map(k => [k, 'dot']))
   };
   const RE = new RegExp('(' + Object.keys(E).sort((a, b) => b.length - a.length).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\uFE0F?', 'gu');
@@ -122,7 +172,7 @@
   NX.ICONS = I; NX.EMOJI_ICONS = E;
   NX.icon = name => I[name] ? svg(name) : '';
   // where emojis are what people wrote, not the interface: left alone
-  const KEEP = '[style*="pre-wrap"],.msgs,.thread,.emojis,.rx,.mentions,.mdv,.tr-qa,.beta-note,.tp-body,textarea,input,select,option,[contenteditable],pre,code,svg,script,style,.no-icons,[data-user-text]';
+  const KEEP = '[style*="pre-wrap"],.msg .body,.msg-edit,.bubble,.md-out,[data-user-text],.chat-title-text,.msgs .msg.you,.msgs .msg.user,.msgs > .m,.thread,.emojis,.rx,.mentions,.mdv,.tr-qa,.beta-note,.tp-body,textarea,input,select,option,[contenteditable],pre,code,svg,script,style,.no-icons,[data-user-text]';
   function iconize(root) {
     if (!root || root.nodeType !== 1 || root.closest?.(KEEP)) return;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => {
@@ -148,6 +198,8 @@
     }
     if (queued.size && !raf) raf = requestAnimationFrame(flush);
   });
+  W.NexusIcons = { ICONS: I, EMOJI_ICONS: E, icon: NX.icon, iconize, iconFor: NX.iconFor, strip: t => String(t || '').replace(RE, '').replace(/\s{2,}/g, ' ').trim() };
+  if (typeof document !== 'undefined' && document.head?.prepend) { const st = document.createElement('style'); st.id = 'ico-base'; st.textContent = '.ico{display:inline-block;width:1.15em;height:1.15em;vertical-align:-.2em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}'; document.head.prepend(st); }
   const start = () => { iconize(document.body); mo.observe(document.body, { childList: true, subtree: true, characterData: true }); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
-})();
+})(typeof NX !== 'undefined' ? NX : (typeof window !== 'undefined' && window.NX) || {});

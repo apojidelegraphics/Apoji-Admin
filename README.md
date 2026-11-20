@@ -26,13 +26,13 @@ It's the same portal with the files built in, plus a Dock badge for unread items
 - **App control**: feature flags, announcements and maintenance switches the apps enforce.
 - **Tasks**: the team's to-do board (To do · Doing · Done) with owners, due dates and priorities, linked to feedback, users or reports. Drag cards between columns.
 - **Command palette**: ⌘K / Ctrl+K jumps to any page, admin, user, feedback report or task. `G` then a letter goes to a page, `N` makes a task, `?` lists every shortcut.
-- **Saved replies**: your own snippets for feedback replies and chat (⚡).
+- **Saved replies**: your own snippets for feedback replies and chat ().
 - **Notifications**: pop-ups, desktop notifications, a chime and an app badge. Phone notifications through your Mac hub (below).
 - **Team notes**: playbooks and how-tos, end-to-end encrypted like the chat, saved as you type, with a markdown preview and no silent overwrites.
 - **Broadcasts**: a notification in everyone's Nexus app (Mac and PC) and N28C (everyone, beta testers, admins or people on older versions), now or later.
 - **Schedules**: turn announcements, maintenance and feature flags on or off at a set time.
 - **Health**: Supabase speed, live updates, the desktop hub, N28C requests waiting, failed schedules, free AI key credit, database and storage size.
-- **Releases**: downloads from GitHub, which versions people run and a one-click "please update" broadcast, plus **✉ Email the changelog**: send each release's notes to everyone who opted in, with EmailJS (high-admins; needs `supabase/nexus-v2.7.sql` from the Nexus repo). Setup is in the Nexus repo under `docs/EMAILJS.md`.
+- **Releases**: downloads from GitHub, which versions people run and a one-click "please update" broadcast, plus **Email the changelog**: send each release's notes to everyone who opted in, with EmailJS (high-admins; needs `supabase/nexus-v2.7.sql` from the Nexus repo). Setup is in the Nexus repo under `docs/EMAILJS.md`.
 - **Status page**: post incidents and updates to the public Nexus status page, and override any component.
 - **Axiom (Apex)**: high-admins only. Take Axiom offline (now, for a while or until you bring it back, with a message), switch tool kits off for everyone, read-only mode, block people or give them their own minutes, reset minutes, latest turns, prompt history with restore, who can use it, weekly minutes, providers and its prompt (stored only in Supabase).
 - **Audit alerts**: a notification when another admin changes roles, bans someone or removes content.
@@ -69,7 +69,7 @@ Messages and files are encrypted in your browser before they're sent (AES-256-GC
 
 ## High-admin tiers (1.7)
 
-- **👑 Owner** (Apoji_Delegraphics): everything. Only the Owner can change the Owner account or anyone's tier, and the Owner tag can only be given in the Supabase SQL editor.
+- **Owner** (Apoji_Delegraphics): everything. Only the Owner can change the Owner account or anyone's tier, and the Owner tag can only be given in the Supabase SQL editor.
 - **Editor**: what high-admins could always do, plus changing people's accounts.
 - **Viewer**: sees every high-admin page but can't change roles, accounts, Axiom or email settings.
 
@@ -90,7 +90,7 @@ Both live in `supabase/functions/`. Deploy with the Supabase CLI, or in the dash
   1. Supabase → Edge Functions → **Secrets**: add `CHANGELOG_SECRET` = any long random string.
   2. GitHub → Nexus-28 → Settings → Secrets and variables → Actions → **New repository secret**: `CHANGELOG_SECRET` with the same value.
   3. EmailJS → Account → Security: turn on **Allow EmailJS API for non-browser applications** (and keep using the Private Key in Apoji Admin).
-  4. Apoji Admin → Releases → Email the changelog → **⚡ Automatic**. From then on, each Nexus release emails subscribers by itself (Nexus' release workflow calls the function after publishing; it never fails the release).
+  4. Apoji Admin → Releases → Email the changelog → **Automatic**. From then on, each Nexus release emails subscribers by itself (Nexus' release workflow calls the function after publishing; it never fails the release).
 
 ## Axiom managers, select people and access requests (1.8)
 Run `supabase/nexus-v3.1.sql` from the Nexus repo first (after `apoji-admin-1.7.sql`).
@@ -128,7 +128,7 @@ Run `supabase/nexus-v3.3.sql` from the Nexus repo first (after `nexus-v3.2.sql`)
 ## 2.0.2
 Run `supabase/nexus-v3.3.2.sql` from the Nexus repo (adds the Feature & Fix kind).
 - **This Mac → Dim when I step away:** a slider from 0% (dark) through 55% to None.
-- **Feedback & bugs:** reports written in the portal can be edited (✎ Edit); new kind **🛠 Feature & Fix**.
+- **Feedback & bugs:** reports written in the portal can be edited (✎ Edit); new kind **Feature & Fix**.
 - **Team chat:** "Maya is typing…" in every room and DM (sent over Realtime, with the room and person sealed with the team key).
 - **◆ Nexus** follows the agent and model picked in Nexus '28 right now (the free key only runs free models, so a paid one falls back to `openrouter/free` and says so), and the Nexus orb moves like in the app.
 
@@ -136,24 +136,24 @@ Run `supabase/nexus-v3.3.2.sql` from the Nexus repo (adds the Feature & Fix kind
 Run `supabase/nexus-v3.4.sql` from the Nexus repo.
 - **Real screen dimming:** "Dim when I step away" now lowers the screen's actual brightness (a small helper, `bin/apoji-brightness`, built by `npm install` and in CI; it uses Apple's private DisplayServices like MonitorControl does). The app checks your screens on start; "Try it" dims for a few seconds. Screens that don't allow it get the dark layer, and brightness is always put back, even after a crash.
 - **◆ Nexus** is one continuous chat, like a DM (older chats were merged into it).
-- **Dashboard → 🧪 Test Run:** people, answers and searches from the web version (Nexus without a Mac). Take it down from **Maintenance → 🧪 Test Run**.
+- **Dashboard → Test Run:** people, answers and searches from the web version (Nexus without a Mac). Take it down from **Maintenance → Test Run**.
 - **Containment Sector 28:** attempts now run by themselves every 3 hours (pg_cron + a private secret, already set up), and the function rejects answers that just copy its instructions.
 
 ## 2.0.4
 - **Dimming works:** the dimmer was being set up before the app was ready, so it never started. Fixed.
 - **Windows:** Apoji Admin now comes for Windows too (see above).
-- **Editing users works:** the `admin-users` function is deployed. In a user's Account card, **📷 Change picture** sits left of **Remove picture**.
-- **👑** The Owner's picture wears its crown in chat and everywhere else.
+- **Editing users works:** the `admin-users` function is deployed. In a user's Account card, **Change picture** sits left of **Remove picture**.
+- **** The Owner's picture wears its crown in chat and everywhere else.
 
 ## 2.0.5
-- **👑** The Owner's crown now sits on the top-left of the picture.
+- **** The Owner's crown now sits on the top-left of the picture.
 - **Maintenance:** ◆ Nexus and @mentions in Team chat now stop when a switch is on with **Admins bypass** turned off (otherwise admins still get through, as before).
 
 ## 2.1
 Run `supabase/apoji-admin-2.1.sql` (already applied to the live project).
 - **Chat rooms:** "All admins" is now **Team Chat**, and there are three new rooms: **All High Admins**, **All Admins** and **All Mods**. Each only lets in people of that level, plus the Owner, who is in all three.
 - **＋ New profile** (Users page) and **＋ New admin profile** (Dashboard → Admins online): make a Nexus account with a password (or email them an invite), name, username, and optionally a role. Needs the redeployed `admin-users` function.
-- **Dashboard:** 🧪 Test Run sits under Active people and Admins online.
+- **Dashboard:** Test Run sits under Active people and Admins online.
 - **Windows updates itself** (see above).
 
 ## 2.1.1
@@ -161,44 +161,51 @@ Run `supabase/apoji-admin-2.1.sql` (already applied to the live project).
 
 ## 2.2
 Run `supabase/nexus-v3.7.sql` from the Nexus repo (adds `beta_events` and `admin_beta_stats`).
-- **β Beta:** a page per beta feature: who gets it (change it right there), uses this week, people in the last 30 days, 👍 / 👎 from one-tap beta feedback (and what people wrote), open bug reports (one tap to see them in Feedback), and whether it's used on Mac, PC, Test Run or a phone.
-- **Maintenance → 🔎 Web search:** one switch that turns off web search everywhere (Mac, PC, Test Run, N28C). Answers keep working.
+- **β Beta:** a page per beta feature: who gets it (change it right there), uses this week, people in the last 30 days, / from one-tap beta feedback (and what people wrote), open bug reports (one tap to see them in Feedback), and whether it's used on Mac, PC, Test Run or a phone.
+- **Maintenance → Web search:** one switch that turns off web search everywhere (Mac, PC, Test Run, N28C). Answers keep working.
 - **Mac and PC:** the hub page is the **Desktop hub** on the website (it can be a Mac or a PC), and the dashboard, releases, broadcasts and Nexus chat say Mac & PC.
 
 ## 2.3
 Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The updated `admin-users` function is already deployed.
-- **🔐 Admin access:** mods and admins ask for one thing at a time (edit accounts, make profiles, the changelog email, Axiom, test checklists, training data, roles, maintenance, feature flags). The Owner, and the high-admins the Owner picks as approvers, approve it for 7 days, 30 days or for good, or give it directly. The database checks every one, not just the page.
-- **Active on:** the Users list shows which apps each person uses (🍎 Mac app, 🪟 Windows app, 🧪 Test Run, 📱 N28C, 🛡 Apoji Admin), with 🟢 when they're on right now. Their profile has a **What they use** card with versions and when they started on each, and you get a 🎉 notification when a Test Run person installs the app.
-- **Feedback & bugs:** tabs for 🐞 Bugs, ✨ Feature ideas and 💬 Feedback (old "Feature & Fix" reports wait under 🛠 Unsorted with one-tap sorting). Reports can have screenshots (from Nexus, N28C or ＋ New report here), with ⬇ Save image.
-- **🧪 Testing:** "needs testing" checklists per release and platform (fill them from the release notes in one tap). Beta testers tick ✅ / ❌ / ⏭ in Nexus and Test Run; a fail can become a bug report in one tap.
-- **🧠 Training:** what beta testers share to train Nexus models (it's required to be a beta tester), a mind map of the plan, and JSONL exports for fine-tuning and for a test set.
+- **Admin access:** mods and admins ask for one thing at a time (edit accounts, make profiles, the changelog email, Axiom, test checklists, training data, roles, maintenance, feature flags). The Owner, and the high-admins the Owner picks as approvers, approve it for 7 days, 30 days or for good, or give it directly. The database checks every one, not just the page.
+- **Active on:** the Users list shows which apps each person uses (Mac app, Windows app, Test Run, N28C, Apoji Admin), with when they're on right now. Their profile has a **What they use** card with versions and when they started on each, and you get a notification when a Test Run person installs the app.
+- **Feedback & bugs:** tabs for Bugs, Feature ideas and Feedback (old "Feature & Fix" reports wait under Unsorted with one-tap sorting). Reports can have screenshots (from Nexus, N28C or ＋ New report here), with Save image.
+- **Testing:** "needs testing" checklists per release and platform (fill them from the release notes in one tap). Beta testers tick / / in Nexus and Test Run; a fail can become a bug report in one tap.
+- **Training:** what beta testers share to train Nexus models (it's required to be a beta tester), a mind map of the plan, and JSONL exports for fine-tuning and for a test set.
 - **Temporary passwords:** nobody can see someone's password (Supabase only keeps a one-way hash), so the Account card can make a one-time password instead; Nexus, Test Run and N28C ask them to pick their own when they sign in.
-- **Team chat:** typing indicator switches in My settings, ⬇ Save image on every picture, and the header fits on phones.
+- **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
+
+## 2.6.1
+
+Needs `supabase/nexus-v3.11.sql` from the Nexus repo.
+
+- **New models** (Agent prompts → New models): add a model with just a name, a prompt and its @features, then pick who gets it (admins, beta testers, everyone). Nexus, N28C and Test Run pick it up within 10 minutes and show a New model pop-up once; it runs on Lyte, Flash or Neodela until its own code ships with the next Nexus. Optional tagline, about text and color for the pop-up.
+- **Our own icons, everywhere:** the icon set now covers every emoji the Nexus apps used, and the same file (icons.js) draws them in Nexus '28, N28C and Test Run. No emojis in this README either.
 
 ## 2.6
 
 Needs `supabase/apoji-admin-2.6.sql` (this repo) for release planning. Mexel needs aARgon3 2.0 deployed (its `staff` Edge Function).
 
-- **🧾 Mexel** (MONEY in the menu): the aARgon3 2.0 staff system inside Apoji Admin. **Today** (sales today and the last 7 days, active subscriptions, who's on the clock, and your own clock in / break / clock out), **Orders** (search, details, and for managers cancel, cancel + refund, and free orders), **Sell** (a Stripe payment link and QR code the customer pays on their phone; it updates when they've paid), **Timesheets** (everyone's shifts for managers, fix a shift, CSV) and the staff **Log**. Any admin is staff; high-admins are managers. The desktop app (apoji://admin) needs the aARgon3 staff function from aArgon3 with `apoji://admin` in its allowed origins (`supabase/functions/_shared/lib.mjs`), then `supabase functions deploy staff --no-verify-jwt`.
-- **🗓 Release planning** on Releases: plan a version with a target date, a status (idea → planned → building → testing → released), which apps it's for and a checklist of features and fixes. Each plan shows its Testing gate; **🧪 Add to Testing** turns the checklist into test items and **📋 Copy release notes** gives you the changes.json entry.
-- **👁 Preview as** (Owner only, My settings): see Apoji Admin as a High-admin, a Viewer, an Admin or a Moderator. A yellow bar shows while you preview; Supabase still sees you as the Owner.
-- **🗑 Remove a feature flag** on Feature flags (apps fall back to their built-in setting).
-- **📚 The lessons on the Training map** (with who has each one), and the pushes under Ship.
+- **Mexel** (MONEY in the menu): the aARgon3 2.0 staff system inside Apoji Admin. **Today** (sales today and the last 7 days, active subscriptions, who's on the clock, and your own clock in / break / clock out), **Orders** (search, details, and for managers cancel, cancel + refund, and free orders), **Sell** (a Stripe payment link and QR code the customer pays on their phone; it updates when they've paid), **Timesheets** (everyone's shifts for managers, fix a shift, CSV) and the staff **Log**. Any admin is staff; high-admins are managers. The desktop app (apoji://admin) needs the aARgon3 staff function from aArgon3 with `apoji://admin` in its allowed origins (`supabase/functions/_shared/lib.mjs`), then `supabase functions deploy staff --no-verify-jwt`.
+- **Release planning** on Releases: plan a version with a target date, a status (idea → planned → building → testing → released), which apps it's for and a checklist of features and fixes. Each plan shows its Testing gate; **Add to Testing** turns the checklist into test items and **Copy release notes** gives you the changes.json entry.
+- **Preview as** (Owner only, My settings): see Apoji Admin as a High-admin, a Viewer, an Admin or a Moderator. A yellow bar shows while you preview; Supabase still sees you as the Owner.
+- **Remove a feature flag** on Feature flags (apps fall back to their built-in setting).
+- **The lessons on the Training map** (with who has each one), and the pushes under Ship.
 - **Our own icons** instead of emojis everywhere in the interface (`icons.js`; emojis people type are left alone). The mind map draws them too.
 
 ## 2.5
 
 Needs `supabase/nexus-v3.10.sql` from the Nexus repo.
 
-- **🧠 Training → 6 · Ship: push lessons.** Approved lessons reach admins first (try them with Check → Try a question). Push them to beta testers, then everyone: each push sends a notification (“🧠 Nexus learned 3 new things”) and shows the 👍 rate before and after. **Undo** stops them right away. Only the Owner and the high-admins the Owner picks (Admin access → 🚀 Push lessons) can push.
-- **✨ Auto-sort** pre-labels the review queue with the free model: looks good, looks wrong, personal info, unsure.
-- **🌳 Tree / ◉ Graph** on the Training map. Graph is Obsidian-style: dots that settle into place, hover to see connections.
-- **📊 Free API usage:** Nexus speech (Groq) against the free daily limits, Test Run, and the free key's credit.
-- **🧪 Testing:** 👥 Assign to testers (matched by the apps they use; each gets a notice), and the **release gate** (every test needs a ✅; shown on Testing and Releases, and asked before emailing the changelog).
-- **🧾 Redeem an order for a customer** from their drawer in Users (high-admins, or anyone given “Redeem orders for people”).
-- **🔺 Axiom's cage:** once the drivers are 2 days old, integrity wears down (−1% every 2 hours) and the security level slips a step a day until you update them. The cage shows the driver age, the wear, the odds of the next attempt and what to do.
-- **⚖ Terms:** the Terms & Conditions (`terms-data.js`, the same file as Nexus's `renderer/terms-data.js`; keep them the same). Admins agree to the admin part once per version.
+- **Training → 6 · Ship: push lessons.** Approved lessons reach admins first (try them with Check → Try a question). Push them to beta testers, then everyone: each push sends a notification (“Nexus learned 3 new things”) and shows the rate before and after. **Undo** stops them right away. Only the Owner and the high-admins the Owner picks (Admin access → Push lessons) can push.
+- **Auto-sort** pre-labels the review queue with the free model: looks good, looks wrong, personal info, unsure.
+- **Tree / ◉ Graph** on the Training map. Graph is Obsidian-style: dots that settle into place, hover to see connections.
+- **Free API usage:** Nexus speech (Groq) against the free daily limits, Test Run, and the free key's credit.
+- **Testing:** Assign to testers (matched by the apps they use; each gets a notice), and the **release gate** (every test needs a ; shown on Testing and Releases, and asked before emailing the changelog).
+- **Redeem an order for a customer** from their drawer in Users (high-admins, or anyone given “Redeem orders for people”).
+- **Axiom's cage:** once the drivers are 2 days old, integrity wears down (−1% every 2 hours) and the security level slips a step a day until you update them. The cage shows the driver age, the wear, the odds of the next attempt and what to do.
+- **Terms:** the Terms & Conditions (`terms-data.js`, the same file as Nexus's `renderer/terms-data.js`; keep them the same). Admins agree to the admin part once per version.
 
 ## 2.4.1
 
@@ -208,7 +215,7 @@ Needs `supabase/nexus-v3.10.sql` from the Nexus repo.
 ## 2.4
 Run `supabase/nexus-v3.9.sql` from the Nexus repo.
 - **Fixed:** Admin access, Testing, Training and "active on" didn't load in the Mac and Windows apps (their file wasn't packed into the app; a test now checks every page file).
-- **🧠 Training, a working mind map:** each step shows live numbers; click one to act on it. **Use** is the review queue: approve good answers (or testers' better answers) as **lessons**, with an optional one-line rule. Every agent in Nexus and Test Run looks up the matching lessons and all the rules before it answers. **Check** shows the 👍 rate this week vs last and lets you try a question to see which lessons it gets.
+- **Training, a working mind map:** each step shows live numbers; click one to act on it. **Use** is the review queue: approve good answers (or testers' better answers) as **lessons**, with an optional one-line rule. Every agent in Nexus and Test Run looks up the matching lessons and all the rules before it answers. **Check** shows the rate this week vs last and lets you try a question to see which lessons it gets.
 
 ### How model training works
 
@@ -218,7 +225,7 @@ Run `supabase/nexus-v3.9.sql` from the Nexus repo.
 2. **Clean:** emails, phone numbers, keys, passwords and link tokens are stripped on the device before sending.
 3. **Store:** Supabase `training_examples` (consent in `training_consent`); only admins with Training access can read it.
 4. **Use:** approved examples become lessons the agents follow; exports for fine-tuning a small open model and for a test set.
-5. **Check:** compare the 👍 rate before and after; run the test set; beta testers try changes first.
+5. **Check:** compare the rate before and after; run the test set; beta testers try changes first.
 6. **Ship:** new prompts or models go out with feature flags (admins → beta → everyone).
 
 ## Develop
