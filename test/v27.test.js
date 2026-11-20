@@ -48,7 +48,14 @@ const sql = read('supabase/apoji-admin-2.7.sql');
 assert.ok(/update public\.feature_flags set stage = 'all'/.test(sql) && ['citations', 'daily_challenge', 'homework_helper', 'nexus_wrapped', 'orb_skins', 'phone_companion'].every(k => sql.includes(`'${k}'`)));
 ok('early features for everyone (apoji-admin-2.7.sql)');
 
-assert.strictEqual(pkg.version, '2.7.0');
-assert.ok(admin.includes("VERSION: '2.7.0'") && read('sw.js').includes('apoji-admin-v2.7.0') && read('sw.js').includes("'./v27.js'") && html.includes('<script src="v27.js"></script>') && read('README.md').includes('## 2.7'));
-ok('version 2.7.0');
+// 2.7.1
+assert.ok(v27.includes('NX.mexelAccess = async') && v27.includes("['mexel', 'shifts', 'employees']") && v27.includes('Not on the staff list'));
+const em = read('electron/main.js');
+assert.ok(em.includes("updates.log") && em.includes("async function fallback()") && em.includes("['/S', '--force-run']") && em.includes("ipcMain.handle('update:state'") && read('electron/preload.js').includes('updateState'));
+assert.ok(read('supabase/aargon3-mexel-lockdown.sql').includes('if not coalesce(p_owner, false) then return null; end if;') && css.includes('.mx-store td:not(:first-child)'));
+ok('2.7.1: Mexel for the Owner and picked staff, Windows updates with a fallback and a log, By store fits');
+
+assert.ok(pkg.version.localeCompare('2.7.0', undefined, { numeric: true }) >= 0);
+assert.ok(admin.includes("VERSION: '" + pkg.version + "'") && read('sw.js').includes('apoji-admin-v' + pkg.version) && read('sw.js').includes("'./v27.js'") && html.includes('<script src="v27.js"></script>') && read('README.md').includes('## 2.7'));
+ok('version 2.7.0 or newer');
 console.log(`Apoji Admin 2.7: ${n} checks passed`);

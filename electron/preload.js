@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('apojiDesktop', {
   platform: process.platform,   // 2.0.4: 'darwin' or 'win32'
   onUpdate: fn => ipcRenderer.on('update', (_e, u) => fn(u)),
   installUpdate: () => ipcRenderer.invoke('update:install'),   // 2.1 Windows: restart into the downloaded update
+  updateState: () => ipcRenderer.invoke('update:state'),   // 2.7: what the updater is doing (My settings)
+  checkUpdate: () => ipcRenderer.send('update:check'),
   // 1.2: the Mac hub (Tailscale, phone notifications, keep awake, schedules)
   hub: {
     status: fresh => ipcRenderer.invoke('hub:status', !!fresh),

@@ -176,6 +176,16 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.7.1
+
+Mexel is locked down: run `aargon3-mexel-lockdown.sql` (in the aARgon3 project) so only the owner and the people on its staff list get in.
+
+- **Mexel, Shifts and Employees are for the Owner and the staff the Owner picks.** Nexus admins are no longer added to the staff list automatically; add people in STAFF → Employees and switch anyone off there. Everyone else doesn't see MONEY or STAFF at all.
+- **Windows updates install.** Every step goes in updates.log, the window says what's happening, quitting from the tray installs a downloaded update, and if the automatic updater fails, Apoji Admin downloads the installer from the release and runs it by itself. My settings has an Updates card with Check now, Restart and update, and the log.
+- **Sales → By store** uses the whole width, so long store names and the numbers fit.
+- **API usage → Server functions** can reach premium-chat and try-chat (needs those two redeployed from Nexus 3.11.1).
+- The Owner's crown is gold everywhere the icon set draws it.
+
 ## 2.7
 
 Needs `supabase/apoji-admin-2.7.sql` (this repo, Nexus project). Mexel's new tabs and STAFF need aARgon3 2.1 or newer (its `staff` function). The Paragon & Axiom models need the premium-chat function from Nexus 3.11.1.

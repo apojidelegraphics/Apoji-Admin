@@ -60,9 +60,9 @@
           <polyline points="${line}" fill="none" class="mx-cum"/></svg>
           <div class="mx-rev-x">${months.map(m => `<span>${mName(m.month)}<b>${money0(m.revenue)}</b></span>`).join('')}</div></div>
         <p class="muted mx-legend"><i class="sw bar"></i> revenue each month <i class="sw line"></i> running total (${money0(run)})</p></div>
+<div class="card mx-store"><h3>By store</h3><div class="mx-scroll">${(r.top_stores || []).length ? `<table class="cards"><tr><th>Store</th><th>Orders</th><th>Revenue</th><th>Average</th></tr>${r.top_stores.map(x => `<tr><td><b>${esc(x.name === '—' ? 'Online / no store' : x.name)}</b></td><td>${x.orders}</td><td>${money(x.revenue)}</td><td>${money((+x.revenue || 0) / Math.max(1, +x.orders || 0))}</td></tr>`).join('')}</table>` : '<p class="muted">Nothing yet.</p>'}</div></div>
       <div class="grid2">
         <div class="card"><h3>Orders by plan type</h3>${plans.length ? `<div class="mx-donut-row">${donut(plans.map(x => +x.orders || 0))}<div class="mx-bars">${plans.map((x, i) => `<div class="mx-bar"><div class="row"><i class="sw" style="background:${PAL[i % PAL.length]}"></i><b>${esc(cap(x.key))}</b><span class="sp"></span><span>${x.orders} · ${Math.round(x.orders / totalOrders * 100)}%</span></div><small class="muted">${money(x.revenue)} · avg ${money((+x.revenue || 0) / Math.max(1, +x.orders || 0))}</small></div>`).join('')}</div></div>` : '<p class="muted">Nothing yet.</p>'}</div>
-        <div class="card"><h3>By store</h3>${(r.top_stores || []).length ? `<table class="cards"><tr><th>Store</th><th>Orders</th><th>Revenue</th><th>Average</th></tr>${r.top_stores.map(x => `<tr><td><b>${esc(x.name === '—' ? 'Online / no store' : x.name)}</b></td><td>${x.orders}</td><td>${money(x.revenue)}</td><td>${money((+x.revenue || 0) / Math.max(1, +x.orders || 0))}</td></tr>`).join('')}</table>` : '<p class="muted">Nothing yet.</p>'}</div>
         <div class="card"><h3>By tier</h3>${bars(r.by_tier || [])}</div>
         <div class="card"><h3>Where orders come from</h3>${bars(r.by_source || [], { label: x => ({ web: 'Online store', staff: 'Sold in store', comp: 'Free orders', quote: 'Custom orders & quotes', legacy: 'Before aARgon3 2.0' })[x.key] || x.key })}</div>
         ${mine ? '' : `<div class="card"><h3>Top sellers</h3>${(r.top_staff || []).length ? `<table class="cards"><tr><th>Seller</th><th>Orders</th><th>Revenue</th></tr>${r.top_staff.map((x, i) => `<tr><td><b>${i + 1}. ${esc(x.name)}</b></td><td>${x.orders}</td><td>${money(x.revenue)}</td></tr>`).join('')}</table>` : '<p class="muted">Nothing yet.</p>'}</div>`}
@@ -365,4 +365,45 @@
     { name: 'checkout', project: 'aARgon3', what: 'The online store’s Stripe checkout', secret: 'STRIPE_SECRET_KEY', base: STORE, key: SKEY },
     { serverOnly: true, name: 'stripe-webhook', project: 'aARgon3', what: 'Payments and renewals from Stripe', secret: 'STRIPE_WEBHOOK_SECRET', base: STORE, key: SKEY }
   ];
+})();
+
+// =========================================================== 2.7.1: Mexel is for the Owner and the staff they pick
+// The aARgon3 staff function decides (only the owner and people on its staff list get in; see aargon3-mexel-lockdown.sql).
+// Apoji Admin asks it once and hides MONEY and STAFF from everyone else.
+(function () {
+  const A = NX.A, P = NX.pages, $ = NX.$, esc = NX.esc;
+  const TABS = ['mexel', 'shifts', 'employees'];
+  let access = null, asking = null;
+  NX.mexelAccess = async (fresh = false) => {
+    if (A.realOwner || A.owner) return (access = true);
+    if (access !== null && !fresh) return access;
+    asking = asking || NX.mexel('me').then(r => { NX.mexelState.me = r.user; NX.mexelState.state = r.state; NX.mexelState.overview = r.overview; NX.mexelState.at = Date.now(); return true; }, () => false).finally(() => { asking = null; });
+    access = await asking; paintNav(); return access;
+  };
+  function paintNav() {
+    const nav = document.getElementById('nav'); if (!nav) return;
+    const show = access === true || A.owner || A.realOwner;
+    for (const t of TABS) { const b = nav.querySelector(`[data-tab="${t}"]`); if (b) b.hidden = !show; }
+    for (const h of nav.querySelectorAll('h6')) if (/^(MONEY|STAFF)$/.test(h.textContent.trim())) h.hidden = !show;
+  }
+  const kick = () => { if (access !== null) return; if (A.user) NX.mexelAccess(); else setTimeout(kick, 1500); };
+  new MutationObserver(() => { if (document.getElementById('nav') && !document.getElementById('nav').dataset.mx) { document.getElementById('nav').dataset.mx = 1; paintNav(); kick(); } }).observe(document.body, { childList: true, subtree: true });
+  const locked = () => NX.main(`<h1>🧾 Mexel</h1><div class="card"><h3>Not on the staff list</h3><p class="muted">Mexel, Shifts and Employees are for the Owner and the staff the Owner adds. Ask them to add you in STAFF → Employees.</p></div>`, { cards: false });
+  for (const t of TABS) { const page = P[t]; if (page) P[t] = async (...a) => { if (!(await NX.mexelAccess())) return locked(); return page(...a); }; }
+
+  // =========================================================== 2.7.1: Windows updates, visible (My settings)
+  const meBefore = P.me;
+  if (meBefore && window.apojiDesktop?.updateState) P.me = async (...a) => {
+    await meBefore(...a);
+    if (A.tab !== 'me') return;
+    const st = await window.apojiDesktop.updateState().catch(() => null); if (!st || A.tab !== 'me') return;
+    const card = document.createElement('div'); card.className = 'card'; card.id = 'updCard';
+    card.innerHTML = `<h3>Updates</h3><div class="kv"><span>This version</span><span>${esc(st.current)}</span><span>Status</span><span>${st.ready ? `${esc(st.ready)} is downloaded and ready` : st.error ? `<span class="err">${esc(st.error)}</span>` : 'Up to date, or checking in the background'}</span><span>How</span><span>${st.auto ? 'Automatic (downloads by itself, installs when you restart or quit)' : 'Download from GitHub'}</span></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="updCheck">Check now</button>${st.ready ? '<button class="btn primary" id="updGo">Restart and update</button>' : ''}<span class="sp"></span>${st.log ? '<button class="btn ghost sm" id="updLog">Show the log</button>' : ''}</div><pre class="info" id="updPre" hidden>${esc(st.log || '')}</pre>`;
+    ($('main').querySelector('.card:last-of-type') || $('main')).after(card);
+    card.onclick = e => { const b = e.target.closest('button'); if (!b) return;
+      if (b.id === 'updCheck') { window.apojiDesktop.checkUpdate(); NX.toast('Checking…'); }
+      if (b.id === 'updGo') window.apojiDesktop.installUpdate();
+      if (b.id === 'updLog') card.querySelector('#updPre').hidden = !card.querySelector('#updPre').hidden; };
+  };
 })();

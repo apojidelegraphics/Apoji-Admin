@@ -67,28 +67,70 @@ ipcMain.handle('version', () => app.getVersion());
 // 2.1: automatic updates on Windows (electron-updater + the release's latest.yml): downloads in the background, then
 // asks to restart; if you don't, it installs the next time Apoji Admin quits. Macs keep the download link (an unsigned
 // Mac app can't replace itself).
-let winUpdater = null, winReady = null;
+// 2.7: updates didn't install for people who keep Apoji Admin running in the tray, and failures were silent. Now every
+// step is written to updates.log, the window is told what's happening, and if electron-updater fails for any reason
+// the app downloads the installer from the release itself and runs it silently (then reopens).
+const fs = require('fs'), os = require('os');
+let winUpdater = null, winReady = null, fallbackExe = null, lastErr = '';
+const ulog = (...a) => { try { fs.appendFileSync(path.join(app.getPath('userData'), 'updates.log'), `[${new Date().toISOString()}] ${a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')}\n`); } catch {} console.log('[update]', ...a); };
+const tell = u => win?.webContents.send('update', { ...u, current: app.getVersion() });
 function setupWinUpdates() {
   if (!WIN || !app.isPackaged) return;
   try {
     winUpdater = require('electron-updater').autoUpdater;
-    winUpdater.autoDownload = true; winUpdater.autoInstallOnAppQuit = true;
-    winUpdater.on('update-downloaded', info => { winReady = info.version; win?.webContents.send('update', { latest: info.version, ready: true }); });
-    winUpdater.on('error', e => console.log('[update]', e?.message || e));
-  } catch (e) { console.log('[update]', e.message); winUpdater = null; }
+    winUpdater.autoDownload = true; winUpdater.autoInstallOnAppQuit = true; winUpdater.logger = { info: m => ulog('info', m), warn: m => ulog('warn', m), error: m => ulog('error', m), debug: () => {} };
+    winUpdater.on('update-available', info => { ulog('available', info.version); tell({ latest: info.version, downloading: true }); });
+    winUpdater.on('update-not-available', info => ulog('up to date', info?.version || ''));
+    winUpdater.on('update-downloaded', info => { winReady = info.version; ulog('downloaded', info.version); tell({ latest: info.version, ready: true }); });
+    winUpdater.on('error', e => { lastErr = String(e?.message || e).slice(0, 300); ulog('error', lastErr); fallback().catch(er => ulog('fallback failed', er.message)); });
+  } catch (e) { ulog('no electron-updater', e.message); winUpdater = null; }
 }
-ipcMain.handle('update:install', () => { if (winUpdater && winReady) { app.isQuitting = true; setImmediate(() => winUpdater.quitAndInstall(true, true)); return true; } return false; });
+// the fallback: fetch the latest release's installer and run it silently
+async function latestRelease() {
+  const r = await net.fetch('https://api.github.com/repos/apojidelegraphics/Apoji-Admin/releases/latest', { headers: { 'User-Agent': 'Apoji-Admin' } });
+  if (!r.ok) throw new Error('GitHub said ' + r.status);
+  return r.json();
+}
+async function fallback() {
+  if (!WIN || !app.isPackaged || fallbackExe || winReady) return;
+  const j = await latestRelease(), latest = String(j.tag_name || '').replace(/^v/, '');
+  if (!latest || latest.localeCompare(app.getVersion(), undefined, { numeric: true }) <= 0) return;
+  const asset = (j.assets || []).find(a => /\.exe$/i.test(a.name) && /setup/i.test(a.name)) || (j.assets || []).find(a => /\.exe$/i.test(a.name));
+  if (!asset) throw new Error('no installer in the release');
+  ulog('fallback download', asset.name); tell({ latest, downloading: true });
+  const res = await net.fetch(asset.browser_download_url, { headers: { 'User-Agent': 'Apoji-Admin', Accept: 'application/octet-stream' } });
+  if (!res.ok) throw new Error('download failed ' + res.status);
+  const file = path.join(os.tmpdir(), asset.name); fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+  fallbackExe = file; winReady = latest; ulog('fallback ready', file); tell({ latest, ready: true });
+}
+function runFallback() {
+  if (!fallbackExe) return false;
+  ulog('running installer', fallbackExe); app._nxInstalling = true;
+  require('child_process').spawn(fallbackExe, ['/S', '--force-run'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  app.isQuitting = true; setTimeout(() => app.quit(), 400); return true;
+}
+ipcMain.handle('update:install', () => {
+  if (fallbackExe) return runFallback();
+  if (winUpdater && winReady) { app.isQuitting = true; ulog('quitAndInstall', winReady); setImmediate(() => winUpdater.quitAndInstall(true, true)); return true; }
+  return false;
+});
+ipcMain.on('update:check', () => checkUpdate(true));
+ipcMain.handle('update:state', () => ({ current: app.getVersion(), ready: winReady, error: lastErr, auto: !!winUpdater, log: (() => { try { return fs.readFileSync(path.join(app.getPath('userData'), 'updates.log'), 'utf8').split('\n').slice(-30).join('\n'); } catch { return ''; } })() }));
+// quitting from the tray installs a downloaded update too (the hub keeps the app alive, so "on quit" rarely happened)
+app.on('before-quit', () => { if (fallbackExe && !app._nxInstalling) { app._nxInstalling = true; require('child_process').spawn(fallbackExe, ['/S'], { detached: true, stdio: 'ignore', windowsHide: true }).unref(); } });
 // A quiet update check against GitHub Releases (Help menu shows it too)
 async function checkUpdate(manual) {
-  if (winUpdater) {
-    if (winReady) { win?.webContents.send('update', { latest: winReady, ready: true }); return; }
-    try { const r = await winUpdater.checkForUpdates(); const v = r?.updateInfo?.version; if (manual) win?.webContents.send('update', v && v !== app.getVersion() ? { latest: v, downloading: true } : { latest: '', current: app.getVersion() }); }
-    catch { if (manual) shell.openExternal(RELEASES); }
+  if (WIN && app.isPackaged) {
+    if (winReady) { tell({ latest: winReady, ready: true }); return; }
+    if (winUpdater) {
+      try { ulog('check'); const r = await winUpdater.checkForUpdates(); const v = r?.updateInfo?.version; if (manual) tell(v && v.localeCompare(app.getVersion(), undefined, { numeric: true }) > 0 ? { latest: v, downloading: true } : { latest: '' }); return; }
+      catch (e) { lastErr = String(e?.message || e).slice(0, 300); ulog('check failed', lastErr); }
+    }
+    try { await fallback(); if (manual && !winReady) tell({ latest: '' }); } catch (e) { ulog('fallback failed', e.message); if (manual) shell.openExternal(RELEASES); }
     return;
   }
   try {
-    const r = await net.fetch('https://api.github.com/repos/apojidelegraphics/Apoji-Admin/releases/latest', { headers: { 'User-Agent': 'Apoji-Admin' } });
-    const j = await r.json(); const latest = String(j.tag_name || '').replace(/^v/, '');
+    const j = await latestRelease(); const latest = String(j.tag_name || '').replace(/^v/, '');
     const newer = latest && latest.localeCompare(app.getVersion(), undefined, { numeric: true }) > 0;
     if (newer) win?.webContents.send('update', { latest, url: j.html_url || RELEASES });
     else if (manual) win?.webContents.send('update', { latest: '', current: app.getVersion() });

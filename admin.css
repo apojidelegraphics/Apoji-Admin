@@ -675,3 +675,7 @@ h3 svg.ico { color: var(--accent); }
   .mx-rev-x b { display: none; } .mx-you-head { flex-wrap: wrap; } .mx-body { gap: 12px; }
 }
 .api-premium table.cards { margin-top: 12px; } .api-premium .tr-days { margin-top: 12px; }
+/* 2.7.1: By store gets the whole width; numbers never wrap */
+.mx-scroll { overflow-x: auto; } .mx-store table { min-width: 520px; }
+.mx-store td:not(:first-child), .mx-store th:not(:first-child) { white-space: nowrap; text-align: right; } .mx-store td:first-child { min-width: 200px; }
+@media (max-width: 760px) { .mx-store table { min-width: 0; } .mx-store td:first-child { min-width: 0; } .mx-store td:not(:first-child) { text-align: left; } }

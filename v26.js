@@ -42,7 +42,7 @@
     if (A.arg === 'time') return NX.go('shifts');
     if (A.arg && TABS.some(t => t[0] === A.arg)) M.tab = A.arg;
     const tabsFor = () => TABS.filter(t => t[2] !== 'm' || !M.me || M.me.manager);
-    NX.main(`<h1>🧾 Mexel</h1><p class="mx-intro">The money side of Apoji: aARgon3 store orders, sales, promotions and the clock. Shifts and employees are under STAFF. You’re staff because you’re an admin${A.level === 'high-admin' ? '; as a high-admin you’re a manager too (refunds, free orders, promotions).' : '.'}</p>
+    NX.main(`<h1>🧾 Mexel</h1><p class="mx-intro">The money side of Apoji: aARgon3 store orders, sales, promotions and the clock. Shifts and employees are under STAFF. Only the Owner and the staff the Owner adds can open it.</p>
       <div class="seg mx-tabs">${tabsFor().map(([k, l]) => `<button class="${M.tab === k ? 'on' : ''}" data-mxtab="${k}">${l}</button>`).join('')}</div><div id="mx" class="mx-body"><div class="card"><span class="spinner"></span></div></div>`, { cards: false });
     $('main').querySelector('.mx-tabs').onclick = e => { const b = e.target.closest('[data-mxtab]'); if (!b) return; M.tab = b.dataset.mxtab; NX.go('mexel', { arg: M.tab }); };
     try {
