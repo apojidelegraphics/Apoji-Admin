@@ -176,6 +176,19 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.7
+
+Needs `supabase/apoji-admin-2.7.sql` (this repo, Nexus project). Mexel's new tabs and STAFF need aARgon3 2.1 or newer (its `staff` function). The Paragon & Axiom models need the premium-chat function from Nexus 3.11.1.
+
+- **Mexel → Sales:** gross revenue all time and month by month (with a running total), total orders, average order, this month, monthly recurring, active subscriptions, orders by plan type, by store, by tier, where orders come from and top sellers. Managers can switch between everyone and just their own sales.
+- **Mexel → You:** your sales, hours, upcoming shifts, the last two weeks, your details (name, title, phone, usual store, color) and time off requests.
+- **Mexel → Promotions** (managers): make promotion codes (percent or dollars off, first payment / some months / every payment, plans, tiers, minimum order, end date, use limit), copy them, switch them on and off, and see how often each was used.
+- **STAFF in the sidebar:** **Shifts** (this week's schedule by day, add, change and delete shifts, copy last week, hours per person, timesheets) and **Employees** (the team with hours, sales and next shift, add or edit someone, roles and pay for the owner, time off to approve).
+- **Release plans:** Copy info copies a plan as plain text (version, date, status, apps, features, fixes, other, notes); every item can be edited, re-kinded and reordered after saving; more room in the cards and the editor.
+- **API usage** (was Free API usage): the Paragon & Axiom key (tasks, calls, people, the last two weeks, who used it most), which models it runs (Owner and high-admin editors pick any OpenRouter model; apps follow within a minute) and a check of every server function.
+- The early features Citation helper, Daily challenge, Homework helper, Nexus Wrapped, Orb skins and the phone companion are for everyone.
+- Fixes: the last emojis in Team chat and Feedback & bugs are icons now (reactions and what people type stay as they are); the Owner's crown is gold again; on a phone, a profile or any drawer has a Close bar, closes with a swipe to the right or the Back gesture, and the close button sits below the status bar; Close and Cancel buttons in Mexel and release plan dialogs work; Mexel spacing.
+
 ## 2.6.1
 
 Needs `supabase/nexus-v3.11.sql` from the Nexus repo.

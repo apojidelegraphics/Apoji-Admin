@@ -19,7 +19,7 @@ ok('Training → Ship: push lessons admins → beta → everyone with the 👍 r
 assert.ok(v25.includes('NX.trainingAutoSort') && v25.includes("model: 'openrouter/free'") && /'good', 'wrong', 'private', 'unsure'/.test(v25) && v23.includes("id=\"trAuto\"") && v23.includes("auto_label,auto_note"));
 ok('✨ Auto-sort pre-labels the review queue with the free model (and flags personal info)');
 
-assert.ok(v25.includes('P.freeapi = async') && v25.includes("sb.rpc('admin_free_usage')") && read('admin.js').includes("['freeapi', '📊', 'Free API usage']") && read('features.js').includes('NX.freeKeyCredit'));
+assert.ok(v25.includes('P.freeapi = async') && v25.includes("sb.rpc('admin_free_usage')") && /\['freeapi', '📊', '(Free )?API usage'\]/.test(read('admin.js')) && read('features.js').includes('NX.freeKeyCredit'));
 ok('📊 Free API usage: Nexus speech against Groq’s free limits, Test Run, and the free key’s credit');
 
 assert.ok(v25.includes("sb.rpc('admin_assign_tests'") && v25.includes("sb.rpc('admin_testers')") && v25.includes('id="asAuto"') && v25.includes("sb.rpc('admin_release_gate'"));

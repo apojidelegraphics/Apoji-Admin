@@ -164,8 +164,9 @@
     ['INBOX', [['access', '🔑', 'Access requests', 'access'], ['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['perms', '🔐', 'Admin access', 'perms']]],
     ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['beta', 'β', 'Beta'], ['testing', '🧪', 'Testing'], ['prompts', '✍', 'Agent prompts'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
-    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['training', '🧠', 'Training'], ['freeapi', '📊', 'Free API usage'], ['audit', '📜', 'Audit log']]],
+    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['training', '🧠', 'Training'], ['freeapi', '📊', 'API usage'], ['audit', '📜', 'Audit log']]],
     ['MONEY', [['mexel', '🧾', 'Mexel']]],
+    ['STAFF', [['shifts', '🗓', 'Shifts'], ['employees', '👥', 'Employees']]],
     ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['terms', '⚖', 'Terms'], ['me', '⚙︎', 'My settings']]]
   ];
   const ALL_TABS = TABS.flatMap(g => g[1].map(t => t[0]));
@@ -215,14 +216,23 @@
       t.querySelectorAll('tr').forEach(r => [...r.children].forEach((c, i) => { if (c.tagName === 'TD' && hs[i] && !c.hasAttribute('colspan')) c.dataset.l = hs[i]; }));
     });
   }
-  function closeOverlays() { document.querySelectorAll('.scrim,.drawer,.modal,.rpick,.mentions,.emojis,.lightbox').forEach(e => e.remove()); }
+  function closeOverlays() { document.querySelectorAll('.scrim,.drawer,.modal,.rpick,.mentions,.emojis,.lightbox,.drawer-done').forEach(e => e.remove()); }
+  addEventListener('popstate', () => { if (document.querySelector('.drawer,.modal')) document.querySelectorAll('.scrim,.drawer,.modal,.drawer-done').forEach(e => e.remove()); });
   function overlay(kind, html) {
     closeOverlays();
     const scrim = document.createElement('div'); scrim.className = 'scrim';
-    const el = document.createElement('div'); el.className = kind; el.innerHTML = `<button class="btn sm x" data-x>✕</button>${html}`;
-    const close = () => { scrim.remove(); el.remove(); };
-    scrim.onclick = close; el.addEventListener('click', e => { if (e.target.closest('[data-x]')) close(); });
-    document.body.append(scrim, el);
+    const el = document.createElement('div'); el.className = kind; el.innerHTML = `<button class="btn sm x" data-x aria-label="Close">✕</button>${html}`;
+    // 2.7: on phones a drawer covers the whole screen, so it also gets a Close bar at the bottom, a swipe to the right
+    // closes it, and the phone's back gesture / browser Back closes it instead of leaving the page
+    const done = kind === 'drawer' ? Object.assign(document.createElement('button'), { className: 'btn drawer-done', textContent: 'Close' }) : null;
+    let closed = false;
+    const close = () => { if (closed) return; closed = true; scrim.remove(); el.remove(); done?.remove(); if (history.state?.nxOverlay) history.back(); };
+    scrim.onclick = close; el.addEventListener('click', e => { if (e.target.closest('[data-x],[data-close]')) close(); });
+    if (done) { done.onclick = close; let x0 = null, y0 = 0; el.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+      el.addEventListener('touchend', e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = Math.abs(e.changedTouches[0].clientY - y0); x0 = null; if (dx > 90 && dy < 60) close(); }, { passive: true }); }
+    document.body.append(scrim, el, ...(done ? [done] : []));
+    if (innerWidth <= 760) try { history.pushState({ nxOverlay: 1 }, '', location.href); } catch {}
+    el._close = close;
     return { el, close };
   }
   const drawer = html => overlay('drawer', html), modal = html => overlay('modal', html);
@@ -377,7 +387,7 @@
   const NX = window.NX = {
     sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {}, WIN: IS_WIN, pc, VERSION: '2.6.1',
+    pages: {}, WIN: IS_WIN, pc, VERSION: '2.7.0',
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,

@@ -35,15 +35,21 @@
     try { M.catalog = await (await fetch(`${STORE_SITE}/catalog.json`, { cache: 'no-store' })).json(); } catch { M.catalog = null; }
     return M.catalog;
   }
-  const TABS = [['today', 'Today'], ['orders', 'Orders'], ['sell', 'Sell'], ['time', 'Timesheets'], ['log', 'Log']];
+  // 2.7: Sales, Promotions and You (v27.js); Timesheets moved to STAFF → Shifts; m = managers only
+  const TABS = [['today', 'Today'], ['sales', 'Sales'], ['orders', 'Orders'], ['sell', 'Sell'], ['promos', 'Promotions', 'm'], ['you', 'You'], ['log', 'Log', 'm']];
+  NX.mexelTabs = NX.mexelTabs || {};
   P.mexel = async () => {
+    if (A.arg === 'time') return NX.go('shifts');
     if (A.arg && TABS.some(t => t[0] === A.arg)) M.tab = A.arg;
-    NX.main(`<h1>🧾 Mexel</h1><p>The money side of Apoji: aARgon3 store orders, sales, the clock and timesheets. You’re staff because you’re an admin${A.level === 'high-admin' ? '; as a high-admin you’re a manager too (refunds, free orders, everyone’s timesheets).' : '.'}</p>
-      <div class="seg mx-tabs">${TABS.map(([k, l]) => `<button class="${M.tab === k ? 'on' : ''}" data-mxtab="${k}">${l}</button>`).join('')}</div><div id="mx"><div class="card"><span class="spinner"></span></div></div>`, { cards: false });
+    const tabsFor = () => TABS.filter(t => t[2] !== 'm' || !M.me || M.me.manager);
+    NX.main(`<h1>🧾 Mexel</h1><p class="mx-intro">The money side of Apoji: aARgon3 store orders, sales, promotions and the clock. Shifts and employees are under STAFF. You’re staff because you’re an admin${A.level === 'high-admin' ? '; as a high-admin you’re a manager too (refunds, free orders, promotions).' : '.'}</p>
+      <div class="seg mx-tabs">${tabsFor().map(([k, l]) => `<button class="${M.tab === k ? 'on' : ''}" data-mxtab="${k}">${l}</button>`).join('')}</div><div id="mx" class="mx-body"><div class="card"><span class="spinner"></span></div></div>`, { cards: false });
     $('main').querySelector('.mx-tabs').onclick = e => { const b = e.target.closest('[data-mxtab]'); if (!b) return; M.tab = b.dataset.mxtab; NX.go('mexel', { arg: M.tab }); };
     try {
       const r = await mexel('me'); M.me = r.user; M.state = r.state; M.overview = r.overview; M.at = Date.now();
-      await ({ today, orders, sell, time, log })[M.tab]();
+      const tabs = $('main').querySelector('.mx-tabs'); if (tabs) tabs.innerHTML = tabsFor().map(([k, l]) => `<button class="${M.tab === k ? 'on' : ''}" data-mxtab="${k}">${l}</button>`).join('');
+      if (!tabsFor().some(t => t[0] === M.tab)) M.tab = 'today';
+      await (({ today, orders, sell, log, ...NX.mexelTabs })[M.tab] || today)();
     } catch (e) { if ($('mx')) $('mx').innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
   };
   const mgr = () => !!M.me?.manager;
@@ -186,27 +192,27 @@
   // ---------- Timesheets
   M.from = M.from || (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; })();
   M.to = M.to || new Date(M.from.getTime() + 7 * 864e5);
-  async function time() {
+  async function time(host = box()) {
     const day = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
-    box().innerHTML = `<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><label class="muted">From <input class="field" type="date" id="tsF" value="${day(M.from)}"></label><label class="muted">to <input class="field" type="date" id="tsT" value="${day(new Date(M.to - 864e5))}"></label>
+    host.innerHTML = `<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><label class="muted">From <input class="field" type="date" id="tsF" value="${day(M.from)}"></label><label class="muted">to <input class="field" type="date" id="tsT" value="${day(new Date(M.to - 864e5))}"></label>
       ${mgr() ? `<label class="row"><input type="checkbox" id="tsAll" ${M.everyone ? 'checked' : ''}> Everyone</label>` : ''}<button class="btn" id="tsGo">Show</button><span class="sp"></span><button class="btn" id="tsCsv">⬇ CSV</button></div><div id="tsList"><div class="card"><span class="spinner"></span></div></div>`;
     let rows = [];
     const paint = async () => {
       rows = await mexel('shifts', { from: M.from.toISOString(), to: M.to.toISOString(), everyone: !!M.everyone });
       const by = {}; for (const s of rows) (by[s.name || 'Staff'] ||= []).push(s);
-      $('tsList').innerHTML = Object.entries(by).map(([name, list]) => `<div class="card"><div class="row"><h3 style="margin:0">${esc(name)}</h3><span class="sp"></span><b>${hm(list.reduce((n, s) => n + s.minutes, 0))}</b><span class="muted">· ${money(list.reduce((n, s) => n + (+s.sales || 0), 0))} in sales</span></div>
+      host.querySelector('#tsList').innerHTML = Object.entries(by).map(([name, list]) => `<div class="card"><div class="row"><h3 style="margin:0">${esc(name)}</h3><span class="sp"></span><b>${hm(list.reduce((n, s) => n + s.minutes, 0))}</b><span class="muted">· ${money(list.reduce((n, s) => n + (+s.sales || 0), 0))} in sales</span></div>
         <table class="cards"><tr><th>Day</th><th>Store</th><th>In</th><th>Out</th><th>Breaks</th><th>Worked</th><th></th></tr>${list.map(s => `<tr><td>${new Date(s.clock_in).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</td><td>${esc(s.store || s.store_code || '—')}</td>
           <td>${new Date(s.clock_in).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td><td>${s.clock_out ? new Date(s.clock_out).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '<span class="pill p-approved">ON</span>'}${s.forgot ? ' <span class="pill p-pending" title="Clocked out later with the real time">FORGOT</span>' : ''}${s.edited_by ? ` <span class="muted" title="Fixed by ${esc(s.edited_by)}">✎</span>` : ''}</td>
           <td>${(s.breaks || []).length}</td><td><b>${hm(s.minutes)}</b></td><td>${mgr() ? `<button class="btn sm" data-edit="${s.id}">Fix</button>` : ''}</td></tr>${s.note ? `<tr><td colspan="7" class="muted">“${esc(s.note)}”</td></tr>` : ''}`).join('')}</table></div>`).join('') || '<div class="card"><p class="muted">No shifts in these dates.</p></div>';
       NX.labelTables?.();
     };
-    box().onclick = async e => {
+    host.onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
-      if (b.id === 'tsGo') { M.from = new Date($('tsF').value + 'T00:00'); M.to = new Date(new Date($('tsT').value + 'T00:00').getTime() + 864e5); M.everyone = !!$('tsAll')?.checked; return paint().catch(er => toast(er.message, true)); }
+      if (b.id === 'tsGo') { M.from = new Date(host.querySelector('#tsF').value + 'T00:00'); M.to = new Date(new Date(host.querySelector('#tsT').value + 'T00:00').getTime() + 864e5); M.everyone = !!host.querySelector('#tsAll')?.checked; return paint().catch(er => toast(er.message, true)); }
       if (b.id === 'tsCsv') {
         const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
         const csv = ['Name,Store,Clock in,Clock out,Breaks,Minutes,Sales,Orders,Note,Forgot,Fixed by', ...rows.map(s => [s.name, s.store || s.store_code, s.clock_in, s.clock_out, (s.breaks || []).length, s.minutes, s.sales, s.orders, s.note, s.forgot ? 'yes' : '', s.edited_by].map(q).join(','))].join('\n');
-        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `mexel-timesheets-${$('tsF').value}.csv`; a.click(); return;
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `mexel-timesheets-${host.querySelector('#tsF').value}.csv`; a.click(); return;
       }
       if (b.dataset.edit) {
         const s = rows.find(x => x.id === +b.dataset.edit); if (!s) return;
@@ -221,6 +227,7 @@
     };
     await paint();
   }
+  NX.mexelTimesheets = time;
 
   // ---------- Log (managers)
   async function log() {
@@ -236,6 +243,16 @@
   const PST = { idea: ['Idea', 'p-closed'], planned: ['Planned', 'p-pending'], building: ['Building', 'p-reviewing'], testing: ['Testing', 'p-reviewing'], released: ['Released', 'p-approved'], dropped: ['Dropped', 'p-declined'] };
   const APPS = { nexus: "Nexus '28", admin: 'Apoji Admin', n28c: 'N28C', test_run: 'Test Run', aargon3: 'aARgon3' };
   const canPlan = () => !A.viewer && (A.owner || NX.can('changelog'));
+  // 2.7: a plain-text summary of a plan, to paste anywhere (Copy info)
+  const planText = p => {
+    const it = p.items || [], grp = k => it.filter(x => (x.kind || 'feature') === k);
+    const sec = (h, list) => list.length ? `\n${h}:\n${list.map(x => `- ${x.text}${x.done ? ' (done)' : ''}`).join('\n')}\n` : '';
+    return [`${p.version}${p.title ? ' — ' + p.title : ''}`,
+      [p.target_date ? 'Target: ' + new Date(p.target_date + 'T12:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '', 'Status: ' + (PST[p.status]?.[0] || p.status), (p.apps || []).length ? 'Apps: ' + p.apps.map(a => APPS[a] || a).join(', ') : ''].filter(Boolean).join(' · ')]
+      .join('\n') + '\n' + sec('Features', grp('feature')) + sec('Fixes', grp('fix')) + sec('Other', grp('chore')) + (p.notes ? `\nNotes:\n${p.notes}\n` : '');
+  };
+  const copyPlan = p => { navigator.clipboard?.writeText(planText(p)); toast('Copied the plan'); };
+  NX.planText = planText;
   NX.releasePlans = async host => {
     const { data, error } = await sb.from('admin_release_plans').select('*').order('target_date', { ascending: true, nullsFirst: false }).order('id');
     if (error) { host.innerHTML = `<div class="card"><h3>🗓 Plan releases</h3><p class="muted">${/admin_release_plans|42P01|PGRST20/.test(error.message) ? 'Run supabase/apoji-admin-2.6.sql (this repo) in Supabase → SQL Editor to turn this on.' : esc(error.message)}</p></div>`; return; }
@@ -246,27 +263,36 @@
         ${p.target_date ? `<span class="muted ${p.status !== 'released' && new Date(p.target_date + 'T23:59') < Date.now() ? 'err' : ''}">🗓 ${new Date(p.target_date + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${days(p.target_date)}</span>` : '<span class="muted">no date</span>'}</div>
         <div class="muted">${(p.apps || []).map(a => APPS[a] || a).join(' · ')}</div>
         ${it.length ? `<div class="plan-bar"><i style="width:${pct}%"></i></div><div class="muted">${d}/${it.length} done · ${it.filter(x => x.kind === 'feature').length} features · ${it.filter(x => x.kind === 'fix').length} fixes</div>` : ''}
-        <div class="gate-slot" data-gate="${esc(p.version)}"></div></div>`; };
+        <div class="row plan-foot"><div class="gate-slot" data-gate="${esc(p.version)}"></div><span class="sp"></span><button class="btn sm ghost" data-plancopy="${p.id}" title="Copy the version, features, fixes and notes as text">Copy info</button></div></div>`; };
     host.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">🗓 Plan releases</h3><span class="muted">${open.length} coming up</span><span class="sp"></span>${canPlan() ? '<button class="btn primary sm" id="plNew">＋ Plan a release</button>' : ''}</div>
       <div class="plans">${open.map(card).join('') || '<p class="muted">Nothing planned. Plan the next version: what’s in it, when, and for which apps.</p>'}</div>
       ${done.length ? `<details><summary class="muted">Released and dropped (${done.length})</summary><div class="plans">${done.slice(-12).reverse().map(card).join('')}</div></details>` : ''}</div>`;
     // the release gate for planned versions that have tests
     for (const slot of host.querySelectorAll('[data-gate]')) NX.releaseGate?.(slot.dataset.gate).then(g => { if (g?.items) slot.innerHTML = `<span class="pill ${g.ready ? 'p-approved' : 'p-declined'}">${g.ready ? 'TESTS PASS' : `${g.failing} FAILING · ${g.untested} UNTESTED`}</span>`; }).catch(() => {});
-    host.onclick = e => { const b = e.target.closest('#plNew'); if (b) return planModal(null, host); const c = e.target.closest('[data-plan]'); if (c) planModal((data || []).find(p => p.id === +c.dataset.plan), host); };
+    host.onclick = e => { const cp = e.target.closest('[data-plancopy]'); if (cp) { e.stopPropagation(); return copyPlan((data || []).find(p => p.id === +cp.dataset.plancopy)); }
+      const b = e.target.closest('#plNew'); if (b) return planModal(null, host); const c = e.target.closest('[data-plan]'); if (c) planModal((data || []).find(p => p.id === +c.dataset.plan), host); };
   };
   function planModal(p, host) {
     const can = canPlan(), items = (p?.items || []).map(x => ({ ...x }));
-    const { el, close } = NX.modal(`<h3>${p ? `🗓 ${esc(p.version)}` : '🗓 Plan a release'}</h3>
+    const { el, close } = NX.modal(`<h3 class="pv-head">${p ? `🗓 ${esc(p.version)}` : '🗓 Plan a release'}</h3>
       <div class="acct-grid"><label>Version</label><input class="field" id="pvV" value="${esc(p?.version || '')}" placeholder="3.11.0" ${can ? '' : 'disabled'}>
         <label>Name</label><input class="field" id="pvT" maxlength="120" value="${esc(p?.title || '')}" placeholder="What it's about, e.g. Voice and the Nexus guide" ${can ? '' : 'disabled'}>
         <label>Target date</label><input class="field" type="date" id="pvD" value="${esc(p?.target_date || '')}" ${can ? '' : 'disabled'}>
         <label>Status</label><select class="field" id="pvS" ${can ? '' : 'disabled'}>${Object.entries(PST).map(([k, [l]]) => `<option value="${k}" ${(p?.status || 'planned') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <label>Apps</label><div class="row" style="flex-wrap:wrap">${Object.entries(APPS).map(([k, l]) => `<label class="row"><input type="checkbox" data-app="${k}" ${(p?.apps || ['nexus']).includes(k) ? 'checked' : ''} ${can ? '' : 'disabled'}> ${l}</label>`).join('')}</div></div>
-      <h3 style="margin-top:14px">What’s in it</h3><div id="pvItems"></div>
-      ${can ? `<div class="row"><select class="field sm" id="pvK" style="width:auto"><option value="feature">Feature</option><option value="fix">Fix</option><option value="chore">Other</option></select><input class="field" id="pvI" maxlength="200" placeholder="Add something, e.g. Live dictation" style="flex:1"><button class="btn" id="pvAdd">Add</button></div>` : ''}
-      <label class="muted" style="display:block;margin-top:10px">Notes</label><textarea class="field" id="pvN" rows="3" maxlength="4000" ${can ? '' : 'disabled'}>${esc(p?.notes || '')}</textarea>
-      <div class="row" style="margin-top:12px">${p && can ? '<button class="btn danger" id="pvDel">Delete</button><button class="btn" id="pvTests" title="Adds the unfinished items to Testing for this version">🧪 Add to Testing</button><button class="btn" id="pvNotes" title="Copies What’s New lines for changes.json">📋 Copy release notes</button>' : ''}<span class="sp"></span><button class="btn" data-close>Close</button>${can ? '<button class="btn primary" id="pvGo">Save</button>' : ''}</div>`);
-    const paintItems = () => { el.querySelector('#pvItems').innerHTML = items.map((x, i) => `<div class="row plan-item ${x.done ? 'done' : ''}"><input type="checkbox" data-done="${i}" ${x.done ? 'checked' : ''} ${can ? '' : 'disabled'}><span class="pill">${x.kind === 'fix' ? 'FIX' : x.kind === 'chore' ? 'OTHER' : 'FEATURE'}</span><span style="flex:1">${esc(x.text)}</span>${can ? `<button class="btn sm ghost" data-rm="${i}" title="Remove">✕</button>` : ''}</div>`).join('') || '<p class="muted">Nothing yet.</p>'; };
+      <h3 class="pv-sec">What’s in it <span class="muted">click any item to change it</span></h3><div id="pvItems" class="pv-items"></div>
+      ${can ? `<div class="row pv-add"><select class="field sm" id="pvK" style="width:auto"><option value="feature">Feature</option><option value="fix">Fix</option><option value="chore">Other</option></select><input class="field" id="pvI" maxlength="200" placeholder="Add something, e.g. Live dictation" style="flex:1"><button class="btn" id="pvAdd">Add</button></div>` : ''}
+      <label class="muted pv-notes-l">Notes</label><textarea class="field" id="pvN" rows="3" maxlength="4000" ${can ? '' : 'disabled'}>${esc(p?.notes || '')}</textarea>
+      <div class="row pv-actions">${p && can ? '<button class="btn danger" id="pvDel">Delete</button><button class="btn" id="pvTests" title="Adds the unfinished items to Testing for this version">🧪 Add to Testing</button><button class="btn" id="pvNotes" title="Copies What’s New lines for changes.json">📋 Release notes</button>' : ''}<span class="sp"></span><button class="btn" id="pvCopy" title="Copy the version, features, fixes and notes as text">Copy info</button><button class="btn" data-close>Close</button>${can ? '<button class="btn primary" id="pvGo">Save</button>' : ''}</div>`);
+    el.classList.add('pv-modal');
+    // 2.7: every item can be changed after saving: click its text to edit it, pick a kind, move it up or down
+    const KINDS = [['feature', 'FEATURE'], ['fix', 'FIX'], ['chore', 'OTHER']];
+    const paintItems = () => { el.querySelector('#pvItems').innerHTML = items.map((x, i) => `<div class="plan-item ${x.done ? 'done' : ''}" data-i="${i}"><input type="checkbox" data-done="${i}" ${x.done ? 'checked' : ''} ${can ? '' : 'disabled'}>
+        ${can ? `<select class="field sm pi-kind" data-kind="${i}">${KINDS.map(([k, l]) => `<option value="${k}" ${(x.kind || 'feature') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : `<span class="pill">${(KINDS.find(k => k[0] === (x.kind || 'feature')) || KINDS[0])[1]}</span>`}
+        ${can ? `<input class="field pi-text" data-text="${i}" value="${esc(x.text)}" maxlength="200" aria-label="Item">` : `<span class="pi-text">${esc(x.text)}</span>`}
+        ${can ? `<span class="pi-tools"><button class="btn sm ghost" data-up="${i}" title="Move up" ${i ? '' : 'disabled'}>↑</button><button class="btn sm ghost" data-down="${i}" title="Move down" ${i < items.length - 1 ? '' : 'disabled'}>↓</button><button class="btn sm ghost" data-rm="${i}" title="Remove">✕</button></span>` : ''}</div>`).join('') || '<p class="muted">Nothing yet.</p>'; };
+    el.addEventListener('input', e => { const i = e.target.dataset.text; if (i !== undefined) items[+i].text = e.target.value; });
+    el.addEventListener('change', e => { const i = e.target.dataset.kind; if (i !== undefined) items[+i].kind = e.target.value; });
     paintItems();
     const add = () => { const t = el.querySelector('#pvI').value.trim(); if (!t) return; items.push({ text: t, kind: el.querySelector('#pvK').value, done: false }); el.querySelector('#pvI').value = ''; paintItems(); el.querySelector('#pvI').focus(); };
     el.addEventListener('keydown', e => { if (e.target.id === 'pvI' && e.key === 'Enter') { e.preventDefault(); add(); } });
@@ -276,9 +302,11 @@
       const b = t.closest('button'); if (!b) return;
       if (b.id === 'pvAdd') return add();
       if (b.dataset.rm !== undefined) { items.splice(+b.dataset.rm, 1); return paintItems(); }
+      if (b.dataset.up !== undefined || b.dataset.down !== undefined) { const i = +(b.dataset.up ?? b.dataset.down), j = b.dataset.up !== undefined ? i - 1 : i + 1; if (j < 0 || j >= items.length) return; [items[i], items[j]] = [items[j], items[i]]; return paintItems(); }
+      if (b.id === 'pvCopy') return copyPlan({ ...(p || {}), version: el.querySelector('#pvV').value.trim() || p?.version || 'Next version', title: el.querySelector('#pvT').value.trim(), target_date: el.querySelector('#pvD').value || null, status: el.querySelector('#pvS').value, apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), items: items.filter(x => x.text.trim()), notes: el.querySelector('#pvN').value.trim() });
       if (b.id === 'pvGo') {
         const row = { version: el.querySelector('#pvV').value.trim(), title: el.querySelector('#pvT').value.trim(), target_date: el.querySelector('#pvD').value || null, status: el.querySelector('#pvS').value,
-          apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), items, notes: el.querySelector('#pvN').value.trim() };
+          apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), items: items.map(x => ({ ...x, text: x.text.trim() })).filter(x => x.text), notes: el.querySelector('#pvN').value.trim() };
         if (!row.version) return toast('Give it a version, like 3.11.0', true);
         const { error } = p ? await sb.from('admin_release_plans').update(row).eq('id', p.id) : await sb.from('admin_release_plans').insert(row);
         if (error) return toast(/duplicate|unique/.test(error.message) ? `${row.version} is already planned.` : error.message, true);
