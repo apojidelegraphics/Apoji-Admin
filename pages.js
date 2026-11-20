@@ -543,9 +543,10 @@
     if (error) return main(`<h1>Feature flags</h1><div class="card err">${esc(error.message)}</div>`);
     const ST = [['off', 'Off'], ['admin', 'Admins'], ['beta', 'Beta testers'], ['all', 'Everyone']];
     main(`<h1>Feature flags</h1><p>Who gets each feature in the app. Apps pick up changes within a minute or two, no update needed.</p>
-      <div class="card"><table class="cards"><tr><th>Feature</th><th>Who gets it</th><th>Min version</th><th>Changed</th></tr>${data.map(f => `<tr><td><b>${esc(f.title || f.key)}</b><div class="muted">${esc(f.key)}${f.description ? ' · ' + esc(f.description) : ''}</div></td>
+      <div class="card"><table class="cards"><tr><th>Feature</th><th>Who gets it</th><th>Min version</th><th>Changed</th><th></th></tr>${data.map(f => `<tr><td><b>${esc(f.title || f.key)}</b><div class="muted">${esc(f.key)}${f.description ? ' · ' + esc(f.description) : ''}</div></td>
         <td><select class="field" data-stage="${esc(f.key)}">${ST.map(([v, l]) => `<option value="${v}" ${f.stage === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
-        <td><input class="field" data-minv="${esc(f.key)}" value="${esc(f.min_version || '')}" placeholder="any" style="width:90px"></td><td class="muted">${ago(f.updated_at)}</td></tr>`).join('')}</table></div>
+        <td><input class="field" data-minv="${esc(f.key)}" value="${esc(f.min_version || '')}" placeholder="any" style="width:90px"></td><td class="muted">${ago(f.updated_at)}</td><td>${A.viewer ? '' : `<button class="btn sm ghost danger" data-delflag="${esc(f.key)}" title="Remove this flag">🗑 Remove</button>`}</td></tr>`).join('')}</table>
+        <p class="muted" style="margin:8px 0 0">Removing a flag deletes its row here. Apps that still know the feature fall back to their built-in setting (most are on for everyone); apps that don’t know it ignore it. To turn a feature off for everyone, set it to <b>Off</b> instead.</p></div>
       <div class="card"><h3>New flag</h3><div class="row"><input class="field" id="nk" placeholder="key_like_this"><input class="field" id="nt" placeholder="Title"><input class="field" id="nd" placeholder="Description" style="flex:1"><select class="field" id="ns">${ST.map(([v, l]) => `<option value="${v}" ${v === 'admin' ? 'selected' : ''}>${l}</option>`).join('')}</select><button class="btn primary" id="nadd">Add</button></div></div>`);
     $('main').onchange = async e => {
       const t = e.target, key = t.dataset.stage || t.dataset.minv; if (!key) return;
@@ -554,6 +555,14 @@
       toast(er ? er.message : '✓ Saved', !!er);
     };
     $('main').onclick = async e => {
+      const del = e.target.closest('[data-delflag]');
+      if (del) {   // 2.6: remove a flag
+        const key = del.dataset.delflag; if (!confirm(`Remove the “${key}” flag? Apps fall back to their built-in setting for it.`)) return;
+        const { error: er } = await sb.from('feature_flags').delete().eq('key', key);
+        if (er) return toast(er.message, true);
+        await sb.from('moderation_log').insert({ action: 'flag_removed', performed_by: A.user.id, details: { key } }).then(() => {}, () => {});
+        toast('🗑 Removed ' + key); return P.flags();
+      }
       if (e.target.id !== 'nadd') return;
       const key = $('nk').value.trim(); if (!/^[a-z0-9_]{2,48}$/.test(key)) return toast('Keys are 2–48 lowercase letters, numbers and _', true);
       const { error: er } = await sb.from('feature_flags').insert({ key, title: $('nt').value.trim() || key, description: $('nd').value.trim(), stage: $('ns').value });

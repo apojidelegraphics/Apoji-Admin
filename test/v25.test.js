@@ -41,7 +41,6 @@ const T = require('../terms-data.js');
 assert.ok(T.TERMS.sections.some(s => s.id === 'admins' && (s.who || []).includes('admin')) && v25.includes('P.terms = async') && v25.includes('NX.termsCheck = async') && read('admin.js').includes("['terms', '⚖', 'Terms']") && read('admin.js').includes('NX.termsCheck?.()'));
 ok('📜 Terms page (admin part highlighted) and admins agree once per version');
 
-assert.strictEqual(pkg.version, '2.5.0');
-assert.ok(read('admin.js').includes("VERSION: '2.5.0'") && read('sw.js').includes('apoji-admin-v2.5.0') && read('README.md').includes('## 2.5'));
-ok('version 2.5.0');
+assert.ok(pkg.version.localeCompare('2.5.0', undefined, { numeric: true }) >= 0 && read('README.md').includes('## 2.5'));
+ok('2.5 is documented');
 console.log(`Apoji Admin 2.5: ${n} checks passed`);

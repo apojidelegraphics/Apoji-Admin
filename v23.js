@@ -229,6 +229,14 @@
     const delta = st.up_rate_7d != null && st.up_rate_prev != null ? st.up_rate_7d - st.up_rate_prev : null;
     const pl = (k, w) => `${k} ${k == 1 ? w : w === 'person' ? 'people' : w + 's'}`, leaf = (id, label, extra = {}) => ({ id, label, ...extra });
     const counts = (obj, pre, names = {}) => Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => leaf(pre + k, `${names[k] || k}: ${v}`));
+    // 2.6: the lessons themselves (and the pushes) are on the map too
+    const [{ data: lessonRows }, { data: pushData }] = await Promise.all([
+      sb.from('training_examples').select('id,lesson,prompt,agent,push_id').eq('approved', true).order('approved_at', { ascending: false }).limit(40),
+      sb.rpc('admin_training_pushes').then(r => r, () => ({ data: null }))]);
+    const pushes = pushData?.pushes || [], live = new Map(pushes.filter(p => !p.undone_at).map(p => [p.id, p.stage]));
+    const STG = { admin: 'admins', beta: 'beta', all: 'everyone' };
+    const lessonLeaves = (lessonRows || []).map(r => leaf('ls:' + r.id, `${r.lesson ? '📏 ' + r.lesson : r.prompt.replace(/\s+/g, ' ').slice(0, 60)} · ${STG[live.get(r.push_id)] || 'admins only'}`, { step: 'use', lessonId: r.id }));
+    const pushLeaves = pushes.slice(0, 12).map(p => leaf('ps:' + p.id, `${p.title} · ${p.undone_at ? 'undone' : STG[p.stage]} · ${p.lessons} lesson${p.lessons === 1 ? '' : 's'}`, { step: 'ship' }));
     // 2.4.1: a Notion-style mind map. Click a step (or its ○) to fold it; click a step's name to open what you can do there.
     const STEPS = [
       { id: 'collect', label: '1 · Collect', sub: `${pl(st.total, 'example')} · ${st.week} this week`, color: '#3dffa0', children: [
@@ -241,18 +249,20 @@
         leaf('s-up', `👍 ${st.up} good`), leaf('s-down', `👎 ${st.down} not good`), leaf('s-fix', `✏️ ${st.corrected} better answers written`),
         { id: 's-agent', label: 'By agent', collapsed: true, children: counts(st.by_agent, 'ag:') }] },
       { id: 'use', label: '4 · Use', sub: `${pl(st.lessons, 'lesson')} · ${pl(st.rules, 'rule')}`, color: '#ffd36b', children: [
-        leaf('u-review', st.to_review ? `${st.to_review} waiting for review` : 'Nothing to review', { step: 'use' }), leaf('u-match', 'Agents see the 3 best-matching lessons'), leaf('u-rules', 'and every rule, on every answer'), leaf('u-where', 'Admins first, then push (6 · Ship)', { step: 'ship' })] },
+        leaf('u-review', st.to_review ? `${st.to_review} waiting for review` : 'Nothing to review', { step: 'use' }), leaf('u-match', 'Agents see the 3 best-matching lessons'), leaf('u-rules', 'and every rule, on every answer'), leaf('u-where', 'Admins first, then push (6 · Ship)', { step: 'ship' }),
+        ...(lessonLeaves.length ? [{ id: 'u-lessons', label: `📚 The lessons (${lessonLeaves.length}${lessonLeaves.length === 40 ? '+' : ''})`, collapsed: lessonLeaves.length > 6, step: 'use', children: lessonLeaves }] : [])] },
       { id: 'check', label: '5 · Check', sub: st.up_rate_7d != null ? `👍 ${st.up_rate_7d}% this week` : 'Not enough ratings yet', color: '#ff8a98', children: [
         leaf('k-prev', st.up_rate_prev != null ? `${st.up_rate_prev}% the week before` : 'Week before: no ratings'), leaf('k-delta', delta == null ? 'Change: —' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)} points`), leaf('k-try', 'Try a question', { step: 'check' })] },
       { id: 'ship', label: '6 · Ship', sub: 'Push lessons, prompts, flags', color: '#9be37b', children: [
         leaf('p-push', '🚀 Push lessons: admins → beta → everyone', { step: 'ship' }),
+        ...(pushLeaves.length ? [{ id: 'p-pushes', label: `🚀 Pushes (${pushes.length})`, collapsed: true, step: 'ship', children: pushLeaves }] : []),
         leaf('p-prompts', '✍ Agent prompts', { go: 'prompts' }), leaf('p-flags', '⚑ Feature flags: admins → beta → everyone', { go: 'flags' }), leaf('p-jsonl', '⬇ Export for fine-tuning (JSONL)', { step: 'store' })] }];
     STEPS.forEach((s, i) => { s.open = true; s.step = s.id; s.side = i < 3 ? 'right' : 'left'; s.collapsed = A.trFold?.[s.id] ?? s.id === 'clean'; });
     NX.main(`<h1>🧠 Training</h1><p>Beta testers share their chats (personal details stripped) to help train Nexus models; anyone else can opt in. You review the best examples and approve them as <b>lessons</b>: every agent (desktop and Test Run) looks up matching lessons and rules before it answers.</p>
       <div class="card mm-tree"><div class="mm-tools"><button class="btn sm ${A.trMode === 'graph' ? '' : 'on'}" data-tmode="tree" title="Mind map (Notion-style)">🌳 Tree</button><button class="btn sm ${A.trMode === 'graph' ? 'on' : ''}" data-tmode="graph" title="Graph (Obsidian-style)">◉ Graph</button></div><div id="trTree"></div><p class="muted mm-hint">Click a step to see what you can do there · its ○ folds it · drag to move, scroll to zoom</p></div>
       <div id="trPanel"><div class="card"><span class="spinner"></span></div></div>`, { cards: false });
     const tree = { id: 'root', label: 'Training', sub: 'Nexus models', color: '#3dffa0', children: STEPS };
-    const mt = MindTree.create($('trTree'), { mode: A.trMode,
+    const mt = MindTree.create($('trTree'), { mode: A.trMode, iconFor: NX.iconFor,
       onOpen: n => {
         if (n.go) return NX.go(n.go);
         const step = n.step || n.branch?.step; if (!step) return;

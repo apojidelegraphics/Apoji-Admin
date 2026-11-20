@@ -165,6 +165,7 @@
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['perms', '🔐', 'Admin access', 'perms']]],
     ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['beta', 'β', 'Beta'], ['testing', '🧪', 'Testing'], ['prompts', '✍', 'Agent prompts'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
     ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['training', '🧠', 'Training'], ['freeapi', '📊', 'Free API usage'], ['audit', '📜', 'Audit log']]],
+    ['MONEY', [['mexel', '🧾', 'Mexel']]],
     ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['terms', '⚖', 'Terms'], ['me', '⚙︎', 'My settings']]]
   ];
   const ALL_TABS = TABS.flatMap(g => g[1].map(t => t[0]));
@@ -376,7 +377,7 @@
   const NX = window.NX = {
     sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {}, WIN: IS_WIN, pc, VERSION: '2.5.0',
+    pages: {}, WIN: IS_WIN, pc, VERSION: '2.6.0',
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,

@@ -176,6 +176,17 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, ⬇ Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.6
+
+Needs `supabase/apoji-admin-2.6.sql` (this repo) for release planning. Mexel needs aARgon3 2.0 deployed (its `staff` Edge Function).
+
+- **🧾 Mexel** (MONEY in the menu): the aARgon3 2.0 staff system inside Apoji Admin. **Today** (sales today and the last 7 days, active subscriptions, who's on the clock, and your own clock in / break / clock out), **Orders** (search, details, and for managers cancel, cancel + refund, and free orders), **Sell** (a Stripe payment link and QR code the customer pays on their phone; it updates when they've paid), **Timesheets** (everyone's shifts for managers, fix a shift, CSV) and the staff **Log**. Any admin is staff; high-admins are managers. The desktop app (apoji://admin) needs the aARgon3 staff function from aArgon3 with `apoji://admin` in its allowed origins (`supabase/functions/_shared/lib.mjs`), then `supabase functions deploy staff --no-verify-jwt`.
+- **🗓 Release planning** on Releases: plan a version with a target date, a status (idea → planned → building → testing → released), which apps it's for and a checklist of features and fixes. Each plan shows its Testing gate; **🧪 Add to Testing** turns the checklist into test items and **📋 Copy release notes** gives you the changes.json entry.
+- **👁 Preview as** (Owner only, My settings): see Apoji Admin as a High-admin, a Viewer, an Admin or a Moderator. A yellow bar shows while you preview; Supabase still sees you as the Owner.
+- **🗑 Remove a feature flag** on Feature flags (apps fall back to their built-in setting).
+- **📚 The lessons on the Training map** (with who has each one), and the pushes under Ship.
+- **Our own icons** instead of emojis everywhere in the interface (`icons.js`; emojis people type are left alone). The mind map draws them too.
+
 ## 2.5
 
 Needs `supabase/nexus-v3.10.sql` from the Nexus repo.
