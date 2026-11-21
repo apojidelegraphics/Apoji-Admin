@@ -205,6 +205,7 @@
           <td>${new Date(s.clock_in).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td><td>${s.clock_out ? new Date(s.clock_out).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '<span class="pill p-approved">ON</span>'}${s.forgot ? ' <span class="pill p-pending" title="Clocked out later with the real time">FORGOT</span>' : ''}${s.edited_by ? ` <span class="muted" title="Fixed by ${esc(s.edited_by)}">✎</span>` : ''}</td>
           <td>${(s.breaks || []).length}</td><td><b>${hm(s.minutes)}</b></td><td>${mgr() ? `<button class="btn sm" data-edit="${s.id}">Fix</button>` : ''}</td></tr>${s.note ? `<tr><td colspan="7" class="muted">“${esc(s.note)}”</td></tr>` : ''}`).join('')}</table></div>`).join('') || '<div class="card"><p class="muted">No shifts in these dates.</p></div>';
       NX.labelTables?.();
+      NX.afterTimesheets?.(host, rows, { from: M.from, to: M.to, everyone: !!M.everyone, mgr: mgr() });   // 2.8: payroll export
     };
     host.onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
@@ -240,7 +241,7 @@
   }
 
   // =========================================================== 🗓 Release planning (Releases page)
-  const PST = { idea: ['Idea', 'p-closed'], planned: ['Planned', 'p-pending'], building: ['Building', 'p-reviewing'], testing: ['Testing', 'p-reviewing'], released: ['Released', 'p-approved'], dropped: ['Dropped', 'p-declined'] };
+  const PST = { idea: ['Idea', 'p-closed'], planned: ['Planned', 'p-pending'], building: ['Building', 'p-reviewing'], testing: ['Testing', 'p-reviewing'], released: ['Released', 'p-approved'], done: ['Done', 'p-approved'], dropped: ['Dropped', 'p-declined'] };   // 2.8: Done
   const APPS = { nexus: "Nexus '28", admin: 'Apoji Admin', n28c: 'N28C', test_run: 'Test Run', aargon3: 'aARgon3' };
   const canPlan = () => !A.viewer && (A.owner || NX.can('changelog'));
   // 2.7: a plain-text summary of a plan, to paste anywhere (Copy info)
@@ -256,20 +257,48 @@
   NX.releasePlans = async host => {
     const { data, error } = await sb.from('admin_release_plans').select('*').order('target_date', { ascending: true, nullsFirst: false }).order('id');
     if (error) { host.innerHTML = `<div class="card"><h3>🗓 Plan releases</h3><p class="muted">${/admin_release_plans|42P01|PGRST20/.test(error.message) ? 'Run supabase/apoji-admin-2.6.sql (this repo) in Supabase → SQL Editor to turn this on.' : esc(error.message)}</p></div>`; return; }
-    const open = (data || []).filter(p => !['released', 'dropped'].includes(p.status)), done = (data || []).filter(p => ['released', 'dropped'].includes(p.status));
+    const FIN = ['released', 'done', 'dropped'];   // 2.8: finished plans live in their own section at the bottom
+    const open = (data || []).filter(p => !FIN.includes(p.status)), done = (data || []).filter(p => FIN.includes(p.status)).sort((a, b) => new Date(b.done_at || b.updated_at || 0) - new Date(a.done_at || a.updated_at || 0));
+    const view = NX.store?.get?.('planView', 'list') || 'list';
     const days = d => { if (!d) return ''; const n = Math.round((new Date(d + 'T12:00') - Date.now()) / 864e5); return n === 0 ? 'today' : n > 0 ? `in ${n} day${n === 1 ? '' : 's'}` : `${-n} day${n === -1 ? '' : 's'} late`; };
     const card = p => { const it = p.items || [], d = it.filter(x => x.done).length, pct = it.length ? Math.round(d / it.length * 100) : 0;
       return `<div class="plan ${p.status}" data-plan="${p.id}"><div class="row"><b class="plan-v">${esc(p.version)}</b><span class="pill ${PST[p.status][1]}">${PST[p.status][0].toUpperCase()}</span>${p.title ? `<span>${esc(p.title)}</span>` : ''}<span class="sp"></span>
         ${p.target_date ? `<span class="muted ${p.status !== 'released' && new Date(p.target_date + 'T23:59') < Date.now() ? 'err' : ''}">🗓 ${new Date(p.target_date + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${days(p.target_date)}</span>` : '<span class="muted">no date</span>'}</div>
         <div class="muted">${(p.apps || []).map(a => APPS[a] || a).join(' · ')}</div>
         ${it.length ? `<div class="plan-bar"><i style="width:${pct}%"></i></div><div class="muted">${d}/${it.length} done · ${it.filter(x => x.kind === 'feature').length} features · ${it.filter(x => x.kind === 'fix').length} fixes</div>` : ''}
-        <div class="row plan-foot"><div class="gate-slot" data-gate="${esc(p.version)}"></div><span class="sp"></span><button class="btn sm ghost" data-plancopy="${p.id}" title="Copy the version, features, fixes and notes as text">Copy info</button></div></div>`; };
-    host.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">🗓 Plan releases</h3><span class="muted">${open.length} coming up</span><span class="sp"></span>${canPlan() ? '<button class="btn primary sm" id="plNew">＋ Plan a release</button>' : ''}</div>
-      <div class="plans">${open.map(card).join('') || '<p class="muted">Nothing planned. Plan the next version: what’s in it, when, and for which apps.</p>'}</div>
-      ${done.length ? `<details><summary class="muted">Released and dropped (${done.length})</summary><div class="plans">${done.slice(-12).reverse().map(card).join('')}</div></details>` : ''}</div>`;
+        <div class="row plan-foot">${FIN.includes(p.status) ? '' : `<div class="gate-slot" data-gate="${esc(p.version)}"></div>`}${FIN.includes(p.status) && p.done_at ? `<span class="muted">${PST[p.status][0]} ${new Date(p.done_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>` : ''}<span class="sp"></span>
+          ${canPlan() ? (FIN.includes(p.status) ? `<button class="btn sm ghost" data-planreopen="${p.id}" title="Back to Planned">Reopen</button>` : `<button class="btn sm" data-plandone="${p.id}" title="Mark this release as done">✓ Mark done</button>`) : ''}<button class="btn sm ghost" data-plancopy="${p.id}" title="Copy the version, features, fixes and notes as text">Copy info</button></div></div>`; };
+    // 2.8: the release calendar (target dates, and when finished ones were done)
+    const cal = () => {
+      const m = NX.planMonth || (NX.planMonth = (() => { const d = new Date(); d.setDate(1); d.setHours(12, 0, 0, 0); return d; })());
+      const first = new Date(m), start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));
+      const key = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const on = {}; for (const p of data || []) { const k = FIN.includes(p.status) && p.done_at ? key(new Date(p.done_at)) : p.target_date; if (k) (on[k] = on[k] || []).push(p); }
+      const today = key(new Date());
+      return `<div class="rcal"><div class="row rcal-nav"><button class="btn sm" data-calm="-1">‹</button><b>${first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</b><button class="btn sm" data-calm="1">›</button><button class="btn sm ghost" data-calm="0">Today</button></div>
+        <div class="rcal-grid">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="rcal-h">${d}</div>`).join('')}
+        ${Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); const k = key(d), list = on[k] || [];
+          return `<div class="rcal-d ${d.getMonth() !== first.getMonth() ? 'out' : ''} ${k === today ? 'today' : ''}"><span class="rcal-n">${d.getDate()}</span>${list.map(p => `<button class="rcal-p ${p.status}" data-plan="${p.id}" title="${esc(p.version + (p.title ? ' · ' + p.title : '') + ' · ' + PST[p.status][0])}">${FIN.includes(p.status) ? '✓ ' : ''}${esc(p.version)}</button>`).join('')}</div>`; }).join('')}</div>
+        <p class="muted rcal-key">Coming releases sit on their target date; finished ones on the day they were done. ${(data || []).filter(p => !p.target_date && !FIN.includes(p.status)).length ? `${(data || []).filter(p => !p.target_date && !FIN.includes(p.status)).length} without a date aren’t shown.` : ''}</p></div>`;
+    };
+    const showAll = NX.planAllDone;
+    host.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">🗓 Plan releases</h3><span class="muted">${open.length} coming up</span><span class="sp"></span>
+        <div class="seg plan-view"><button class="${view === 'list' ? 'on' : ''}" data-planview="list">List</button><button class="${view === 'cal' ? 'on' : ''}" data-planview="cal">Calendar</button></div>${canPlan() ? '<button class="btn primary sm" id="plNew">＋ Plan a release</button>' : ''}</div>
+      ${view === 'cal' ? cal() : `<div class="plans">${open.map(card).join('') || '<p class="muted">Nothing planned. Plan the next version: what’s in it, when, and for which apps.</p>'}</div>`}</div>
+      ${done.length ? `<div class="card plans-done"><details ${NX.planDoneOpen ? 'open' : ''}><summary><h3 style="display:inline;margin:0">Done</h3> <span class="muted">${done.length} finished · released, done or dropped</span></summary>
+        <div class="plans">${(showAll ? done : done.slice(0, 8)).map(card).join('')}</div>${done.length > 8 ? `<button class="btn sm ghost" data-planall>${showAll ? 'Show fewer' : `Show all ${done.length}`}</button>` : ''}</details></div>` : ''}`;
+    host.querySelector('.plans-done details')?.addEventListener('toggle', e => { NX.planDoneOpen = e.target.open; });
     // the release gate for planned versions that have tests
     for (const slot of host.querySelectorAll('[data-gate]')) NX.releaseGate?.(slot.dataset.gate).then(g => { if (g?.items) slot.innerHTML = `<span class="pill ${g.ready ? 'p-approved' : 'p-declined'}">${g.ready ? 'TESTS PASS' : `${g.failing} FAILING · ${g.untested} UNTESTED`}</span>`; }).catch(() => {});
-    host.onclick = e => { const cp = e.target.closest('[data-plancopy]'); if (cp) { e.stopPropagation(); return copyPlan((data || []).find(p => p.id === +cp.dataset.plancopy)); }
+    host.onclick = async e => { const cp = e.target.closest('[data-plancopy]'); if (cp) { e.stopPropagation(); return copyPlan((data || []).find(p => p.id === +cp.dataset.plancopy)); }
+      const dn = e.target.closest('[data-plandone], [data-planreopen]');
+      if (dn) { e.stopPropagation(); const id = +(dn.dataset.plandone || dn.dataset.planreopen), st = dn.dataset.plandone ? 'done' : 'planned';
+        const { error } = await sb.from('admin_release_plans').update({ status: st }).eq('id', id);
+        if (error) return toast(/check constraint|status_check/.test(error.message) ? 'Run supabase/apoji-admin-2.8.sql to mark releases done.' : error.message, true);
+        toast(st === 'done' ? '✓ Marked done' : 'Reopened'); return NX.releasePlans(host); }
+      const pv = e.target.closest('[data-planview]'); if (pv) { NX.store?.set?.('planView', pv.dataset.planview); return NX.releasePlans(host); }
+      const cm = e.target.closest('[data-calm]'); if (cm) { const d = NX.planMonth || new Date(); if (cm.dataset.calm === '0') NX.planMonth = null; else { const n = new Date(d); n.setMonth(n.getMonth() + +cm.dataset.calm); NX.planMonth = n; } return NX.releasePlans(host); }
+      if (e.target.closest('[data-planall]')) { NX.planAllDone = !NX.planAllDone; NX.planDoneOpen = true; return NX.releasePlans(host); }
       const b = e.target.closest('#plNew'); if (b) return planModal(null, host); const c = e.target.closest('[data-plan]'); if (c) planModal((data || []).find(p => p.id === +c.dataset.plan), host); };
   };
   function planModal(p, host) {

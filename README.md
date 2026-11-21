@@ -176,6 +176,23 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.8.0
+
+Run `supabase/apoji-admin-2.8.sql` (this repo) in the **Nexus** Supabase project. Shift reminders also need the pg_cron extension on (it already is if Axiom's cage runs on a schedule).
+
+- **Idle status.** Pick Idle yourself in My settings (or ⌘K → Status: Idle), until you change it or for 30 minutes, an hour, two hours or the rest of the day. Choose when you go idle by yourself (1 to 60 minutes, or never). Every admin's picture now shows if they're online, idle, away or busy everywhere in the app, and hovering says "Idle for 12 min" or "Last seen …".
+- **Releases.** Mark a release done (or reopen it). Released, done and dropped plans move to their own Done section at the bottom. The new Calendar view shows coming releases on their target dates and finished ones on the day they were done.
+- **Daily digest.** "Yesterday at a glance" on the Dashboard: people who used Nexus, new accounts, reports, open and urgent bugs, Paragon & Axiom tasks, Test Run answers, open incidents and releases coming up. Step back day by day. One notification each morning the first time Apoji Admin is open.
+- **On-call.** High-admins plan a weekly rotation on the Status page. Whoever is on call is shown on the Dashboard, and a major or critical incident or a bug marked urgent pages them in Apoji Admin (even in Do not disturb), in Nexus and on their phone.
+- **Bug duplicates.** Each bug shows reports that look like it. Merge one into another, and the duplicate is closed, its reporter is told, and known issues pick it up. Feedback → Duplicates lists open bugs that look alike.
+- **Admin activity** (INSIGHTS): a weekday × hour heatmap of chat messages, replies to reports, admin actions and incidents, for everyone or one person, plus day by day and who did the most.
+- **Staff shift reminders.** Everyone on the schedule gets a notice in Nexus and on their phone before their shift (1 hour by default; each person picks theirs in Shifts). The schedule is copied for reminders whenever a manager opens or changes a week, matched by staff email to Nexus accounts.
+- **Shift swaps.** Ask a coworker (or anyone) to take a shift, they accept, and a manager approves, which moves the shift in aARgon3.
+- **Payroll export.** Timesheets → Payroll: hours, overtime (over 40 a week at 1.5×), pay where the rate is set, and a CSV.
+- **More on each person.** Employees show start date, birthdays coming up and skills; each person's page adds availability, emergency contact, goals, and their hours this month and last.
+- **Promo performance.** Mexel → Promotions shows how each code is doing: uses, how much of its limit is used, and how much off it gave.
+- Staff extras live in the Nexus project (Apoji Admin signs in there), so the aARgon3 staff function didn't change.
+
 ## 2.7.2
 
 Needs `supabase/nexus-v3.12.sql` from the Nexus repo (run it in the Nexus Supabase project).

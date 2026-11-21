@@ -178,6 +178,7 @@
           <b>${esc(r.title)}${(r.attachments || []).length ? ' <span title="Has pictures">📎</span>' : ''}</b><span class="muted">${r.channel && r.channel !== 'app' ? `<span class="pill" style="font-size:10px">${r.channel === 'github' ? 'GITHUB' : r.channel === 'portal' ? 'PORTAL' : 'EMAIL'}</span> ` : ''}${esc(r.username || r.email || (r.user_id ? 'Someone' : 'Not signed in'))} · ${esc(r.source)} ${esc(r.app_version)}${r.assignee ? ' · ' + esc(nameOf(NX.adminById(r.assignee))) : ''}</span></button>`).join('') || '<div class="empty">Inbox zero. 🎉</div>'}</div>
         <div class="idetail" id="idetail">${sel ? '<div class="card"><span class="spinner"></span></div>' : '<div class="card empty">Pick something on the left.</div>'}</div></div>`, { cards: false });
     if (sel) fbDetail(sel);
+    NX.afterFeedbackList?.(data);   // 2.8: duplicates
     $('main').onclick = e => {
       const s = e.target.closest('[data-s]'); if (s) { f.status = s.dataset.s; A.arg = null; return P.feedback(); }
       const g = e.target.closest('[data-g]'); if (g) { f.kind = g.dataset.g; A.arg = null; return P.feedback(); }
@@ -211,6 +212,7 @@
         <button class="btn" id="fbSaved" title="Saved replies">⚡</button><button class="btn" data-quick="Thanks! We've got it and we're looking into it.">Quick: got it</button><button class="btn" data-quick="This is fixed in the next update. Thanks for reporting it!">Quick: fixed</button><button class="btn primary" id="fbSend">Send</button></div></div>`;
     const save = async patch => { const { error: er } = await sb.from('feedback_reports').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id); toast(er ? er.message : '✓ Saved', !!er); NX.refreshCounts(); };
     NX.loadPics?.(el);
+    NX.afterFbDetail?.(el, r);   // 2.8: similar reports, merge
     $('fbSt').onchange = e => save({ status: e.target.value });
     $('fbPr').onchange = e => save({ priority: e.target.value });
     $('fbAs').onchange = e => save({ assignee: e.target.value || null });
@@ -692,9 +694,11 @@
           <input class="field" id="nick" placeholder="Your name in chat" maxlength="24" value="${esc(me.nickname || '')}" style="width:100%"><div class="row" style="margin-top:8px">
           <button class="btn" id="pic">Change picture</button>${me.avatar_url ? '<button class="btn ghost" id="picRm">Remove</button>' : ''}<input type="file" id="picF" accept="image/*" hidden></div>
           <p class="muted" style="margin:8px 0 0">Your picture shows here, in Nexus on Mac and PC, in Test Run and in N28C. You can also change it in Nexus (Settings → Account).</p></div></div></div>`;
-    const status = `<div class="card"><h3>Status</h3><div class="tabsub" id="st" style="flex-wrap:wrap">${[['auto', '🟢 Automatic', 'Online, or idle when you step away'], ['dnd', '⛔ Do not disturb', 'No pop-ups or sounds'], ['invisible', '⚪ Invisible', 'Look offline']].map(([k, l, s]) => `<button data-st="${k}" class="${p.status === k ? 'on' : ''}" title="${s}">${l}</button>`).join('')}</div>
+    const status = `<div class="card"><h3>Status</h3><div class="tabsub" id="st" style="flex-wrap:wrap">${[['auto', '🟢 Automatic', 'Online, or idle when you step away'], ['idle', '🌙 Idle', 'Show as away until you change it (or a time you pick)'], ['dnd', '⛔ Do not disturb', 'No pop-ups or sounds'], ['invisible', '⚪ Invisible', 'Look offline']].map(([k, l, s]) => `<button data-st="${k}" class="${NX.myStatus() === k ? 'on' : ''}" title="${s}">${l}</button>`).join('')}</div>
+          ${NX.myStatus() === 'idle' ? `<div class="row idle-back"><span class="muted">Idle until</span>${[[0, 'I change it'], [30, '30 min'], [60, '1 hour'], [120, '2 hours'], ['eod', 'end of day']].map(([v, l]) => `<button class="btn sm ${String(p.back_at ? '' : 0) === String(v) ? 'primary' : ''}" data-back="${v}">${l}</button>`).join('')}${p.back_at ? `<span class="muted">· back at ${new Date(p.back_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>` : ''}</div>` : ''}
+          <div class="row idle-after"><span class="muted">Go idle by myself after</span><select class="field sm" id="idleAfter" style="width:auto">${[[1, '1 minute'], [5, '5 minutes'], [15, '15 minutes'], [30, '30 minutes'], [60, '1 hour'], [0, 'Never']].map(([v, l]) => `<option value="${v}" ${(+(p.idle_after ?? 5)) === v ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="muted">without using the portal</span></div>
           <input class="field" id="stt" maxlength="80" placeholder="Custom status, e.g. 🛠 fixing the relay" value="${esc(p.status_text || '')}" style="width:100%">
-          <p class="muted" style="margin:8px 0 0">Right now others see you as <span class="prtxt ${presence(me)}">${PRES[presence(me)]}</span>.</p></div>`;
+          <p class="muted" style="margin:8px 0 0">Right now others see you as <span class="prtxt ${presence(me)}">${esc(NX.presText(me))}</span>.</p></div>`;
     const notes = `<div class="card"><h3>Notifications</h3>
           <div class="row" style="margin-bottom:6px">${perm === 'granted' ? '<span class="ok">✓ Desktop notifications are on for this browser.</span>' : perm === 'denied' ? '<span class="err" style="flex:1;min-width:200px">Notifications are blocked for this site. Allow them in your browser\'s site settings.</span>' : perm === 'unsupported' ? '<span class="muted">This browser can\'t show notifications. You\'ll still get pop-ups in the portal.</span>' : '<button class="btn primary" id="perm">Turn on desktop notifications</button>'}<span class="sp"></span><button class="btn sm" id="ntest">Test</button></div>
           ${tog('nChat', '💬 Admin chat', 'New messages (muted chats only for @mentions)', n.chat !== false)}${tog('nReq', '🧪 Requests', 'Beta and access requests', n.requests !== false)}
@@ -722,9 +726,13 @@
       if (id === 'picF' && e.target.files[0]) uploadAvatar(e.target.files[0]);
       if (id === 'nick') { const v = e.target.value.trim(); const { error } = await sb.from('profiles').update({ nickname: v || null }).eq('id', A.user.id); if (error) return toast(error.message, true); await NX.loadAdmins(); NX.paintHeader(); toast('✓ Saved'); }
       if (id === 'stt') { await NX.savePrefs({ status_text: e.target.value.trim() }); toast('✓ Status saved'); }
+      if (id === 'idleAfter') { const ok = await NX.savePrefs({ idle_after: +e.target.value }); if (ok) toast(+e.target.value ? '✓ Saved' : 'You won’t go idle by yourself'); }
     };
     $('main').onclick = async e => {
-      const s = e.target.closest('[data-st]'); if (s) { await NX.savePrefs({ status: s.dataset.st }); return P.me(); }
+      const s = e.target.closest('[data-st]'); if (s) { await NX.savePrefs({ status: s.dataset.st, ...(A.prefs.back_at || s.dataset.st !== 'idle' ? { back_at: null } : {}) }); return P.me(); }
+      const bk = e.target.closest('[data-back]'); if (bk) { const v = bk.dataset.back; let at = null;   // 2.8: Idle until …
+        if (v === 'eod') { const d = new Date(); d.setHours(23, 59, 0, 0); at = d.toISOString(); } else if (+v) at = new Date(Date.now() + +v * 60e3).toISOString();
+        await NX.savePrefs({ back_at: at }); return P.me(); }
       if (await NX.replies.click(e)) return;
       if (e.target.id === 'keysHelp') return NX.shortcutsHelp();
       if (e.target.id === 'pic') $('picF').click();

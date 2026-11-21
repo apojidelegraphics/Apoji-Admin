@@ -181,6 +181,7 @@
       { ic: '✅', label: 'New task', words: 'add todo', run: () => taskModal() },
       { ic: '👥', label: 'New group chat', words: 'create room', run: () => { NX.go('chat'); setTimeout(() => document.getElementById('newGroup')?.click(), 400); } },
       { ic: '⛔', label: 'Status: Do not disturb', words: 'dnd quiet mute', run: () => NX.savePrefs({ status: 'dnd' }).then(() => toast('⛔ Do not disturb')) },
+      { ic: '🌙', label: 'Status: Idle', words: 'idle away brb break lunch', run: () => NX.savePrefs({ status: 'idle', back_at: null }).then(() => toast('🌙 Idle')) },
       { ic: '🟢', label: 'Status: Automatic', words: 'online available', run: () => NX.savePrefs({ status: 'auto' }).then(() => toast('🟢 Online')) },
       { ic: '⚪', label: 'Status: Invisible', words: 'hide offline', run: () => NX.savePrefs({ status: 'invisible' }).then(() => toast('⚪ Invisible')) },
       { ic: '🔒', label: 'Lock admin chat on this device', words: 'encryption passphrase', run: async () => { await NX.chat.lock(); toast('🔒 Locked'); if (A.tab === 'chat') NX.pages.chat(); } },

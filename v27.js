@@ -123,6 +123,7 @@
     };
   };
   const storeName = (stores, code) => (stores.find(x => x.code === code) || {}).name || code || 'No store';
+  NX.staffKit = { mexel, ensureMe, mgr, owner, friendly, money, money0, hm, dt, tm, dayName, ymd, cap, bars, storeName };   // 2.8 (v28.js)
 
   // =========================================================== Mexel → Promotions (managers)
   NX.mexelTabs.promos = async function promos() {
@@ -146,6 +147,7 @@
       if (b.id === 'prNew') return promoModal();
       if (b.dataset.promo) { try { await mexel('promo_save', { id: +b.dataset.promo, active: b.dataset.on === '1' }); toast(b.dataset.on === '1' ? 'Switched on' : 'Switched off'); NX.mexelTabs.promos(); } catch (er) { toast(friendly(er), true); } }
     };
+    NX.afterPromos?.(box(), list);   // 2.8: promo performance
   };
   async function promoModal() {
     let C = null; try { C = await (await fetch('https://apojidelegraphics.github.io/aArgon3/catalog.json', { cache: 'no-store' })).json(); } catch {}
@@ -213,8 +215,10 @@
       if (b.id === 'shAdd') return shiftModal(null, null, team, stores);
       if (b.dataset.addday) return shiftModal(null, b.dataset.addday, team, stores);
       if (b.dataset.shift) return shiftModal(list.find(c => c.id === +b.dataset.shift), null, team, stores);
+      if (NX.shiftsClick && await NX.shiftsClick(e, b, { list, team, week })) return;   // 2.8: swaps
       if (b.id === 'shCopy') { if (!confirm('Copy last week’s shifts into this week?')) return; try { const r = await mexel('schedule_copy', { week_start: W.start.toISOString() }); toast(`Copied ${r.copied} shift${r.copied === 1 ? '' : 's'}`); week(); } catch (er) { toast(friendly(er), true); } }
     };
+    NX.afterShiftsWeek?.(host, list, team, { from, to, week, mgr: mgr() });   // 2.8: reminders, swaps, publish to the reminder feed
   }
   function shiftModal(c, day, team, stores) {
     const d = day || (c ? ymd(c.starts_at) : ymd(Date.now()));
@@ -263,6 +267,7 @@
         if (b.dataset.emp) return empModal(team.find(t => t.id === +b.dataset.emp), stores);
       } catch (er) { toast(friendly(er), true); }
     };
+    NX.afterEmployees?.($('em'), team, off);   // 2.8: deeper profiles
   };
   function empModal(t, stores) {
     const isOwner = t?.role === 'owner', canRole = owner() && !isOwner && t?.user_id !== M.me?.id;
@@ -280,6 +285,7 @@
       ${t && !isOwner && t.user_id !== M.me?.id ? `<label>Access</label><label class="row"><input type="checkbox" id="epA" ${t.active ? 'checked' : ''} ${canEdit ? '' : 'disabled'}> Can use aARgon3 and Mexel</label>` : ''}</div>
       <p class="muted">${t ? '' : 'They sign in to aARgon3 with the Nexus account that has this email. Nexus admins are added automatically.'}</p>
       <div class="row"><span class="sp"></span><button class="btn" data-close>Cancel</button>${canEdit ? '<button class="btn primary" id="epGo">Save</button>' : ''}</div>`);
+    NX.afterEmpModal?.(el, t, { canEdit, close });   // 2.8: more about them
     const q = id => el.querySelector('#' + id);
     if (canEdit) q('epGo').onclick = async () => {
       const body = { ...(t ? { id: t.id } : { email: q('epE').value.trim() }), display_name: q('epN').value.trim(), title: q('epT').value.trim(), phone: q('epP').value.trim(), default_store: q('epS').value, color: q('epC').value, notes: q('epNo').value.trim() };

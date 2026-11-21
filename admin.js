@@ -101,16 +101,32 @@
   function presence(a) {
     if (!a) return 'offline';
     const fresh = a.last_seen && Date.now() - new Date(a.last_seen) < 150e3;
-    if (a.id === NX.A.user?.id) return NX.A.prefs.status === 'invisible' ? 'offline' : NX.A.prefs.status === 'dnd' ? 'dnd' : NX.A.idle ? 'idle' : 'online';
-    if (!fresh || a.status === 'invisible') return 'offline';
-    return a.status === 'dnd' ? 'dnd' : a.idle ? 'idle' : 'online';
+    const st = a.id === NX.A.user?.id ? myStatus() : (a.status === 'idle' && a.back_at && new Date(a.back_at) < Date.now() ? 'auto' : a.status);
+    if (a.id === NX.A.user?.id) return st === 'invisible' ? 'offline' : st === 'dnd' ? 'dnd' : st === 'idle' || NX.A.idle ? 'idle' : 'online';
+    if (!fresh || st === 'invisible') return 'offline';
+    return st === 'dnd' ? 'dnd' : st === 'idle' || a.idle ? 'idle' : 'online';
   }
+  // 2.8: Idle you picked yourself ends at its "back at" time
+  const myStatus = () => { const p = NX.A.prefs; return p.status === 'idle' && p.back_at && new Date(p.back_at) < Date.now() ? 'auto' : p.status; };
   const PRES = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Offline' };
-  function av(a, size = '', pres = false) {
+  // 2.8: "Idle for 12 min" / "Idle until 3:00 PM" / "Last seen 2 h ago"
+  function presText(a) {
+    const pr = presence(a); if (!a) return PRES.offline;
+    if (pr === 'idle') {
+      const back = (a.id === NX.A.user?.id ? NX.A.prefs.back_at : a.back_at), since = (a.id === NX.A.user?.id ? NX.A.idleSince : a.idle_since);
+      if ((a.id === NX.A.user?.id ? myStatus() : a.status) === 'idle' && back) return 'Idle until ' + new Date(back).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      if (since) { const m = Math.max(1, Math.round((Date.now() - new Date(since)) / 60e3)); return m < 60 ? `Idle for ${m} min` : `Idle for ${Math.floor(m / 60)} h ${m % 60 ? (m % 60) + ' min' : ''}`.trim(); }
+      return 'Idle';
+    }
+    if (pr === 'offline' && a.last_seen) return 'Last seen ' + when(a.last_seen);
+    return PRES[pr];
+  }
+  function av(a, size = '', pres = null) {
+    if (pres === null) pres = !!(a && (a.id || a.user_id) && NX.A.admins?.some(x => x.id === (a.id || a.user_id)));   // 2.8: every admin's picture shows if they're online, idle or away
     const id = a?.id || a?.user_id || a?.email || '?', url = a?.avatar_url;
     const safe = url && /^https:\/\//.test(url) ? url.replace(/["'()\\]/g, '') : '';
     const crown = (NX.A.tiers || {})[id] === 'owner' ? '<i class="av-crown" title="Owner">👑</i>' : '';   // 2.0.4: the Owner's picture wears a crown everywhere (chat too)
-    return `<span class="av ${size} ${safe ? 'img' : ''}" style="--c:${colorOf(id)};${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${crown}${pres ? `<i class="pr ${presence(a)}"></i>` : ''}</span>`;
+    return `<span class="av ${size} ${safe ? 'img' : ''}" style="--c:${colorOf(id)};${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}${pres && a ? ' · ' + esc(presText(adminById(a.id || a.user_id) || a)) : ''}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${crown}${pres ? `<i class="pr ${presence(a)}"></i>` : ''}</span>`;
   }
   const adminById = id => NX.A.admins.find(a => a.id === id);
 
@@ -135,11 +151,11 @@
     } catch {}
   }
   // kind: chat | requests | feedback | reports | tasks | audit | schedules | hub.  force: a mention (gets through muted rooms, not Do not disturb)
-  function notify({ kind, title, body, who, tab, onClick, force = false, room, to }) {
+  function notify({ kind, title, body, who, tab, onClick, force = false, urgent = false, room, to }) {   // 2.8 urgent: on-call pages get through Do not disturb
     emit('notify', { kind, title, body, tab, room, to, force });   // the Mac hub forwards these to phones
     const p = NX.A.prefs, n = p.notify || {};
     if (!force && n[kind] === false) return;
-    const dnd = p.status === 'dnd';
+    const dnd = p.status === 'dnd' && !urgent;
     const open = () => { window.focus(); if (onClick) onClick(); else if (tab) NX.go(tab); };
     if (!dnd) toast(body, { title, who, onClick: open });
     if (dnd) return;
@@ -164,7 +180,7 @@
     ['INBOX', [['access', '🔑', 'Access requests', 'access'], ['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['perms', '🔐', 'Admin access', 'perms']]],
     ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['beta', 'β', 'Beta'], ['testing', '🧪', 'Testing'], ['prompts', '✍', 'Agent prompts'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
-    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['training', '🧠', 'Training'], ['freeapi', '📊', 'API usage'], ['audit', '📜', 'Audit log']]],
+    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['training', '🧠', 'Training'], ['freeapi', '📊', 'API usage'], ['activity', '🔥', 'Admin activity'], ['audit', '📜', 'Audit log']]],
     ['MONEY', [['mexel', '🧾', 'Mexel']]],
     ['STAFF', [['shifts', '🗓', 'Shifts'], ['employees', '👥', 'Employees']]],
     ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['terms', '⚖', 'Terms'], ['me', '⚙︎', 'My settings']]]
@@ -182,7 +198,7 @@
     $('hdr').innerHTML = `${isOffline() || waiting ? `<span class="offline-chip" title="${isOffline() ? "You're offline. Changes you make are kept and sent when you reconnect." : 'Sending changes you made offline…'}">${isOffline() ? 'OFFLINE' : 'SYNCING'}${waiting ? ' · ' + waiting : ''}</span>` : ''}<span class="live ${NX.A.live ? '' : 'off'}" id="liveDot" title="${NX.A.live ? 'Updates arrive instantly' : 'Checking for updates every few seconds'}">${NX.A.live ? '● <b>LIVE</b>' : '○ <b>POLLING</b>'}</span>
       <button class="hbtn search" id="hFind" title="Search and jump (${IS_WIN ? 'Ctrl+K' : '⌘K'})">⌕<span class="kb">${IS_WIN ? 'Ctrl K' : '⌘K'}</span></button>
       <button class="hbtn" id="hBell" title="Notifications">🔔<span class="n" data-badge="inbox" hidden></span></button>
-      <button class="me-chip" id="hMe" title="My settings">${av(me, 'sm', true)}<span>${esc(nameOf(me))}<small>${esc(NX.levelLabel(NX.A.level, NX.A.user.id))} · ${PRES[presence(me)]}</small></span></button>`;
+      <button class="me-chip" id="hMe" title="My settings">${av(me, 'sm', true)}<span>${esc(nameOf(me))}<small>${esc(NX.levelLabel(NX.A.level, NX.A.user.id))} · ${esc(presText(me))}</small></span></button>`;
     $('hMe').onclick = () => NX.go('me');
     $('hFind').onclick = () => NX.palette?.();
     $('hBell').onclick = () => NX.go(NX.A.counts.access ? 'access' : NX.A.counts.requests ? 'requests' : NX.A.counts.feedback ? 'feedback' : NX.A.counts.reports ? 'reports' : NX.A.counts.chat ? 'chat' : NX.A.counts.health ? 'health' : 'dashboard');
@@ -255,7 +271,7 @@
   const on = (table, fn) => { (listeners[table] = listeners[table] || []).push(fn); return () => { listeners[table] = listeners[table].filter(f => f !== fn); }; };
   const emit = (table, payload) => (listeners[table] || []).slice().forEach(fn => { try { fn(payload); } catch (e) { console.error(e); } });
   const LIVE_TABLES = ['admin_messages', 'admin_reads', 'admin_prefs', 'admin_groups', 'admin_group_members', 'beta_requests', 'feedback_reports', 'feedback_replies', 'content_reports', 'maintenance_config', 'admin_tasks',
-    'broadcasts', 'admin_schedules', 'admin_hub', 'admin_team_notes', 'moderation_log', 'status_incidents', 'access_requests'];
+    'broadcasts', 'admin_schedules', 'admin_hub', 'admin_team_notes', 'moderation_log', 'status_incidents', 'access_requests', 'admin_oncall', 'staff_shift_swaps'];
   function realtime() {
     let ch = sb.channel('admin-live');
     for (const t of LIVE_TABLES) ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, p => emit(t, p));
@@ -296,7 +312,7 @@
     });
     on('admin_prefs', p => {
       const r = p.new; if (!r?.user_id) return;
-      const a = adminById(r.user_id); if (a) Object.assign(a, { status: r.status, status_text: r.status_text, idle: r.idle, last_seen: r.last_seen, read_receipts: r.read_receipts });
+      const a = adminById(r.user_id); if (a) Object.assign(a, { status: r.status, status_text: r.status_text, idle: r.idle, last_seen: r.last_seen, read_receipts: r.read_receipts, idle_since: r.idle_since, back_at: r.back_at });
       emit('presence', a);
     });
   }
@@ -307,11 +323,18 @@
   document.addEventListener('visibilitychange', () => { hiddenAt = document.hidden ? Date.now() : 0; if (!document.hidden) { lastInput = Date.now(); if (NX.A.idle) { NX.A.idle = false; beat(); } emit('visible', {}); } });
   async function beat() {
     if (!NX.A.user) return;
-    const idle = Date.now() - lastInput > 5 * 60e3 || (hiddenAt && Date.now() - hiddenAt > 5 * 60e3);
-    NX.A.idle = !!idle;
+    // 2.8: your own idle timer (My settings), 0 = never idle by itself
+    const after = Number.isFinite(+NX.A.prefs.idle_after) ? +NX.A.prefs.idle_after : 5;
+    const idle = after > 0 && (Date.now() - lastInput > after * 60e3 || (hiddenAt && Date.now() - hiddenAt > after * 60e3));
+    const was = NX.A.idle; NX.A.idle = !!idle;
+    if (NX.A.idle && !was) NX.A.idleSince = new Date(Math.min(Date.now(), lastInput + after * 60e3)).toISOString(); else if (!NX.A.idle) NX.A.idleSince = null;
+    let expired = false; if (NX.A.prefs.status === 'idle' && NX.A.prefs.back_at && new Date(NX.A.prefs.back_at) < Date.now()) { NX.A.prefs.status = 'auto'; NX.A.prefs.back_at = null; expired = true; }
     const now = new Date().toISOString();
-    const { error } = await sb.from('admin_prefs').upsert({ user_id: NX.A.user.id, last_seen: now, idle: NX.A.idle, updated_at: now }, { onConflict: 'user_id' });
-    if (!error) { const me = adminById(NX.A.user.id); if (me) Object.assign(me, { last_seen: now, idle: NX.A.idle }); }
+    const row = { user_id: NX.A.user.id, last_seen: now, idle: NX.A.idle, updated_at: now, ...(expired ? { status: 'auto', back_at: null } : {}) };
+    if (was !== NX.A.idle) row.idle_since = NX.A.idleSince;
+    let { error } = await sb.from('admin_prefs').upsert(row, { onConflict: 'user_id' });
+    if (error && /idle_since/.test(error.message)) { delete row.idle_since; ({ error } = await sb.from('admin_prefs').upsert(row, { onConflict: 'user_id' })); }   // before apoji-admin-2.8.sql
+    if (!error) { const me = adminById(NX.A.user.id); if (me) Object.assign(me, { last_seen: now, idle: NX.A.idle, idle_since: NX.A.idleSince }); }
     paintHeader(); emit('presence', null);
   }
   // Going offline when the page closes (keepalive so it still sends)
@@ -323,7 +346,7 @@
   async function savePrefs(patch) {
     Object.assign(NX.A.prefs, patch);
     const { error } = await sb.from('admin_prefs').upsert({ user_id: NX.A.user.id, ...patch, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    if (error) toast(needSql(error.message) ? 'Run supabase/nexus-v2.2.sql to save settings.' : error.message, true);
+    if (error) toast(/status_check|idle_after|back_at|idle_since/.test(error.message) ? 'Run supabase/apoji-admin-2.8.sql (this repo) to use Idle and the idle timer.' : needSql(error.message) ? 'Run supabase/nexus-v2.2.sql to save settings.' : error.message, true);
     const me = adminById(NX.A.user.id); if (me) Object.assign(me, patch);
     paintHeader(); emit('presence', null);
     return !error;
@@ -385,9 +408,9 @@
   }
 
   const NX = window.NX = {
-    sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, PRES, adminById, applyTheme,
+    sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, presText, myStatus, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {}, WIN: IS_WIN, pc, VERSION: '2.7.2',
+    pages: {}, WIN: IS_WIN, pc, VERSION: '2.8.0',
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,
