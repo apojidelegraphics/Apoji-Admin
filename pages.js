@@ -200,7 +200,7 @@
       <div class="row" style="margin:12px 0"><select class="field" id="fbSt">${FB_STATUS.map(([k, l]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <select class="field" id="fbPr">${['low', 'normal', 'high', 'urgent'].map(p => `<option value="${p}" ${r.priority === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)} priority</option>`).join('')}</select>
         <select class="field" id="fbAs"><option value="">Unassigned</option>${A.admins.map(a => `<option value="${esc(a.id)}" ${r.assignee === a.id ? 'selected' : ''}>${esc(nameOf(a))}${a.id === A.user.id ? ' (me)' : ''}</option>`).join('')}</select>
-        <span class="sp"></span>${isPortal(r) ? '<button class="btn sm" id="fbEdit" title="Written in the portal, so you can change it">✎ Edit</button>' : ''}<button class="btn sm" id="fbTask" title="Make a task for this">✅ Task</button><button class="btn sm danger" id="fbDel">Delete</button></div>
+        <span class="sp"></span>${isPortal(r) ? '<button class="btn sm" id="fbEdit" title="Written in the portal, so you can change it">✎ Edit</button>' : ''}<button class="btn sm" id="fbTask" title="Make a task for this">✅ Task</button>${r.kind === 'bug' ? '<button class="btn sm" id="fbKnownIssue" title="Put it on the status page as a known issue">⚠ Known issue</button>' : ''}<button class="btn sm danger" id="fbDel">Delete</button></div>
       ${r.kind === 'featfix' ? '<div class="banner">🛠 This came in as “Feature & Fix”. Which is it? <span class="sp" style="flex:1"></span><button class="btn sm" data-sortk="bug">🐞 A bug</button><button class="btn sm" data-sortk="feature">✨ A feature idea</button></div>' : ''}
       <div class="quote" style="margin-bottom:10px">${esc(r.body || '(no details)')}</div>
       ${(r.attachments || []).length ? `<div class="fb-pics">${r.attachments.map(p => `<div class="fb-pic" data-fbimg="${esc(p)}"><span class="spinner"></span></div>`).join('')}</div>` : ''}
@@ -222,6 +222,7 @@
       if (e.target.id === 'fbEdit') return newReport(r);
       if (e.target.dataset.sortk) { await save({ kind: e.target.dataset.sortk }); return P.feedback(); }
       const pic = e.target.closest('.fb-pic img'); if (pic) { const lb = document.createElement('div'); lb.className = 'lightbox'; lb.innerHTML = `<img src="${pic.src}" alt=""><div class="lb-acts"><button class="btn primary" data-saveimg="${pic.src}" data-name="bug-report-${r.id}">⬇ Save image</button></div>`; lb.onclick = ev => { if (!ev.target.closest('button')) lb.remove(); }; document.body.appendChild(lb); return; }
+      if (e.target.closest('#fbKnownIssue')) return NX.knownIssueFromReport?.(r);   // 2.7.2
       if (e.target.id === 'fbTask') return NX.tasks.modal({ title: r.title.slice(0, 200), link_kind: 'feedback', link_id: String(id), link_label: r.title.slice(0, 200), priority: r.priority === 'urgent' || r.priority === 'high' ? r.priority : 'normal', assignee: r.assignee || A.user.id });
       if (e.target.id === 'fbDel') { if (!confirm('Delete this report and its replies?')) return; const { error: er } = await sb.from('feedback_reports').delete().eq('id', id); if (er) return toast(er.message, true); A.arg = null; NX.refreshCounts(); return P.feedback(); }
       if (e.target.id === 'fbSend') {

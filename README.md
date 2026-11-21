@@ -176,6 +176,14 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.7.2
+
+Needs `supabase/nexus-v3.12.sql` from the Nexus repo (run it in the Nexus Supabase project).
+
+- **Status → Known issues & bugs.** Add the bugs people keep hitting: what happens, a workaround, which apps and versions, how bad it is, words that match reports about it, and whether it shows on the public status page. Mark one fixed (with the version) and everyone who said "I have this too" gets a notification.
+- **Feedback → ⚠ Known issue** on a bug report starts a known issue from it, with the report linked. When someone writes a report in Nexus that matches a known issue, the app shows them the workaround first.
+- Matches Nexus '28 3.12 (staff get a Pro plan's use of the free tier; the premium-chat function needs the `STORE_SERVICE_KEY` secret for that).
+
 ## 2.7.1
 
 Mexel is locked down: run `aargon3-mexel-lockdown.sql` (in the aARgon3 project) so only the owner and the people on its staff list get in.

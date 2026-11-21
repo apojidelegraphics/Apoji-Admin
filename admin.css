@@ -679,3 +679,7 @@ h3 svg.ico { color: var(--accent); }
 .mx-scroll { overflow-x: auto; } .mx-store table { min-width: 520px; }
 .mx-store td:not(:first-child), .mx-store th:not(:first-child) { white-space: nowrap; text-align: right; } .mx-store td:first-child { min-width: 200px; }
 @media (max-width: 760px) { .mx-store table { min-width: 0; } .mx-store td:first-child { min-width: 0; } .mx-store td:not(:first-child) { text-align: left; } }
+/* 2.7.2 known issues */
+.ki-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.ki-row { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.ki-row:hover { border-color: rgba(var(--rgb), .5); } .ki-row.done { opacity: .65; } .ki-row .row { gap: 8px; align-items: center; flex-wrap: wrap; }

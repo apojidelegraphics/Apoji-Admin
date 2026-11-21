@@ -407,3 +407,64 @@
       if (b.id === 'updLog') card.querySelector('#updPre').hidden = !card.querySelector('#updPre').hidden; };
   };
 })();
+
+// =========================================================== 2.7.2: Known issues & bugs (Status page)
+// Shown on the public status page and in Nexus when someone types a bug report that matches. Mark one Fixed (with the
+// release) and everyone who said "I have this too" gets a notice. Needs supabase/nexus-v3.12.sql (Nexus repo).
+(function () {
+  const { sb, $, esc, ago, toast } = NX;
+  const A = NX.A, P = NX.pages;
+  const ST = [['investigating', 'Investigating'], ['identified', 'Found the cause'], ['fixing', 'Fix coming'], ['fixed', 'Fixed'], ['wont_fix', 'Won’t fix']];
+  const APPS = [['mac', 'Mac app'], ['windows', 'Windows app'], ['n28c', 'N28C'], ['test_run', 'Test Run'], ['admin', 'Apoji Admin'], ['aargon3', 'aARgon3']];
+  const SEVS = [['minor', 'Minor'], ['major', 'Major'], ['critical', 'Critical']];
+  const pill = s => `<span class="pill ${s === 'fixed' ? 'p-approved' : s === 'wont_fix' ? '' : s === 'investigating' ? 'p-pending' : 'p-declined'}">${esc((ST.find(x => x[0] === s) || [, s])[1]).toUpperCase()}</span>`;
+  async function card(host) {
+    const [{ data, error }, { data: incs }] = await Promise.all([sb.rpc('admin_known_issues'), sb.from('status_incidents').select('id,title,started_at,resolved_at').order('started_at', { ascending: false }).limit(30)]);
+    if (error) { host.innerHTML = `<div class="card"><h3>Known issues &amp; bugs</h3><p class="muted">${esc(NX.needSql?.(error.message) ? 'Run supabase/nexus-v3.12.sql (Nexus repo) in Supabase → SQL Editor to turn this on.' : error.message)}</p></div>`; return; }
+    const list = data || [], open = list.filter(i => !['fixed', 'wont_fix'].includes(i.status)), closed = list.filter(i => ['fixed', 'wont_fix'].includes(i.status));
+    const row = i => `<div class="ki-row ${['fixed', 'wont_fix'].includes(i.status) ? 'done' : ''}" data-ki="${i.id}"><div class="row"><b>${esc(i.title)}</b>${pill(i.status)}${i.severity !== 'minor' ? `<span class="pill p-declined">${esc(i.severity.toUpperCase())}</span>` : ''}${i.public ? '' : '<span class="pill">HIDDEN</span>'}<span class="sp"></span><span class="muted">${(i.apps || []).map(a => (APPS.find(x => x[0] === a) || [, a])[1]).join(', ') || 'All apps'}${i.fixed_in ? ' · fixed in ' + esc(i.fixed_in) : ''} · ${i.followers} following · ${ago(i.updated_at)}</span></div>${i.workaround ? `<div class="muted">Workaround: ${esc(i.workaround)}</div>` : ''}</div>`;
+    host.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">Known issues &amp; bugs <span class="muted">${open.length} open</span></h3><span class="sp"></span><button class="btn primary" id="kiNew">＋ Add a known issue</button></div>
+      <p class="muted">On the public status page and in Nexus's feedback form (“We know about this”). Marking one Fixed tells everyone who follows it.</p>
+      <div class="ki-list">${open.map(row).join('') || '<p class="muted">No open issues.</p>'}</div>
+      ${closed.length ? `<details style="margin-top:10px"><summary class="muted">Fixed and closed (${closed.length})</summary><div class="ki-list">${closed.map(row).join('')}</div></details>` : ''}</div>`;
+    host.onclick = e => { if (e.target.closest('#kiNew')) return modal(null, incs || [], host); const r = e.target.closest('[data-ki]'); if (r) modal(list.find(x => x.id === +r.dataset.ki), incs || [], host); };
+  }
+  function modal(k, incs, host, preset = {}) {
+    const v = { ...preset, ...(k || {}) };
+    const { el, close } = NX.modal(`<h3>${k ? 'Known issue' : 'Add a known issue'}</h3><div class="acct-grid mx-form">
+      <label>Title</label><input class="field" id="kT" maxlength="140" value="${esc(v.title || '')}" placeholder="e.g. The highlight orb won't start on some Windows PCs">
+      <label>What happens</label><textarea class="field" id="kD" rows="3" maxlength="2000" placeholder="What people see">${esc(v.details || '')}</textarea>
+      <label>Workaround</label><textarea class="field" id="kW" rows="2" maxlength="1000" placeholder="Optional: what to do until it's fixed">${esc(v.workaround || '')}</textarea>
+      <label>Apps</label><div class="row" style="flex-wrap:wrap">${APPS.map(([a, l]) => `<label class="row"><input type="checkbox" data-kapp="${a}" ${(v.apps || []).includes(a) ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+      <label>Versions</label><input class="field" id="kV" maxlength="60" value="${esc(v.versions || '')}" placeholder="e.g. 3.11.0 – 3.11.1">
+      <label>Status</label><select class="field" id="kS">${ST.map(([s, l]) => `<option value="${s}" ${(v.status || 'investigating') === s ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <label>Fixed in</label><input class="field" id="kF" maxlength="40" value="${esc(v.fixed_in || '')}" placeholder="e.g. 3.12.0">
+      <label>How bad</label><select class="field" id="kSev">${SEVS.map(([s, l]) => `<option value="${s}" ${(v.severity || 'minor') === s ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <label>Match words</label><input class="field" id="kWords" maxlength="300" value="${esc((v.words || []).join(', '))}" placeholder="Extra words people use, e.g. orb, clixml, highlight">
+      <label>Incident</label><select class="field" id="kI"><option value="">None</option>${incs.map(i => `<option value="${i.id}" ${+v.incident_id === i.id ? 'selected' : ''}>${esc(i.title)}${i.resolved_at ? ' (resolved)' : ''}</option>`).join('')}</select>
+      <label>Reports</label><input class="field" id="kR" value="${esc((v.report_ids || []).join(', '))}" placeholder="Feedback report numbers, e.g. 12, 31">
+      <label>Public</label><label class="row"><input type="checkbox" id="kP" ${v.public === false ? '' : 'checked'}> Show it on the status page and in Nexus</label></div>
+      <div class="row" style="margin-top:14px">${k ? '<button class="btn danger" id="kDel">Delete</button>' : ''}<span class="sp"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="kGo">Save</button></div>`);
+    const q = id => el.querySelector('#' + id);
+    q('kGo').onclick = async () => {
+      const row = { title: q('kT').value.trim(), details: q('kD').value.trim(), workaround: q('kW').value.trim(), apps: [...el.querySelectorAll('[data-kapp]:checked')].map(x => x.dataset.kapp),
+        versions: q('kV').value.trim(), status: q('kS').value, fixed_in: q('kF').value.trim(), severity: q('kSev').value, words: q('kWords').value.split(',').map(x => x.trim()).filter(Boolean).slice(0, 20),
+        incident_id: q('kI').value ? +q('kI').value : null, report_ids: q('kR').value.split(/[,\s#]+/).map(Number).filter(n => n > 0), public: q('kP').checked };
+      if (row.title.length < 3) return toast('Give it a title.', true);
+      if (row.status === 'fixed' && !row.fixed_in && !confirm('Mark it fixed without saying which release has the fix?')) return;
+      const { error } = k ? await sb.from('known_issues').update(row).eq('id', k.id) : await sb.from('known_issues').insert(row);
+      if (error) return toast(error.message, true);
+      close(); toast(row.status === 'fixed' && k?.status !== 'fixed' ? 'Marked fixed. Followers get a notice.' : 'Saved'); if (host) card(host);
+    };
+    if (k) q('kDel').onclick = async () => { if (!confirm('Delete this known issue?')) return; const { error } = await sb.from('known_issues').delete().eq('id', k.id); if (error) return toast(error.message, true); close(); toast('Deleted'); if (host) card(host); };
+  }
+  NX.knownIssueFromReport = async report => { const { data: incs } = await sb.from('status_incidents').select('id,title,started_at,resolved_at').order('started_at', { ascending: false }).limit(30); modal(null, incs || [], null, { title: report.title, details: report.body ? String(report.body).slice(0, 600) : '', report_ids: [report.id], apps: /win/i.test(report.source || '') ? ['windows'] : /mac|desktop/i.test(report.source || '') ? ['mac'] : /phone|n28c/i.test(report.source || '') ? ['n28c'] : /web|try/i.test(report.source || '') ? ['test_run'] : [] }); };
+  const before = P.status;
+  if (before) P.status = async (...a) => {
+    await before(...a);
+    if (A.tab !== 'status') return;
+    const host = document.createElement('div'); host.id = 'knownIssues'; host.style.marginTop = '14px';
+    const first = $('main').querySelector('h1 + p'); (first || $('main').querySelector('h1')).after(host);
+    card(host);
+  };
+})();

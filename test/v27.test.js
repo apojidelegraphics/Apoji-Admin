@@ -55,6 +55,10 @@ assert.ok(em.includes("updates.log") && em.includes("async function fallback()")
 assert.ok(read('supabase/aargon3-mexel-lockdown.sql').includes('if not coalesce(p_owner, false) then return null; end if;') && css.includes('.mx-store td:not(:first-child)'));
 ok('2.7.1: Mexel for the Owner and picked staff, Windows updates with a fallback and a log, By store fits');
 
+// 2.7.2
+assert.ok(v27.includes("sb.rpc('admin_known_issues')") && v27.includes('NX.knownIssueFromReport = async') && read('pages.js').includes('#fbKnownIssue') && css.includes('.ki-list'));
+ok('2.7.2: known issues & bugs on the Status page, started from a bug report');
+
 assert.ok(pkg.version.localeCompare('2.7.0', undefined, { numeric: true }) >= 0);
 assert.ok(admin.includes("VERSION: '" + pkg.version + "'") && read('sw.js').includes('apoji-admin-v' + pkg.version) && read('sw.js').includes("'./v27.js'") && html.includes('<script src="v27.js"></script>') && read('README.md').includes('## 2.7'));
 ok('version 2.7.0 or newer');
