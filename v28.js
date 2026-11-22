@@ -13,7 +13,7 @@
   const nm = a => NX.nameOf(a);
   const day = d => new Date(d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const tm = d => new Date(d).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const plural = (n, w) => `${n} ${n === 1 ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + 'ies' : w + 's'}`;
   const csvOf = rows => rows.map(r => r.map(v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(',')).join('\n');
   const download = (name, text) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' })); a.download = name; a.click(); };
 
@@ -132,14 +132,25 @@
     NX.notify({ kind: 'schedules', title: 'Your daily digest', body: bits.join(' · '), tab: 'dashboard' });
   }
   setTimeout(() => { if (A.user) morning(); }, 6000); setInterval(() => { if (A.user) morning(); }, 15 * 60e3);
+  // 2.8.1: "Needs you" under the on-call box: what's waiting right now, and quick links
+  async function paintNeeds(host) {
+    const [d, tests] = await Promise.all([digest(0), sb.from('test_results').select('item_id,status,reply,updated_at').eq('status', 'fail').is('reply', null).gte('updated_at', new Date(Date.now() - 14 * 864e5).toISOString()).then(r => r.error ? sb.from('test_results').select('item_id,status,updated_at').eq('status', 'fail').gte('updated_at', new Date(Date.now() - 14 * 864e5).toISOString()) : r, () => ({ data: [] }))]);
+    if (!host.isConnected) return;
+    const ok = d && !d.error, open = ok ? (d.incidents || []).filter(i => i.status !== 'resolved').length : 0, fails = (tests?.data || []).length;
+    const items = ok ? [[d.urgent_open, 'urgent bug|urgent bugs', 'feedback', true], [open, 'open incident|open incidents', 'status', true], [d.unanswered, 'report waiting over a day|reports waiting over a day', 'feedback'], [fails, 'failed test without a reply|failed tests without a reply', 'testing'], [(d.releases_soon || []).length, 'release coming up|releases coming up', 'releases']].filter(x => +x[0] > 0) : [];
+    host.innerHTML = `<div class="card"><h3 style="margin:0">Needs you</h3>
+      <div class="needs-list">${!ok ? `<div class="ok">${need28(d?.error) ? SQL28 : 'Couldn’t check right now.'}</div>` : items.length ? items.map(([v, l, go, warn]) => `<button data-go="${go}" class="${warn ? 'warn' : ''}"><b>${n(v)}</b><span>${esc(l.split('|')[+v === 1 ? 0 : 1])}</span></button>`).join('') : '<div class="ok">Nothing waiting. Nice.</div>'}</div>
+      <div class="quick-links">${[['feedback', 'Feedback'], ['testing', 'Testing'], ['releases', 'Releases'], ['status', 'Status'], ['chat', 'Team chat']].map(([k, l]) => `<button class="btn sm ghost" data-go="${k}">${l}</button>`).join('')}</div></div>`;
+    host.onclick = e => { const g = e.target.closest('[data-go]'); if (g) NX.go(g.dataset.go); };
+  }
   const beforeDash = P.dashboard;
   P.dashboard = async (...a) => {
     await beforeDash(...a);
     if (A.tab !== 'dashboard') return;
     if ($('main').querySelector('.dg-wrap')) return;   // the dashboard can render twice at once
-    const wrap = document.createElement('div'); wrap.className = 'dg-wrap'; wrap.innerHTML = '<div id="dashDigest"></div><div id="dashOncall"></div>';
+    const wrap = document.createElement('div'); wrap.className = 'dg-wrap'; wrap.innerHTML = '<div id="dashDigest"></div><div class="dg-side"><div id="dashOncall"></div><div id="dashNeeds"></div></div>';
     const first = $('main').querySelector('h1 + p') || $('main').querySelector('h1'); first ? first.after(wrap) : $('main').prepend(wrap);
-    paintDigest($('dashDigest')); paintOc($('dashOncall'), false);
+    paintDigest($('dashDigest')); paintOc($('dashOncall'), false); paintNeeds($('dashNeeds'));
   };
 
   // =========================================================== Bug duplicates

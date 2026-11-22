@@ -27,7 +27,7 @@
       <div class="row" style="margin-bottom:10px"><div class="tabsub" id="dRange" style="margin:0">${[14, 30, 90].map(n => `<button data-days="${n}" class="${n === days ? 'on' : ''}">${n} days</button>`).join('')}</div><span class="sp"></span>
         <label class="muted" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="dTable" ${tableOn ? 'checked' : ''}> Show numbers as tables</label></div>
       <div class="cols3">
-        <div class="card"><h3>Active people per day</h3><div id="cActive"></div></div>
+        <div class="card act-card"><h3>Active people per day</h3><div id="cActive"></div><div class="act-sum" id="cActiveSum"></div></div>
         <div class="card"><h3>Admins online <span class="muted">${online.length} of ${A.admins.length}</span>${A.level === 'high-admin' && A.tier !== 'viewer' ? '<span class="sp"></span><button class="btn sm" id="dNewAdmin" title="Make a new admin profile">＋ New admin profile</button>' : ''}</h3><div class="members">${A.admins.slice().sort((a, b) => ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(a)] - ({ online: 0, idle: 1, dnd: 2, offline: 3 })[presence(b)]).slice(0, 8).map(a => { const p = presence(a); return `<div>${av(a, 'sm', true)}<span class="nm">${esc(nameOf(a))}<small><span class="prtxt ${p}">${PRES[p]}</span>${a.status_text ? ' · ' + esc(a.status_text) : ''}</small></span>${a.id !== A.user.id ? `<button class="btn sm" data-dm="${esc(a.id)}">💬</button>` : ''}</div>`; }).join('')}</div></div>
       </div>
       <div id="tryCard"></div>   <!-- 2.1: Test Run sits under active people + admins online -->
@@ -46,6 +46,10 @@
       const tbl = $('dTable')?.checked;
       if (tbl) { $('cActive').innerHTML = NXCharts.table(rows, [{ key: 'active_desktop', label: 'Mac & PC' }, { key: 'active_phone', label: 'N28C' }, { key: 'active', label: 'Total' }]); $('cSign').innerHTML = NXCharts.table(rows, [{ key: 'signups', label: 'Accounts' }]); $('cPosts').innerHTML = NXCharts.table(rows, [{ key: 'space_posts', label: 'Posts' }]); return; }
       NXCharts.line($('cActive'), rows, [{ key: 'active_desktop', label: 'Mac & PC', color: 'var(--s1)' }, { key: 'active_phone', label: 'N28C phone', color: 'var(--s2)' }]);
+      // 2.8.1: a summary under the chart, so the card has no empty space next to a long Admins list
+      { const tot = rows.map(r => +r.active || (+r.active_desktop || 0) + (+r.active_phone || 0)), avg = tot.length ? tot.reduce((a, b) => a + b, 0) / tot.length : 0, peak = Math.max(0, ...tot), pi = tot.indexOf(peak), last = tot[tot.length - 1] || 0, half = Math.floor(tot.length / 2), a1 = half ? tot.slice(0, half).reduce((a, b) => a + b, 0) / half : 0, a2 = tot.length - half ? tot.slice(half).reduce((a, b) => a + b, 0) / (tot.length - half) : 0, ch = a1 ? Math.round((a2 - a1) / a1 * 100) : null;
+        const ph = rows.reduce((a, r) => a + (+r.active_phone || 0), 0), all = rows.reduce((a, r) => a + (+r.active_desktop || 0) + (+r.active_phone || 0), 0);
+        const el = $('cActiveSum'); if (el) el.innerHTML = [[Math.round(avg).toLocaleString(), 'a day on average'], [peak.toLocaleString(), `peak${rows[pi]?.day ? ' · ' + new Date(rows[pi].day + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}`], [last.toLocaleString(), 'today so far'], [ch == null ? '—' : (ch > 0 ? '+' : '') + ch + '%', 'vs the first half'], [all ? Math.round(ph / all * 100) + '%' : '—', 'on N28C']].map(([v, l], i) => `<div class="${i === 3 && ch != null ? (ch >= 0 ? 'up' : 'down') : ''}"><b>${v}</b><span>${l}</span></div>`).join(''); }
       NXCharts.bars($('cSign'), rows, 'signups', 'new accounts'); NXCharts.bars($('cPosts'), rows, 'space_posts', 'posts');
     };
     draw();

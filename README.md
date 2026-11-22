@@ -176,6 +176,16 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.8.1
+
+Run `supabase/apoji-admin-2.8.1.sql` (this repo) in the **Nexus** Supabase project (after 2.8).
+
+- **Reply to a testing result.** Testing → open an item → **Reply** under anyone's pass, fail or skip. They see it under that item in Nexus (Settings → Beta → Needs testing) with a notification. Edit or remove a reply any time; a re-test keeps it.
+- **Needs you.** Under the on-call box on the Dashboard: urgent bugs, open incidents, reports waiting over a day, failed tests nobody has answered and releases coming up, each one click away, plus quick links.
+- **Active people per day** has a summary under the chart (average, peak, today, the trend and how much is N28C), so the card no longer has empty space beside the Admins list.
+- **Fixes:** Save image sits under a screenshot instead of on top of it; the digest tiles are three across, so six tiles make two even rows; "9 replies", not "9 replys".
+- **More room.** A spacing pass on every page: more padding in cards, more space between cards, grids and table rows (phones keep their tighter layout).
+
 ## 2.8.0
 
 Run `supabase/apoji-admin-2.8.sql` (this repo) in the **Nexus** Supabase project. Shift reminders also need the pg_cron extension on (it already is if Axiom's cage runs on a schedule).

@@ -1,0 +1,21 @@
+// Apoji Admin 2.8.1: reply to testing results, Needs you, the active-people summary, Save image placement, digest tiles, spacing.
+const assert = require('assert'), fs = require('fs'), path = require('path');
+const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+let n = 0; const ok = m => { n++; console.log('  ✓ ' + m); };
+const v23 = read('v23.js'), v28 = read('v28.js'), pages = read('pages.js'), css = read('admin.css'), sql = read('supabase/apoji-admin-2.8.1.sql');
+for (const f of ['v23.js', 'v28.js', 'pages.js']) new Function(read(f));
+assert.ok(sql.includes('add column if not exists reply text') && sql.includes('reply_by uuid') && sql.includes('reply_at timestamptz') && sql.includes('function public.admin_test_reply(p_item bigint, p_user uuid, p_body text)'));
+assert.ok(sql.includes("admin_has_perm('testing')") && sql.includes('revoke all on function public.admin_test_reply') && sql.includes('security definer'));
+assert.ok(v23.includes('data-treply') && v23.includes('data-tunreply') && v23.includes("sb.rpc('admin_test_reply'") && v23.includes('test-reply') && v23.includes('apoji-admin-2.8.1.sql'));
+ok('reply to a testing result (only the team; edit, remove)');
+assert.ok(v28.includes('async function paintNeeds') && v28.includes('dashNeeds') && v28.includes('dg-side') && v28.includes("'failed test without a reply|failed tests without a reply'"));
+assert.ok(/plural = \(n, w\) =>.*ies/.test(v28));
+ok('Needs you under on-call, and plurals like "replies"');
+assert.ok(pages.includes('cActiveSum') && pages.includes("'a day on average'") && css.includes('.act-sum') && css.includes('.act-card { display: flex; flex-direction: column; }'));
+ok('active people card fills its height with a summary');
+assert.ok(css.includes('.fb-pic .save-img { position: static; }') && css.includes('.dg-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }') && css.includes('2.8.1 spacing pass'));
+ok('Save image under the picture, digest tiles 3 across, spacing pass');
+const pkg = JSON.parse(read('package.json'));
+assert.strictEqual(pkg.version, '2.8.1'); assert.ok(read('README.md').includes('## 2.8.1') && read('admin.js').includes("VERSION: '2.8.1'"));
+ok('version 2.8.1');
+console.log(`v2.8.1: ${n} passed`);

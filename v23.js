@@ -168,7 +168,8 @@
       const i = list.find(x => x.id === +id); if (!i) return; const rs = byItem[i.id] || [];
       $('tDetail').innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">${esc(i.title)}</h3><span class="muted">${PLAT[i.platform]}</span><span class="sp"></span>${can ? `<button class="btn sm" data-tedit="${i.id}">Edit</button><button class="btn sm ghost" data-tarch="${i.id}">Archive</button>` : ''}</div>
         ${i.steps ? `<p style="white-space:pre-wrap">${esc(i.steps)}</p>` : ''}
-        ${rs.length ? rs.map(r => `<div class="test-res ${r.status}"><span>${ST[r.status][0]} <b>${esc(people(r.user_id))}</b> <span class="muted">${esc(PLAT[r.platform] || r.platform || '')} · ${ago(r.updated_at)}</span></span>${r.note ? `<div>${esc(r.note)}</div>` : ''}${r.image ? `<div class="fb-pic" data-fbimg="${esc(r.image)}"><span class="spinner"></span></div>` : ''}${r.status === 'fail' ? `<button class="btn sm" data-tbug="${i.id}|${r.user_id}">🐞 Make it a bug report</button>` : ''}</div>`).join('') : '<p class="muted">No results yet.</p>'}</div>`;
+        ${rs.length ? rs.map(r => `<div class="test-res ${r.status}"><span>${ST[r.status][0]} <b>${esc(people(r.user_id))}</b> <span class="muted">${esc(PLAT[r.platform] || r.platform || '')} · ${ago(r.updated_at)}</span></span>${r.note ? `<div>${esc(r.note)}</div>` : ''}${r.image ? `<div class="fb-pic" data-fbimg="${esc(r.image)}"><span class="spinner"></span></div>` : ''}<div class="test-acts">${r.status === 'fail' ? `<button class="btn sm" data-tbug="${i.id}|${r.user_id}">🐞 Make it a bug report</button>` : ''}${can && !r.reply ? `<button class="btn sm ghost" data-treply="${i.id}|${r.user_id}">Reply</button>` : ''}</div>
+          ${r.reply ? `<div class="test-reply"><span class="muted">${esc((r.reply_by && NX.adminById?.(r.reply_by) ? NX.nameOf(NX.adminById(r.reply_by)) : 'The Apoji Team'))} replied · ${ago(r.reply_at)}</span><div>${esc(r.reply)}</div>${can ? `<div class="row"><button class="btn sm ghost" data-treply="${i.id}|${r.user_id}">Edit</button><button class="btn sm ghost" data-tunreply="${i.id}|${r.user_id}">Remove</button></div>` : ''}</div>` : ''}</div>`).join('') : '<p class="muted">No results yet.</p>'}</div>`;
       loadPics($('tDetail'));
     };
     const editItem = async it => {
@@ -199,6 +200,21 @@
       }
       if (b?.dataset.tedit) return editItem(list.find(x => x.id === +b.dataset.tedit));
       if (b?.dataset.tarch) { const { error: er } = await sb.from('test_items').update({ archived: true }).eq('id', +b.dataset.tarch); if (er) return toast(er.message, true); toast('Archived'); return P.testing(); }
+      // 2.8.1: reply to a tester's result (they see it in Nexus → Settings → Beta → Needs testing, with a notification)
+      if (b?.dataset.treply || b?.dataset.tunreply) {
+        const [iid, uid] = (b.dataset.treply || b.dataset.tunreply).split('|'), r = (byItem[iid] || []).find(x => x.user_id === uid);
+        const send = async body => { const { data, error: er } = await sb.rpc('admin_test_reply', { p_item: +iid, p_user: uid, p_body: body });
+          if (er || !data?.ok) return toast(er ? (/admin_test_reply|42883|PGRST20/.test(er.message) ? 'Run supabase/apoji-admin-2.8.1.sql in Supabase → SQL Editor.' : sqlMsg(er.message)) : data.error, true);
+          if (r) Object.assign(r, { reply: body.trim() || null, reply_by: body.trim() ? A.user.id : null, reply_at: data.reply_at }); toast(body.trim() ? '✓ Reply sent' : 'Reply removed'); detail(iid); return true; };
+        if (b.dataset.tunreply) { if (!confirm('Remove this reply?')) return; return send(''); }
+        const host = b.closest('.test-res'); if (host.querySelector('.test-rbox')) return host.querySelector('.test-rbox textarea').focus();
+        host.insertAdjacentHTML('beforeend', `<div class="test-rbox"><textarea class="field" rows="2" maxlength="1000" placeholder="Reply to ${esc(people(uid))}… (e.g. Fixed in the next build, can you try again?)">${esc(r?.reply || '')}</textarea><div class="row"><span class="sp"></span><button class="btn sm" data-tcancel>Cancel</button><button class="btn sm primary" data-tsendreply>Send reply</button></div></div>`);
+        const box = host.querySelector('.test-rbox'); box.querySelector('textarea').focus();
+        box.querySelector('[data-tcancel]').onclick = ev => { ev.stopPropagation(); box.remove(); };
+        box.querySelector('[data-tsendreply]').onclick = async ev => { ev.stopPropagation(); const v = box.querySelector('textarea').value; if (!v.trim()) return toast('Write a reply first.', true); ev.target.disabled = true; if (!await send(v)) ev.target.disabled = false; };
+        return;
+      }
+      if (b?.dataset.tsendreply || b?.dataset.tcancel) return;
       if (b?.dataset.tbug) {
         const [iid, uid] = b.dataset.tbug.split('|'), it = list.find(x => x.id === +iid), r = (byItem[iid] || []).find(x => x.user_id === uid);
         const { data, error: er } = await sb.from('feedback_reports').insert({ user_id: uid, kind: 'bug', title: `Test failed: ${it.title}`.slice(0, 160), body: `${r?.note || ''}\n\nRelease ${it.release} · ${PLAT[r?.platform] || r?.platform || ''}\nSteps:\n${it.steps}`.slice(0, 8000), source: 'desktop', channel: 'portal', info: 'Added in Apoji Admin from Testing', status: 'new', priority: 'normal', attachments: r?.image ? [r.image] : [] }).select('id').single();

@@ -510,7 +510,7 @@ img.nx-orb, canvas.nx-orb { width: 32px; height: 32px; border-radius: 50%; flex:
 .perm-req { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--line); } .perm-req > div { flex: 1; min-width: 200px; }
 .temp-pw { display: flex; gap: 8px; align-items: center; } .temp-pw code { flex: 1; font: 600 20px var(--mono); padding: 10px 14px; border-radius: 10px; background: rgba(0,0,0,.3); letter-spacing: .04em; user-select: all; }
 .fb-pics { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; } .fb-pic { position: relative; max-width: 260px; } .fb-pic img { max-width: 260px; max-height: 200px; border-radius: 10px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
-.fb-pic .save-img { position: absolute; right: 6px; bottom: 6px; }
+.fb-pic { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 6px; } .fb-pic .save-img { position: static; }   /* 2.8.1: under the picture, never on top of a small one */
 .ph-wrap { position: relative; display: inline-block; } .ph-wrap .save-img { position: absolute; right: 6px; bottom: 6px; opacity: 0; transition: opacity .15s; border: 0; border-radius: 8px; padding: 4px 8px; background: rgba(0,0,0,.65); color: #fff; cursor: pointer; }
 .ph-wrap:hover .save-img { opacity: 1; } @media (hover: none) { .ph-wrap .save-img { opacity: .85; } }
 .lightbox .lb-acts { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
@@ -735,3 +735,31 @@ h3 svg.ico { color: var(--accent); }
 .em-avail { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; } .em-avail label { display: grid; gap: 2px; font-size: 11px; color: var(--muted); text-align: center; } .em-avail .field { padding: 5px 4px; text-align: center; min-width: 0; }
 @media (max-width: 560px) { .em-avail { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .pr-perf { margin-top: 14px; }
+
+/* 2.8.1 replies to testing results */
+.test-acts { display: flex; gap: 6px; flex-wrap: wrap; } .test-acts:empty { display: none; }
+.test-reply { margin: 4px 0 0 14px; padding: 8px 12px; border-left: 2px solid var(--accent); background: rgba(var(--accent-rgb, 61,255,160), .05); border-radius: 0 10px 10px 0; display: grid; gap: 4px; }
+.test-rbox { display: grid; gap: 6px; margin-top: 4px; } .test-rbox textarea { width: 100%; resize: vertical; }
+.act-card { display: flex; flex-direction: column; } .act-card #cActive { flex: none; }
+.act-sum { margin-top: auto; padding-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.act-sum > div { padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 2px; } .act-sum b { font-size: 18px; } .act-sum span { font-size: 12px; color: var(--muted); }
+.act-sum .up b { color: var(--ok, #3dffa0); } .act-sum .down b { color: #ff8a98; }
+/* 2.8.1 digest: 3 across so six tiles make two even rows; the side column has on-call and Needs you */
+.dg-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } @media (max-width: 560px) { .dg-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dg-side { display: grid; gap: 14px; align-content: start; } .dg-side .card { margin: 0; }
+.needs-list { display: grid; gap: 6px; margin: 8px 0 0; } .needs-list button { all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+.needs-list button:hover { border-color: var(--line2); } .needs-list button b { min-width: 26px; text-align: center; font-size: 15px; } .needs-list button.warn { border-color: rgba(255, 92, 108, .45); } .needs-list button.warn b { color: #ff8a98; }
+.needs-list .ok { color: var(--muted); font-size: 13px; padding: 4px 2px; }
+.quick-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+/* 2.8.1 spacing pass: more room between and inside cards, grids and rows (desktop; phones keep their tighter layout) */
+@media (min-width: 761px) {
+  main { padding: 28px 34px 72px; }
+  h1 { margin-bottom: 6px; } h1 + p, .sub { margin-bottom: 22px; line-height: 1.55; }
+  .card { padding: 18px 20px; margin-bottom: 16px; } .card h3 { margin-bottom: 14px; }
+  .grid { gap: 12px; margin-bottom: 20px; } .stat { padding: 14px 16px; }
+  .cols, .cols3 { gap: 16px; } .cols > .card, .cols3 > .card { margin-bottom: 0; } .cols + .cols, .cols3 + .cols, .cols + .card, .cols3 + div, .cols + div { margin-top: 16px; }
+  .row { gap: 10px; } .grid2 { gap: 16px; } .stats4 { gap: 12px; margin-bottom: 16px; }
+  .dg-wrap { gap: 16px; margin-bottom: 18px; } .dg-tiles { gap: 10px; margin: 16px 0; } .dg-list { gap: 7px; }
+  table.cards th, table.cards td { padding-top: 9px; padding-bottom: 9px; }
+  .test-res { padding: 12px 0; gap: 6px; }
+}

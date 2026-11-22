@@ -1,7 +1,7 @@
 // Apoji Admin service worker: keeps the app shell so it opens instantly (and installs like an app), and shows
 // phone notifications your Mac hub sends over Tailscale (web push). Your data and chat always come live from
 // Supabase; nothing from your account is cached here.
-const SHELL = 'apoji-admin-v2.8.0';
+const SHELL = 'apoji-admin-v2.8.1';
 const FILES = ['./', './index.html', './admin.css', './admin.js', './crypto.js', './charts.js', './chat.js', './pages.js', './extras.js', './features.js', './v18.js', './v19.js', './v23.js', './mindtree.js', './v25.js', './terms-data.js', './v26.js', './v261.js', './v27.js', './v28.js', './icons.js', './orb.js', './manifest.webmanifest', './icons/icon-192.png', './icons/logo.svg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x.startsWith('apoji-admin-') && x !== SHELL).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
