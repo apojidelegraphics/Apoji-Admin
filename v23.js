@@ -216,9 +216,11 @@
       }
       if (b?.dataset.tsendreply || b?.dataset.tcancel) return;
       if (b?.dataset.tbug) {
-        const [iid, uid] = b.dataset.tbug.split('|'), it = list.find(x => x.id === +iid), r = (byItem[iid] || []).find(x => x.user_id === uid);
-        const { data, error: er } = await sb.from('feedback_reports').insert({ user_id: uid, kind: 'bug', title: `Test failed: ${it.title}`.slice(0, 160), body: `${r?.note || ''}\n\nRelease ${it.release} · ${PLAT[r?.platform] || r?.platform || ''}\nSteps:\n${it.steps}`.slice(0, 8000), source: 'desktop', channel: 'portal', info: 'Added in Apoji Admin from Testing', status: 'new', priority: 'normal', attachments: r?.image ? [r.image] : [] }).select('id').single();
-        if (er) return toast(er.message, true); toast('🐞 Bug report made'); return NX.go('feedback', { arg: data.id });
+        // 2.8.1: made on the server (admin_test_to_bug). Inserting it here under the tester broke the reports' insert policy.
+        const [iid, uid] = b.dataset.tbug.split('|'); b.disabled = true;
+        const { data, error: er } = await sb.rpc('admin_test_to_bug', { p_item: +iid, p_user: uid }); b.disabled = false;
+        if (er || !data?.ok) return toast(er ? (/admin_test_to_bug|42883|PGRST20/.test(er.message) ? 'Run supabase/apoji-admin-2.8.2.sql in Supabase → SQL Editor.' : sqlMsg(er.message)) : data.error, true);
+        toast('🐞 Bug report made'); return NX.go('feedback', { arg: String(data.id) });
       }
       if (row) detail(row.dataset.titem);
     };

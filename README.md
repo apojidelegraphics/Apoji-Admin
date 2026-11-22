@@ -176,6 +176,12 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.8.2
+
+Run `supabase/apoji-admin-2.8.2.sql` (this repo) in the **Nexus** Supabase project.
+
+- **Fixed:** Testing → **Make it a bug report** said "new row violates row-level security policy". The report is now made on the server, still filed under the tester so they see it and your replies.
+
 ## 2.8.1
 
 Run `supabase/apoji-admin-2.8.1.sql` (this repo) in the **Nexus** Supabase project (after 2.8).
