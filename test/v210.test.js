@@ -13,7 +13,7 @@ assert.ok(pages.includes("const ASTYLE = [['info'") && pages.includes("kind: 'an
 console.log('  ✓ announcements: title, style, button, apps, pinned, start/end via Schedules, edit/duplicate, preview');
 assert.ok(admin.includes("const themeMode = () => store.get('themeMode', 'nexus')") && admin.includes('function clearTheme()') && pages.includes('id="thMode"'));
 console.log('  ✓ theme: Apoji Admin violet or your Nexus theme');
-assert.ok(css.includes('.av { container-type: inline-size; }') && css.includes('right: calc(14.6% - var(--pd) / 2)') && css.includes('transform: translate(-50%, -66%) rotate(-10deg)'));
+assert.ok(css.includes('.av { container-type: inline-size; }') && css.includes('right: calc(14.6% - var(--pd) / 2)') && css.includes('rotate(-28deg)'))   // 3.0: the crown went back to the corner;
 console.log('  ✓ avatars: status dot on the edge at any size, crown centered on top');
-assert.ok(/^2\.10\.\d+$/.test(pkg.version) && read('README.md').includes('## ' + pkg.version) && admin.includes(`VERSION: '${pkg.version}'`) && read('sw.js').includes('apoji-admin-v' + pkg.version));
+assert.ok(/^(2\.10|3\.\d+)\.\d+$/.test(pkg.version) && read('README.md').includes('## ' + pkg.version) && admin.includes(`VERSION: '${pkg.version}'`) && read('sw.js').includes('apoji-admin-v' + pkg.version));
 console.log('Apoji Admin 2.10: 6 checks passed');

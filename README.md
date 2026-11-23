@@ -176,6 +176,21 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 3.0.0
+
+- **The Owner's crown is back in the top-left corner** of the picture, sitting on the edge, at every size.
+- **Fixed:** the Idle moon and the Do-not-disturb line on the status dot scale with the dot (they looked broken on bigger pictures).
+- **Spacing pass:** the dashboard's left side no longer has empty space next to On call and Needs you ("Your day" sits under the digest), My settings flows into two even columns, the quick links are tidy pills, and headings and cards have the same rhythm everywhere.
+- **Fixed:** in a picture's full view, Save image and Open sit side by side (Open slid under Save).
+- **Fixed:** the Preview as bar sits under the header on one line, instead of under the Mac's window buttons.
+
+## 2.10.1
+
+Run `supabase/nexus-v4.0.4.sql` from the **Nexus '28** repo.
+
+- **Pictures:** the rebuilt and new Nexus frames (Storm, Overgrowth, Event horizon, Hex shield, 8-bit, Aurora) and the profile fonts, which now ship with the app.
+- **Status:** your status here and in Nexus is the same one. Change it in either and the other follows.
+
 ## 2.10.0
 
 Run `supabase/apoji-admin-2.10.sql` (this repo) in the **Nexus** Supabase project.

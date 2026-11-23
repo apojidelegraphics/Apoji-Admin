@@ -407,7 +407,10 @@
   function paintPreview() {
     document.querySelector('.preview-bar')?.remove();
     if (!A.preview) return;
-    document.body.insertAdjacentHTML('afterbegin', `<div class="preview-bar">👁 Previewing Apoji Admin as <b>${esc(ROLES[A.preview][0])}</b>. Supabase still sees you as the Owner, so anything you do here is done as you.<button class="btn sm" id="pvStop">Stop previewing</button></div>`);
+    // 3.0: under the header (at the very top it sat under the Mac's window buttons), one line of text
+    const html = `<div class="preview-bar"><span class="pv-eye">👁</span><span class="pv-txt">Previewing Apoji Admin as <b>${esc(ROLES[A.preview][0])}</b>. Supabase still sees you as the Owner, so anything you do here is done as you.</span><button class="btn sm" id="pvStop">Stop previewing</button></div>`;
+    const hd = document.querySelector('body > header, .shell > header, header');
+    if (hd) hd.insertAdjacentHTML('afterend', html); else document.body.insertAdjacentHTML('afterbegin', html);
     document.getElementById('pvStop').onclick = () => NX.previewAs(null);
   }
   // after sign-in: remember the Owner, and resume a preview after a reload

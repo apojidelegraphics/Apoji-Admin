@@ -148,8 +148,10 @@
     await beforeDash(...a);
     if (A.tab !== 'dashboard') return;
     if ($('main').querySelector('.dg-wrap')) return;   // the dashboard can render twice at once
-    const wrap = document.createElement('div'); wrap.className = 'dg-wrap'; wrap.innerHTML = '<div id="dashDigest"></div><div class="dg-side"><div id="dashOncall"></div><div id="dashNeeds"></div></div>';
+    const wrap = document.createElement('div'); wrap.className = 'dg-wrap'; wrap.innerHTML = '<div class="dg-main"><div id="dashDigest"></div></div><div class="dg-side"><div id="dashOncall"></div><div id="dashNeeds"></div></div>';
     const first = $('main').querySelector('h1 + p') || $('main').querySelector('h1'); first ? first.after(wrap) : $('main').prepend(wrap);
+    // 3.0: "Your day" sits under the digest, so the left side isn't empty next to On call + Needs you
+    const md = $('myDay'); if (md) wrap.querySelector('.dg-main').appendChild(md);
     paintDigest($('dashDigest')); paintOc($('dashOncall'), false); paintNeeds($('dashNeeds'));
   };
 

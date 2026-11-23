@@ -448,7 +448,7 @@
   const NX = window.NX = { setThemeMode, themeMode, profiles: PROF, refreshProfile: id => { PROF.delete(id); wantProfile(id); },
     sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, presText, myStatus, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {}, WIN: IS_WIN, pc, VERSION: '2.10.0',
+    pages: {}, WIN: IS_WIN, pc, VERSION: '3.0.0',
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,
