@@ -123,7 +123,7 @@
   }
   // 2.9: one Apoji profile everywhere. Pictures and profile frames come from the Nexus account (apoji_profiles, nexus-v4.0.1.sql),
   // so anything that only has a user id still shows the right picture, and your frame from Nexus shows here too.
-  const PROF = NX.profiles = NX.profiles || new Map(); let profQ = new Set(), profT = null;
+  const PROF = new Map(); let profQ = new Set(), profT = null;   // (window.NX doesn't exist yet here: it's made further down)
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   function wantProfile(id) {
     if (!UUID.test(id) || PROF.has(id) || profQ.has(id)) return;
@@ -147,7 +147,6 @@
       if (fk) el.classList.add('nxp-f-' + fk, 'framed');
     });
   }
-  NX.refreshProfile = id => { PROF.delete(id); wantProfile(id); };
   function av(a, size = '', pres = null) {
     if (pres === null) pres = !!(a && (a.id || a.user_id) && NX.A.admins?.some(x => x.id === (a.id || a.user_id)));   // 2.8: every admin's picture shows if they're online, idle or away
     const id = a?.id || a?.user_id || a?.email || '?', P = PROF.get(id);
@@ -436,10 +435,10 @@
       : u.latest ? toast(`Apoji Admin ${u.latest} is out. Click to download.`, { title: '⬆ Update available', ms: 15000, onClick: () => window.open(u.url, '_blank') }) : toast(`You're on the latest version (${u.current}).`));
   }
 
-  const NX = window.NX = {
+  const NX = window.NX = { profiles: PROF, refreshProfile: id => { PROF.delete(id); wantProfile(id); },
     sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, presText, myStatus, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {}, WIN: IS_WIN, pc, VERSION: '2.9.0',
+    pages: {}, WIN: IS_WIN, pc, VERSION: '2.9.1',
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,

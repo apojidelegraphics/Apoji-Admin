@@ -7,3 +7,10 @@ assert.ok(html.indexOf('cosmetics.js') > -1 && html.indexOf('cosmetics.js') < ht
 assert.ok(pkg.build.files.includes('cosmetics.js') && read('sw.js').includes("'./cosmetics.js'"));
 assert.ok(read('cosmetics.js').includes('window.NexusCosmetics') && read('admin.css').includes('.av.framed::after'));
 console.log('Apoji Admin 2.9: 4 checks passed');
+// 2.9.1: nothing at the top level of admin.js may touch NX before `const NX = window.NX` (a TDZ error there blanks the whole app)
+{
+  const top = admin.slice(0, admin.indexOf('const NX = window.NX'));
+  const lines = top.split('\n').filter(l => /^  (const|let|var|NX\.)/.test(l) && /\bNX\./.test(l) && !/=>|function/.test(l));
+  assert.deepStrictEqual(lines, [], 'top-level NX use before it exists:\n' + lines.join('\n'));
+  console.log('Apoji Admin 2.9.1: admin.js starts without touching NX early');
+}

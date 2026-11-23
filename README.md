@@ -176,6 +176,11 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.9.1
+
+- **Fixed:** 2.9.0 opened to an empty window. The new profile pictures code ran before the app had finished starting.
+- Profiles show the new Nexus 4.0.2 frames, and only the Owner can wear the gold crown.
+
 ## 2.9.0
 
 Run `supabase/nexus-v4.0.1.sql` from the **Nexus '28** repo first (it adds `apoji_profiles`).
