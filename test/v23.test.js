@@ -23,7 +23,7 @@ ok('Team chat header fits on phones');
 const aw = read('electron/awake.js');
 assert.ok(aw.includes('async function verify(') && aw.includes('async function reset()') && read('features.js').includes('data-hmode') && read('features.js').includes('hAwReset') && read('electron/hub.js').includes("'hub:awakeReset'") && read('electron/hub-core.js').includes("'forMinutes' in patch"));
 ok('keep awake rebuilt: confirmed by the system, for a while, battery floor, Reset');
-assert.ok(pkg.version >= '2.3.0'); assert.ok( read('sw.js').includes('./v23.js') && read('index.html').includes('v23.js') && read('README.md').includes('## 2.3'));
+assert.ok(pkg.version.localeCompare('2.3.0', undefined, { numeric: true }) >= 0); assert.ok( read('sw.js').includes('./v23.js') && read('index.html').includes('v23.js') && read('README.md').includes('## 2.3'));
 ok('2.3 is wired into the page and the offline cache');
 console.log(`Apoji Admin 2.3: ${n} checks passed`);
 // 2.3.1: every script the page loads must be packed into the Mac and Windows apps (v23.js was missing, so Admin

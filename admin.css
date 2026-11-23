@@ -768,3 +768,19 @@ h3 svg.ico { color: var(--accent); }
 .av.framed { overflow: visible; }
 .av.framed::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; pointer-events: none; }
 .av.sm.framed::after { inset: -2px; } .av.lg.framed::after, .av.xl.framed::after { inset: -5px; }
+/* 2.10 release plans save by themselves */
+.pv-auto { margin-right: auto; font-size: 12px; } .pv-auto.err { color: var(--danger); }
+/* 2.10: avatars at any size. The status dot sits on the edge of the circle (bottom right, 45°) and scales with the picture;
+   the Owner's crown sits centered on top, tilted a little, and scales too. Frames from Nexus draw underneath both. */
+.av { container-type: inline-size; }
+.av i.pr { --pd: clamp(9px, 26cqw, 22px); width: var(--pd) !important; height: var(--pd) !important; right: calc(14.6% - var(--pd) / 2) !important; bottom: calc(14.6% - var(--pd) / 2) !important;
+  border-width: clamp(2px, 4cqw, 4px) !important; z-index: 3; box-sizing: border-box; }
+.av .av-crown, .av.sm .av-crown, .av.lg .av-crown, .av.xl .av-crown { top: 0 !important; bottom: auto; left: 50% !important; transform: translate(-50%, -66%) rotate(-10deg) !important; font-size: clamp(9px, 30cqw, 36px) !important; z-index: 3; line-height: 1; }
+.av .av-crown .ico { width: 1.1em; height: 1.1em; display: block; }
+.av.framed .av-crown { transform: translate(-50%, -74%) rotate(-10deg) !important; }
+/* 2.10 announcements: styles (the same colors the apps use) */
+.ann-pv { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(var(--rgb), .35); background: rgba(var(--rgb), .08); }
+.ann-pv > div { flex: 1; display: grid; gap: 2px; } .ann-pv b { color: var(--text); }
+.ann-pv.ann-success { border-color: rgba(61,255,160,.45); background: rgba(61,255,160,.08); } .ann-pv.ann-celebrate { border-color: rgba(255,94,168,.5); background: linear-gradient(90deg, rgba(255,94,168,.12), rgba(92,200,255,.12)); }
+.ann-pv.ann-warning { border-color: rgba(255,195,92,.55); background: rgba(255,195,92,.1); } .ann-pv.ann-critical { border-color: rgba(255,90,110,.6); background: rgba(255,90,110,.12); }
+.ann-card.ann-warning { border-left: 3px solid #ffc35c; } .ann-card.ann-critical { border-left: 3px solid #ff5a6e; } .ann-card.ann-success { border-left: 3px solid #3dffa0; } .ann-card.ann-celebrate { border-left: 3px solid #ff5ea8; }

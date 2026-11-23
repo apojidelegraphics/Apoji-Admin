@@ -70,10 +70,31 @@
     announcement_on: async j => { const { data, error } = await sb.from('announcements').update({ active: true }).eq('id', j.target).select('id'); if (error) throw error; if (!data?.length) throw new Error('That announcement was deleted.'); return 'Announcement is live'; },
     announcement_off: async j => { const { error } = await sb.from('announcements').update({ active: false }).eq('id', j.target); if (error) throw error; return 'Announcement turned off'; },
     maintenance_on: async j => {
-      const p = j.payload || {}, row = { scope: j.target, enabled: true, message: p.message || '', types: [p.type || 'update'], countdown: !!p.ends_at, updated_at: new Date().toISOString(), ends_at: p.ends_at || null, admin_bypass: p.admin_bypass !== false };
+      const p = j.payload || {}, endsAt = p.duration_ms ? new Date(Date.now() + p.duration_ms).toISOString() : p.ends_at || null, row = { scope: j.target, enabled: true, message: p.message || '', types: [p.type || 'update'], countdown: !!endsAt, updated_at: new Date().toISOString(), ends_at: endsAt, admin_bypass: p.admin_bypass !== false };   // 2.10: repeats use the length, not a fixed end
       const { error } = await sb.from('maintenance_config').upsert(row); if (error) throw error; return `${j.target} is down for maintenance`;
     },
     maintenance_off: async j => { const { error } = await sb.from('maintenance_config').update({ enabled: false, updated_at: new Date().toISOString() }).eq('scope', j.target); if (error) throw error; return `${j.target} is back up`; },
+    // 2.10: more things a schedule can do
+    broadcast_send: async j => {
+      const p = j.payload || {}, at = new Date();
+      const { error } = await sb.from('broadcasts').insert({ title: String(p.title || j.label || 'Nexus').slice(0, 80), body: String(p.body || '').slice(0, 300), url: p.url || '', audience: p.audience || 'all', max_version: '', desktop: p.desktop !== false, phone: p.phone !== false,
+        send_at: at.toISOString(), expires_at: new Date(at.getTime() + (+p.days || 3) * 86400e3).toISOString(), created_by: j.created_by });
+      if (error) throw error; return 'Broadcast sent';
+    },
+    incident_post: async j => {
+      const p = j.payload || {}, now = new Date().toISOString(), st = p.severity === 'maintenance' ? 'identified' : 'investigating';
+      const { error } = await sb.from('status_incidents').insert({ title: String(p.title || j.label).slice(0, 160), severity: p.severity || 'maintenance', components: p.components || [], status: st, updates: [{ at: now, status: st, body: p.body || p.title || j.label }] });
+      if (error) throw error; return 'Posted on the status page';
+    },
+    incident_resolve: async j => {
+      const p = j.payload || {};
+      const { data, error } = await sb.from('status_incidents').select('id').eq('title', String(p.title || j.label).slice(0, 160)).neq('status', 'resolved').order('started_at', { ascending: false }).limit(1);
+      if (error) throw error; if (!data?.length) return 'Nothing open with that title (already closed?)';
+      const r = await sb.rpc('admin_status_update', { p_id: data[0].id, p_status: 'resolved', p_body: p.done || 'This is done. Thanks for your patience.' });
+      if (r.error) throw r.error; if (r.data?.success === false) throw new Error(r.data.error || 'Could not close it'); return 'Closed on the status page';
+    },
+    axiom_offline: async j => { const { data, error } = await sb.rpc('admin_apex_control', { p: { offline: +(j.payload?.minutes) || 0, message: j.payload?.message || '' } }); if (error) throw error; if (data?.success === false) throw new Error(data.error || 'Not allowed'); return 'Axiom is offline'; },
+    axiom_online: async () => { const { data, error } = await sb.rpc('admin_apex_control', { p: { online: true } }); if (error) throw error; if (data?.success === false) throw new Error(data.error || 'Not allowed'); return 'Axiom is back online'; },
     flag_stage: async j => {
       const stage = j.payload?.stage; if (!['off', 'admin', 'beta', 'all'].includes(stage)) throw new Error('Bad stage');
       const { data, error } = await sb.from('feature_flags').update({ stage, updated_at: new Date().toISOString() }).eq('key', j.target).select('key'); if (error) throw error; if (!data?.length) throw new Error('No flag called ' + j.target);
@@ -87,7 +108,7 @@
       if (error) { if (manual) toast(sqlMsg(error.message), true); return; }
       for (const j of data || []) {
         let ok = true, res = '';
-        try { res = await JOB[j.kind](j); } catch (e) { ok = false; res = e.message || String(e); }
+        try { if (!JOB[j.kind]) throw new Error('This Apoji Admin is too old for that schedule. Update it.'); res = await JOB[j.kind](j); } catch (e) { ok = false; res = e.message || String(e); }
         await sb.rpc('admin_finish_schedule', { p_id: j.id, p_ok: ok, p_result: res });
         W.jobs[ok ? 'ran' : 'failed']++; W.jobs.last = new Date().toISOString();
         NX.notify({ kind: 'schedules', title: ok ? '⏰ Schedule ran' : '⚠️ Schedule failed', body: `${j.label || j.kind}: ${res}`, tab: 'schedules' });
@@ -326,38 +347,51 @@
   NX.broadcast = f => { prefill = f; NX.go('broadcast'); };
 
   // =========================================================== Schedules
-  const SK = { announcement_on: '📣 Announcement on', announcement_off: '📣 Announcement off', maintenance_on: '🛠 Maintenance on', maintenance_off: '🛠 Maintenance off', flag_stage: '⚑ Feature flag' };
+  const SK = { announcement_on: '📣 Announcement on', announcement_off: '📣 Announcement off', maintenance_on: '🛠 Maintenance on', maintenance_off: '🛠 Maintenance off', flag_stage: '⚑ Feature flag',
+    broadcast_send: '📡 Broadcast', incident_post: '🟢 Status notice', incident_resolve: '🟢 Status notice closed', axiom_offline: '▲ Axiom offline', axiom_online: '▲ Axiom back online' };
+  const REP = [['', 'Once'], ['daily', 'Every day'], ['weekdays', 'Every weekday'], ['weekly', 'Every week'], ['monthly', 'Every month']];
   const MSCOPES = [['global', '🌐 Everything'], ['desktop', '💻 Desktop app (Mac & PC)'], ['websearch', '🔎 Web search'], ['phone', '📱 N28C'], ['spaces', '👥 Shared Spaces'], ['paragon', '@paragon'], ['neodela', '@neodela'], ['lyte', '@lyte'], ['flash', '@flash']];
   P.schedules = async () => {
     const [{ data, error }, { data: flags }, { data: anns }] = await Promise.all([
       sb.from('admin_schedules').select('*').order('run_at', { ascending: false }).limit(120),
       sb.from('feature_flags').select('key,title,stage').order('key'), sb.from('announcements').select('id,message,active').order('created_at', { ascending: false }).limit(30)]);
+    const { data: comps } = await sb.from('status_components').select('key,label').order('position');
     if (error) return NX.main(`<h1>⏰ Schedules</h1><div class="card err">${esc(sqlMsg(error.message))}</div>`);
     await loadHubRow().catch(() => {});
     const up = data.filter(j => j.status === 'pending' || j.status === 'running').sort((a, b) => new Date(a.run_at) - new Date(b.run_at)), done = data.filter(j => !up.includes(j));
     const hubOn = fresh(H.row);
     const soon = localInput(Date.now() + 60 * 60e3);
-    NX.main(`<h1>⏰ Schedules</h1><p>Turn things on and off at a set time: announcements, maintenance and feature flags.</p>
+    NX.main(`<h1>⏰ Schedules</h1><p>Do things at a set time, once or on repeat: announcements, maintenance, feature flags, broadcasts, status-page notices and Axiom.</p>
       <div class="banner ${hubOn ? '' : 'warn'}">${hubOn ? `🛰 <b>${esc(H.row.name)}</b> runs these on time (checks every 30 seconds).` : `💤 No desktop hub is online, so these run when any Apoji Admin is open. Turn on the hub in the desktop app (This Mac or This PC) to run them on time.`}<span class="sp" style="flex:1"></span><button class="btn sm" id="sRun">Run due now</button></div>
       <div class="card"><h3>New schedule</h3>
-        <div class="tabsub" id="sKind"><button data-k="ann" class="on">📣 Announcement</button><button data-k="maint">🛠 Maintenance</button><button data-k="flag">⚑ Feature flag</button></div>
+        <div class="tabsub" id="sKind"><button data-k="ann" class="on">📣 Announcement</button><button data-k="maint">🛠 Maintenance</button><button data-k="flag">⚑ Feature flag</button><button data-k="bc">📡 Broadcast</button><button data-k="inc">🟢 Status notice</button><button data-k="ax">▲ Axiom</button></div>
         <div data-f="ann"><select class="field" id="sAnnPick" style="width:100%"><option value="">New announcement…</option>${(anns || []).map(a => `<option value="${a.id}">${a.active ? '● ' : ''}${esc(a.message.slice(0, 90))}</option>`).join('')}</select>
           <textarea class="field" id="sAnnMsg" rows="2" maxlength="300" placeholder="Announcement text" style="width:100%;margin-top:8px"></textarea></div>
         <div data-f="maint" hidden><div class="row"><select class="field" id="sScope">${MSCOPES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select><select class="field" id="sType"><option value="update">🛠 Update</option><option value="outage">⚠️ Outage</option><option value="emergency">🚨 Emergency</option></select>
           <input class="field" id="sMsg" placeholder="Message people see" style="flex:1;min-width:180px"></div><label class="muted" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="sBy" checked> Admins can keep using it</label></div>
         <div data-f="flag" hidden><div class="row"><select class="field" id="sFlag">${(flags || []).map(f => `<option value="${esc(f.key)}">${esc(f.title || f.key)} (now: ${esc(f.stage)})</option>`).join('') || '<option value="">No flags yet</option>'}</select>
           <span class="muted">→</span><select class="field" id="sStage"><option value="off">Off</option><option value="admin">Admins</option><option value="beta">Beta testers</option><option value="all" selected>Everyone</option></select></div></div>
+        <div data-f="bc" hidden><input class="field" id="sBcT" maxlength="80" placeholder="Notification title, e.g. Study night tonight" style="width:100%"><textarea class="field" id="sBcB" rows="2" maxlength="300" placeholder="Text (optional)" style="width:100%;margin-top:8px"></textarea>
+          <div class="row" style="margin-top:8px"><input class="field" id="sBcU" placeholder="Link (optional, https://…)" style="flex:1;min-width:180px"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="sBcD" checked> Desktop</label><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="sBcP" checked> Phones</label></div></div>
+        <div data-f="inc" hidden><input class="field" id="sIncT" maxlength="160" placeholder="What people see, e.g. Planned maintenance on Nexus servers" style="width:100%"><div class="chips" id="sIncC" style="margin-top:8px">${(comps || []).map(c => `<label class="chip"><input type="checkbox" value="${esc(c.key)}"> ${esc(c.label)}</label>`).join('') || '<span class="muted">No status components yet.</span>'}</div>
+          <div class="row" style="margin-top:8px"><select class="field" id="sIncS"><option value="maintenance">🛠 Maintenance</option><option value="minor">🟡 Minor</option><option value="major">🟠 Major</option></select><span class="muted">Posted at the start, closed at the end (if you set one).</span></div></div>
+        <div data-f="ax" hidden><div class="row"><input class="field" id="sAxM" maxlength="200" placeholder="Message people see while Axiom is offline (optional)" style="flex:1;min-width:200px"></div><p class="muted" style="margin:8px 0 0">Axiom goes offline at the start and comes back at the end (if you set one). Only people who can manage Axiom can do this.</p></div>
+        <div class="row" style="margin-top:10px"><label class="muted">Repeat <select class="field" id="sRep">${REP.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="muted" id="sUntilL" hidden>until <input class="field" type="date" id="sUntil"></label></div>
         <div class="row" style="margin-top:10px"><label class="muted">Start <input class="field" type="datetime-local" id="sAt" value="${soon}"></label><label class="muted" id="sEndL">End <input class="field" type="datetime-local" id="sEnd"></label><span class="sp"></span><button class="btn primary" id="sAdd">Schedule it</button></div></div>
       <h2>Coming up</h2>
-      ${up.length ? `<div class="card"><table class="cards"><tr><th>When</th><th>What</th><th>Details</th><th>By</th><th></th></tr>${up.map(j => `<tr><td><b>${when(j.run_at)}</b><div class="muted">${new Date(j.run_at) < Date.now() ? 'due now' : 'in ' + until(j.run_at)}</div></td><td>${SK[j.kind]}${j.status === 'running' ? ' ' + pill('p-pending', 'RUNNING') : ''}</td><td>${esc(j.label || j.target)}</td><td class="muted">${esc(nameOf(NX.adminById(j.created_by)))}</td><td>${j.status === 'pending' ? `<button class="btn sm ghost" data-cancel="${j.id}">Cancel</button>` : ''}</td></tr>`).join('')}</table></div>` : '<div class="empty">Nothing scheduled.</div>'}
+      ${up.length ? `<div class="card"><table class="cards"><tr><th>When</th><th>What</th><th>Details</th><th>By</th><th></th></tr>${up.map(j => `<tr><td><b>${when(j.run_at)}</b><div class="muted">${new Date(j.run_at) < Date.now() ? 'due now' : 'in ' + until(j.run_at)}</div></td><td>${SK[j.kind] || j.kind}${j.payload?.repeat ? ` <span class="pill">${esc((REP.find(r => r[0] === j.payload.repeat) || [, j.payload.repeat])[1])}</span>` : ''}${j.status === 'running' ? ' ' + pill('p-pending', 'RUNNING') : ''}</td><td>${esc(j.label || j.target)}</td><td class="muted">${esc(nameOf(NX.adminById(j.created_by)))}</td><td>${j.status === 'pending' ? `<div class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn sm ghost" data-now="${j.id}" title="Run it now">▶</button><button class="btn sm ghost" data-later="${j.id}" title="Push it back an hour">+1h</button><button class="btn sm ghost" data-cancel="${j.id}">Cancel</button>${j.payload?.series ? `<button class="btn sm ghost" data-series="${esc(j.payload.series)}" title="Cancel this and every later run">Stop repeating</button>` : ''}</div>` : ''}</td></tr>`).join('')}</table></div>` : '<div class="empty">Nothing scheduled.</div>'}
       <h2>History</h2>
       ${done.length ? `<div class="card"><table class="cards"><tr><th>Ran</th><th>What</th><th>Result</th><th>Where</th></tr>${done.slice(0, 50).map(j => `<tr><td class="muted">${when(j.ran_at || j.run_at)}</td><td>${SK[j.kind]} ${pill(j.status === 'done' ? 'p-approved' : j.status === 'failed' ? 'p-declined' : 'p-closed', j.status.toUpperCase())}</td><td>${esc(j.label || j.target)}${j.result ? `<div class="muted">${esc(j.result)}</div>` : ''}</td><td class="muted">${esc(j.ran_by || '—')}</td></tr>`).join('')}</table></div>` : '<div class="empty">Nothing has run yet.</div>'}`);
     let kind = 'ann';
-    $('sKind').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; kind = b.dataset.k; document.querySelectorAll('#sKind button').forEach(x => x.classList.toggle('on', x === b)); document.querySelectorAll('[data-f]').forEach(x => { x.hidden = x.dataset.f !== kind; }); $('sEndL').hidden = kind === 'flag'; };
+    $('sKind').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; kind = b.dataset.k; document.querySelectorAll('#sKind button').forEach(x => x.classList.toggle('on', x === b)); document.querySelectorAll('[data-f]').forEach(x => { x.hidden = x.dataset.f !== kind; }); $('sEndL').hidden = kind === 'flag' || kind === 'bc'; };
+    $('sRep').onchange = e => { $('sUntilL').hidden = !e.target.value; };
     $('sAnnPick').onchange = e => { $('sAnnMsg').hidden = !!e.target.value; };
     $('main').onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.id === 'sRun') return runNow();
+      if (b.dataset.now) { const { error: er } = await sb.from('admin_schedules').update({ run_at: new Date().toISOString() }).eq('id', b.dataset.now).eq('status', 'pending'); if (er) return toast(er.message, true); return runNow(); }
+      if (b.dataset.later) { const j = (data || []).find(x => String(x.id) === b.dataset.later); if (!j) return; const { error: er } = await sb.from('admin_schedules').update({ run_at: new Date(Math.max(Date.now(), new Date(j.run_at).getTime()) + 3600e3).toISOString() }).eq('id', j.id).eq('status', 'pending'); toast(er ? er.message : '⏰ Pushed back an hour', !!er); return P.schedules(); }
+      if (b.dataset.series) { if (!confirm('Stop repeating? This cancels every run of it that hasn’t happened yet.')) return; const { data: n, error: er } = await sb.rpc('admin_stop_series', { p_series: b.dataset.series }); toast(er ? sqlMsg(er.message) : `Stopped (${n || 0} cancelled)`, !!er); return P.schedules(); }
       if (b.dataset.cancel) { const { error: er } = await sb.from('admin_schedules').update({ status: 'cancelled' }).eq('id', b.dataset.cancel).eq('status', 'pending'); toast(er ? er.message : '✓ Cancelled', !!er); return P.schedules(); }
       if (b.id !== 'sAdd') return;
       const at = $('sAt').value ? new Date($('sAt').value) : null, end = kind !== 'flag' && $('sEnd').value ? new Date($('sEnd').value) : null;
@@ -377,12 +411,29 @@
           if (end) rows.push({ kind: 'announcement_off', target: String(id), label, run_at: end.toISOString() });
         } else if (kind === 'maint') {
           const sc = $('sScope').value, label = `${MSCOPES.find(x => x[0] === sc)?.[1] || sc}${$('sMsg').value.trim() ? ': ' + $('sMsg').value.trim() : ''}`.slice(0, 200);
-          rows.push({ kind: 'maintenance_on', target: sc, label, run_at: at.toISOString(), payload: { message: $('sMsg').value.trim(), type: $('sType').value, admin_bypass: $('sBy').checked, ends_at: end ? end.toISOString() : null } });
+          rows.push({ kind: 'maintenance_on', target: sc, label, run_at: at.toISOString(), payload: { message: $('sMsg').value.trim(), type: $('sType').value, admin_bypass: $('sBy').checked, ends_at: end ? end.toISOString() : null, ...(end ? { duration_ms: end - at } : {}) } });
           if (end) rows.push({ kind: 'maintenance_off', target: sc, label, run_at: end.toISOString() });
+        } else if (kind === 'bc') {
+          const t = $('sBcT').value.trim(), u = $('sBcU').value.trim(); if (!t) return toast('Give the broadcast a title.', true);
+          if (u && !/^https:\/\//.test(u)) return toast('Links start with https://', true);
+          if (!$('sBcD').checked && !$('sBcP').checked) return toast('Pick desktop, phones or both.', true);
+          rows.push({ kind: 'broadcast_send', target: 'all', label: t.slice(0, 120), run_at: at.toISOString(), payload: { title: t, body: $('sBcB').value.trim(), url: u, desktop: $('sBcD').checked, phone: $('sBcP').checked, audience: 'all' } });
+        } else if (kind === 'inc') {
+          const t = $('sIncT').value.trim(), cs = [...document.querySelectorAll('#sIncC input:checked')].map(i => i.value);
+          if (t.length < 3) return toast('Say what the notice is about.', true); if (!cs.length) return toast('Pick what’s affected.', true);
+          rows.push({ kind: 'incident_post', target: 'status', label: t.slice(0, 120), run_at: at.toISOString(), payload: { title: t, components: cs, severity: $('sIncS').value } });
+          if (end) rows.push({ kind: 'incident_resolve', target: 'status', label: t.slice(0, 120), run_at: end.toISOString(), payload: { title: t } });
+        } else if (kind === 'ax') {
+          const m = $('sAxM').value.trim();
+          rows.push({ kind: 'axiom_offline', target: 'axiom', label: m ? 'Axiom offline: ' + m.slice(0, 100) : 'Axiom offline', run_at: at.toISOString(), payload: { message: m, minutes: end ? Math.round((end - at) / 60e3) : 0 } });
+          if (end) rows.push({ kind: 'axiom_online', target: 'axiom', label: 'Axiom back online', run_at: end.toISOString(), payload: {} });
         } else {
           const k = $('sFlag').value; if (!k) return toast('Make a feature flag first.', true);
           rows.push({ kind: 'flag_stage', target: k, label: `${k} → ${$('sStage').selectedOptions[0].textContent}`, run_at: at.toISOString(), payload: { stage: $('sStage').value } });
         }
+        // 2.10: repeats. Every row of this schedule (start and end) shares a series id and repeats on its own.
+        const repeat = $('sRep').value, untilD = repeat && $('sUntil').value ? new Date($('sUntil').value + 'T23:59:59') : null;
+        if (repeat) { const series = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); rows.forEach(r => { r.payload = { ...(r.payload || {}), repeat, series, ...(untilD ? { until: untilD.toISOString() } : {}) }; }); }
         const { error: er } = await sb.from('admin_schedules').insert(rows.map(r => ({ ...r, created_by: A.user.id }))); if (er) throw er;
         toast(`⏰ Scheduled${rows.length > 1 ? ' (start and end)' : ''}`);
         if (at <= Date.now()) runNow();

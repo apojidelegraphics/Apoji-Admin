@@ -606,20 +606,69 @@
   };
 
   // =========================================================== Announcements
+  // 2.10: a title, a style, a button link, which apps show it, pinning, and start/end times (done with Schedules,
+  // which switch it on and off, so older versions of the apps keep working)
+  const ASTYLE = [['info', 'ℹ️ Info'], ['success', '✅ Good news'], ['celebrate', '🎉 Celebrate'], ['warning', '⚠️ Heads up'], ['critical', '🚨 Critical']];
+  const AAPPS = [['desktop', 'Nexus on Mac & PC'], ['phone', 'N28C']];
+  const localDT = t => { const d = new Date(t); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
   P.announce = async () => {
-    const { data, error } = await sb.from('announcements').select('*').order('created_at', { ascending: false }).limit(50);
+    const [{ data, error }, { data: sch }] = await Promise.all([sb.from('announcements').select('*').order('created_at', { ascending: false }).limit(60),
+      sb.from('admin_schedules').select('id,kind,target,run_at,status').in('kind', ['announcement_on', 'announcement_off']).eq('status', 'pending').order('run_at')]);
     if (error) return main(`<h1>Announcements</h1><div class="card err">${esc(error.message)}</div>`);
-    main(`<h1>Announcements</h1><p>Live announcements show as a banner in Nexus on Mac and PC, in N28C and in Test Run.</p>
-      <div class="card"><h3>New announcement</h3><textarea class="field" id="am" rows="2" maxlength="300" placeholder="Nexus 2.2 is out! Update from the app menu."></textarea>
-        <div class="banner" style="margin:10px 0 0" id="apv" hidden>📣 <span></span></div>
-        <div class="row" style="margin-top:8px"><span class="muted" id="ac">0 / 300</span><span class="sp"></span><button class="btn primary" id="aadd">Post it live</button></div></div>
-      ${data.map(a => `<div class="card"><div class="row"><span class="pill ${a.active ? 'p-approved' : 'p-closed'}">${a.active ? 'LIVE' : 'OFF'}</span><span class="muted">${when(a.created_at)}${a.created_by ? ' · ' + esc(nameOf(NX.adminById(a.created_by))) : ''}</span><span class="sp"></span>
-        <button class="btn sm" data-tog="${a.id}" data-on="${a.active ? 0 : 1}">${a.active ? 'Turn off' : 'Turn on'}</button><button class="btn sm danger" data-del="${a.id}">Delete</button></div><div style="margin-top:6px">${esc(a.message)}</div></div>`).join('') || '<div class="empty">No announcements yet.</div>'}`);
-    $('am').oninput = e => { $('ac').textContent = `${e.target.value.length} / 300`; $('apv').hidden = !e.target.value.trim(); $('apv').querySelector('span').textContent = e.target.value; };
+    const rich = !data.length || 'style' in data[0];
+    const next = id => (sch || []).filter(j => j.target === String(id));
+    const sorted = [...data].sort((x, y) => (y.pinned ? 1 : 0) - (x.pinned ? 1 : 0) || (y.active ? 1 : 0) - (x.active ? 1 : 0) || new Date(y.created_at) - new Date(x.created_at));
+    let editing = null;
+    const form = (a = {}) => `<div class="card" id="aForm"><h3>${a.id ? 'Edit announcement' : 'New announcement'}</h3>
+      ${rich ? '' : '<div class="banner warn">Run supabase/apoji-admin-2.10.sql for titles, styles, links, app picking and pinning.</div>'}
+      <div class="acct-grid">
+        <label>Title</label><input class="field" id="aT" maxlength="80" value="${esc(a.title || '')}" placeholder="Optional, e.g. Nexus 4.1 is here" ${rich ? '' : 'disabled'}>
+        <label>Message</label><textarea class="field" id="am" rows="2" maxlength="300" placeholder="Nexus 2.2 is out! Update from the app menu.">${esc(a.message || '')}</textarea>
+        <label>Style</label><div class="tabsub" id="aS" style="margin:0;flex-wrap:wrap">${ASTYLE.map(([k, l]) => `<button data-as="${k}" class="${(a.style || 'info') === k ? 'on' : ''}" ${rich ? '' : 'disabled'}>${l}</button>`).join('')}</div>
+        <label>Button</label><div class="row"><input class="field" id="aLL" maxlength="30" value="${esc(a.link_label || '')}" placeholder="Label, e.g. See what's new" style="width:200px" ${rich ? '' : 'disabled'}><input class="field" id="aLU" value="${esc(a.link_url || '')}" placeholder="https://…" style="flex:1;min-width:180px" ${rich ? '' : 'disabled'}></div>
+        <label>Show in</label><div class="row" style="flex-wrap:wrap">${AAPPS.map(([k, l]) => `<label class="row"><input type="checkbox" data-aapp="${k}" ${(a.apps || ['desktop', 'phone']).includes(k) ? 'checked' : ''} ${rich ? '' : 'disabled'}> ${l}</label>`).join('')}</div>
+        <label>Options</label><div class="row" style="flex-wrap:wrap"><label class="row"><input type="checkbox" id="aPin" ${a.pinned ? 'checked' : ''} ${rich ? '' : 'disabled'}> Pinned (shows first, can't be dismissed)</label></div>
+        <label>When</label><div class="row" style="flex-wrap:wrap"><label class="muted">Start <input class="field" type="datetime-local" id="aStart" value="${a.id ? '' : ''}"></label><label class="muted">End <input class="field" type="datetime-local" id="aEnd"></label><span class="muted">Leave Start empty to post it now. End switches it off by itself.</span></div>
+      </div>
+      <div class="muted" style="margin:12px 0 4px">Preview</div><div class="ann-pv" id="apv"></div>
+      <div class="row" style="margin-top:10px"><span class="muted" id="ac">0 / 300</span><span class="sp"></span>${a.id ? '<button class="btn ghost" id="aCancel">Cancel</button>' : ''}<button class="btn primary" id="aadd">${a.id ? 'Save changes' : 'Post'}</button></div></div>`;
+    const card = a => { const sc = next(a.id), st = ASTYLE.find(x => x[0] === (a.style || 'info')) || ASTYLE[0];
+      return `<div class="card ann-card ann-${esc(a.style || 'info')}"><div class="row"><span class="pill ${a.active ? 'p-approved' : 'p-closed'}">${a.active ? 'LIVE' : 'OFF'}</span>${a.pinned ? '<span class="pill">PINNED</span>' : ''}<span class="pill">${st[1]}</span>
+        <span class="muted">${when(a.created_at)}${a.created_by ? ' · ' + esc(nameOf(NX.adminById(a.created_by))) : ''}${a.apps ? ' · ' + a.apps.map(k => (AAPPS.find(x => x[0] === k) || [, k])[1]).join(', ') : ''}</span><span class="sp"></span>
+        <button class="btn sm" data-tog="${a.id}" data-on="${a.active ? 0 : 1}">${a.active ? 'Turn off' : 'Turn on'}</button>${rich ? `<button class="btn sm ghost" data-edit="${a.id}">Edit</button><button class="btn sm ghost" data-dup="${a.id}">Duplicate</button>` : ''}<button class="btn sm danger" data-del="${a.id}">Delete</button></div>
+        ${a.title ? `<b style="display:block;margin-top:6px">${esc(a.title)}</b>` : ''}<div style="margin-top:${a.title ? 2 : 6}px">${esc(a.message)}</div>
+        ${a.link_url ? `<div class="muted" style="margin-top:4px">Button: ${esc(a.link_label || 'Open')} → ${esc(a.link_url)}</div>` : ''}
+        ${sc.length ? `<div class="muted" style="margin-top:6px">⏰ ${sc.map(j => `${j.kind === 'announcement_on' ? 'On' : 'Off'} ${when(j.run_at)}`).join(' · ')}</div>` : ''}</div>`; };
+    const paint = () => main(`<h1>Announcements</h1><p>Announcements show as a banner in Nexus on Mac and PC and in N28C. Give one a style and a button, pick the apps, pin it, or set when it starts and ends.</p>
+      ${form(editing || {})}<h2>All announcements</h2>${sorted.map(card).join('') || '<div class="empty">No announcements yet.</div>'}`);
+    const preview = () => { const el = $('apv'); if (!el) return; const m = $('am').value.trim(), t = $('aT').value.trim(), stl = document.querySelector('#aS .on')?.dataset.as || 'info', lu = $('aLU').value.trim(), ll = $('aLL').value.trim();
+      $('ac').textContent = `${$('am').value.length} / 300`;
+      el.className = 'ann-pv ann-' + stl; el.innerHTML = m || t ? `<div>${t ? `<b>${esc(t)}</b>` : ''}<span>${esc(m)}</span></div>${lu ? `<span class="btn sm">${esc(ll || 'Open')}</span>` : ''}` : '<span class="muted">Start typing to see it.</span>'; };
+    paint(); preview();
+    $('main').oninput = preview;
     $('main').onclick = async e => {
       const b = e.target.closest('button'); if (!b) return; let error;
-      if (b.id === 'aadd') { const m = $('am').value.trim(); if (!m) return; ({ error } = await sb.from('announcements').insert({ message: m, active: true, created_by: A.user.id })); }
-      else if (b.dataset.tog) ({ error } = await sb.from('announcements').update({ active: b.dataset.on === '1' }).eq('id', b.dataset.tog));
+      if (b.dataset.as) { document.querySelectorAll('#aS button').forEach(x => x.classList.toggle('on', x === b)); return preview(); }
+      if (b.id === 'aCancel') { editing = null; paint(); return preview(); }
+      if (b.dataset.edit || b.dataset.dup) { const a = data.find(x => String(x.id) === (b.dataset.edit || b.dataset.dup)); editing = b.dataset.edit ? a : { ...a, id: undefined, active: false }; paint(); preview(); $('aForm').scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+      if (b.id === 'aadd') {
+        const m = $('am').value.trim(); if (!m) return toast('Write the message.', true);
+        const lu = $('aLU').value.trim(); if (lu && !/^https:\/\//.test(lu)) return toast('Button links start with https://', true);
+        const start = $('aStart').value ? new Date($('aStart').value) : null, end = $('aEnd').value ? new Date($('aEnd').value) : null;
+        if (end && end <= (start || new Date())) return toast('The end has to be after the start.', true);
+        const apps = [...document.querySelectorAll('[data-aapp]:checked')].map(x => x.dataset.aapp); if (rich && !apps.length) return toast('Pick at least one app.', true);
+        const row = { message: m, ...(rich ? { title: $('aT').value.trim(), style: document.querySelector('#aS .on')?.dataset.as || 'info', link_url: lu, link_label: $('aLL').value.trim(), apps, pinned: $('aPin').checked, updated_at: new Date().toISOString() } : {}) };
+        let id = editing?.id;
+        if (id) ({ error } = await sb.from('announcements').update(row).eq('id', id));
+        else { const r = await sb.from('announcements').insert({ ...row, active: !start || start <= new Date(), created_by: A.user.id }).select('id').single(); error = r.error; id = r.data?.id; }
+        if (error) return toast(error.message, true);
+        const jobs = [];
+        if (start && start > new Date()) jobs.push({ kind: 'announcement_on', target: String(id), label: (row.title || m).slice(0, 120), run_at: start.toISOString(), created_by: A.user.id });
+        if (end) jobs.push({ kind: 'announcement_off', target: String(id), label: (row.title || m).slice(0, 120), run_at: end.toISOString(), created_by: A.user.id });
+        if (jobs.length) { const r = await sb.from('admin_schedules').insert(jobs); if (r.error) toast('Saved, but the times didn’t: ' + r.error.message, true); }
+        toast(editing?.id ? '✓ Saved' : start && start > new Date() ? '⏰ Scheduled' : '📣 Posted'); editing = null; return P.announce();
+      }
+      if (b.dataset.tog) ({ error } = await sb.from('announcements').update({ active: b.dataset.on === '1' }).eq('id', b.dataset.tog));
       else if (b.dataset.del) { if (!confirm('Delete this announcement?')) return; ({ error } = await sb.from('announcements').delete().eq('id', b.dataset.del)); }
       else return;
       toast(error ? error.message : '✓ Saved', !!error); if (!error) P.announce();
@@ -697,7 +746,7 @@
     const profile = `<div class="card"><h3>Profile</h3><div class="row" style="gap:16px;flex-wrap:nowrap">${av(me, 'xl', true)}<div style="flex:1;min-width:0">
           <input class="field" id="nick" placeholder="Your name in chat" maxlength="24" value="${esc(me.nickname || '')}" style="width:100%"><div class="row" style="margin-top:8px">
           <button class="btn" id="pic">Change picture</button>${me.avatar_url ? '<button class="btn ghost" id="picRm">Remove</button>' : ''}<input type="file" id="picF" accept="image/*" hidden></div>
-          <p class="muted" style="margin:8px 0 0">Your picture shows here, in Nexus on Mac and PC, in Test Run and in N28C. You can also change it in Nexus (Settings → Account).</p></div></div></div>`;
+          <p class="muted" style="margin:8px 0 0">Your picture shows here, in Nexus on Mac and PC, in Test Run and in N28C. You can also change it in Nexus (Settings → Profile).</p></div></div></div>`;
     const status = `<div class="card"><h3>Status</h3><div class="tabsub" id="st" style="flex-wrap:wrap">${[['auto', '🟢 Automatic', 'Online, or idle when you step away'], ['idle', '🌙 Idle', 'Show as away until you change it (or a time you pick)'], ['dnd', '⛔ Do not disturb', 'No pop-ups or sounds'], ['invisible', '⚪ Invisible', 'Look offline']].map(([k, l, s]) => `<button data-st="${k}" class="${NX.myStatus() === k ? 'on' : ''}" title="${s}">${l}</button>`).join('')}</div>
           ${NX.myStatus() === 'idle' ? `<div class="row idle-back"><span class="muted">Idle until</span>${[[0, 'I change it'], [30, '30 min'], [60, '1 hour'], [120, '2 hours'], ['eod', 'end of day']].map(([v, l]) => `<button class="btn sm ${String(p.back_at ? '' : 0) === String(v) ? 'primary' : ''}" data-back="${v}">${l}</button>`).join('')}${p.back_at ? `<span class="muted">· back at ${new Date(p.back_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>` : ''}</div>` : ''}
           <div class="row idle-after"><span class="muted">Go idle by myself after</span><select class="field sm" id="idleAfter" style="width:auto">${[[1, '1 minute'], [5, '5 minutes'], [15, '15 minutes'], [30, '30 minutes'], [60, '1 hour'], [0, 'Never']].map(([v, l]) => `<option value="${v}" ${(+(p.idle_after ?? 5)) === v ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="muted">without using the portal</span></div>
@@ -713,9 +762,10 @@
     const crypt = `<div class="card"><h3>🔒 Chat encryption</h3><p class="muted" style="margin-top:0">Admin chat messages and files are end-to-end encrypted with the team passphrase. Supabase only stores scrambled text.</p>
           <div class="row">${NXCrypto.ready() ? '<span class="ok">✓ Unlocked on this device</span><span class="sp"></span><button class="btn" id="eLock">Lock on this device</button>' : '<span class="muted">Locked on this device.</span><span class="sp"></span><button class="btn primary" id="eOpen">Unlock in Admin chat</button>'}</div>
           ${A.level === 'high-admin' && NXCrypto.ready() ? '<div class="row" style="margin-top:10px"><button class="btn" id="eOld">Encrypt messages from before</button><span class="muted" id="eOldN"></span></div>' : ''}</div>`;
-    const privacy = `<div class="card"><h3>Privacy & theme</h3>${tog('rr', 'Read receipts', "Others see when you've read their messages. Turn it off and you won't see theirs either.", p.read_receipts !== false)}
+    const nexusTheme = NX.themeMode() !== 'admin';
+    const privacy = `<div class="card"><h3>Privacy & theme</h3><div class="row" style="margin-bottom:10px"><span style="flex:1"><b style="color:var(--text)">Theme</b><small class="muted" style="display:block">Use Apoji Admin's own violet look, or the theme you picked in Nexus.</small></span><div class="tabsub" id="thMode" style="margin:0"><button data-th="admin" class="${nexusTheme ? '' : 'on'}">Apoji Admin</button><button data-th="nexus" class="${nexusTheme ? 'on' : ''}">Nexus</button></div></div>${tog('rr', 'Read receipts', "Others see when you've read their messages. Turn it off and you won't see theirs either.", p.read_receipts !== false)}
       ${tog('tySend', 'Show when I’m typing', 'Others see “… is typing” while you write in Team chat.', p.typing_send !== false)}${tog('tyShow', 'Show when others are typing', 'See “… is typing” under the messages.', p.typing_show !== false)}
-          <p class="muted" style="margin:10px 0 0">${t ? `<i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);margin-right:6px"></i><b style="color:var(--text)">${esc(t.name || 'Your theme')}</b> · ` : ''}The portal uses the theme you picked in the Mac app (Settings → General → Theme). Change it there and it shows up here next time you open the portal.</p></div>`;
+          <p class="muted" style="margin:10px 0 0">${t ? `<i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);margin-right:6px"></i><b style="color:var(--text)">${esc(t.name || 'Your theme')}</b> · ` : ''}${nexusTheme ? 'The portal uses the theme you picked in Nexus (Settings → General → Theme). Change it there and it shows up here next time you open the portal.' : 'Using Apoji Admin’s own theme. Pick Nexus above to follow your Nexus theme.'}</p></div>`;
     const keys = `<div class="card"><h3>⌨ Shortcuts</h3><p class="muted" style="margin:0 0 8px">Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>) to jump anywhere: pages, admins, users, feedback and tasks. <kbd>G</kbd> then a letter goes to a page, <kbd>N</kbd> makes a task.</p><button class="btn" id="keysHelp">See all shortcuts</button></div>`;
     main(`<h1>My settings</h1><p>Your picture, status and how the portal notifies you.</p>
       <div class="me-cols"><div>${profile}${notes}${NX.replies.card()}</div><div>${status}${crypt}${privacy}${keys}</div></div>
@@ -733,6 +783,7 @@
       if (id === 'idleAfter') { const ok = await NX.savePrefs({ idle_after: +e.target.value }); if (ok) toast(+e.target.value ? '✓ Saved' : 'You won’t go idle by yourself'); }
     };
     $('main').onclick = async e => {
+      const th = e.target.closest('[data-th]'); if (th) { NX.setThemeMode(th.dataset.th); document.querySelectorAll('#thMode [data-th]').forEach(x => x.classList.toggle('on', x === th)); toast(th.dataset.th === 'admin' ? 'Using Apoji Admin\'s theme' : 'Using your Nexus theme'); return; }
       const s = e.target.closest('[data-st]'); if (s) { await NX.savePrefs({ status: s.dataset.st, ...(A.prefs.back_at || s.dataset.st !== 'idle' ? { back_at: null } : {}) }); return P.me(); }
       const bk = e.target.closest('[data-back]'); if (bk) { const v = bk.dataset.back; let at = null;   // 2.8: Idle until …
         if (v === 'eod') { const d = new Date(); d.setHours(23, 59, 0, 0); at = d.toISOString(); } else if (+v) at = new Date(Date.now() + +v * 60e3).toISOString();

@@ -312,17 +312,40 @@
       <h3 class="pv-sec">What’s in it <span class="muted">click any item to change it</span></h3><div id="pvItems" class="pv-items"></div>
       ${can ? `<div class="row pv-add"><select class="field sm" id="pvK" style="width:auto"><option value="feature">Feature</option><option value="fix">Fix</option><option value="chore">Other</option></select><input class="field" id="pvI" maxlength="200" placeholder="Add something, e.g. Live dictation" style="flex:1"><button class="btn" id="pvAdd">Add</button></div>` : ''}
       <label class="muted pv-notes-l">Notes</label><textarea class="field" id="pvN" rows="3" maxlength="4000" ${can ? '' : 'disabled'}>${esc(p?.notes || '')}</textarea>
-      <div class="row pv-actions">${p && can ? '<button class="btn danger" id="pvDel">Delete</button><button class="btn" id="pvTests" title="Adds the unfinished items to Testing for this version">🧪 Add to Testing</button><button class="btn" id="pvNotes" title="Copies What’s New lines for changes.json">📋 Release notes</button>' : ''}<span class="sp"></span><button class="btn" id="pvCopy" title="Copy the version, features, fixes and notes as text">Copy info</button><button class="btn" data-close>Close</button>${can ? '<button class="btn primary" id="pvGo">Save</button>' : ''}</div>`);
+      <div class="row pv-actions"><span class="muted pv-auto" id="pvAuto">${can ? (p ? 'Changes save by themselves' : 'Saves by itself once it has a version') : ''}</span>${p && can ? '<button class="btn danger" id="pvDel">Delete</button><button class="btn" id="pvTests" title="Adds the unfinished items to Testing for this version">🧪 Add to Testing</button><button class="btn" id="pvNotes" title="Copies What’s New lines for changes.json">📋 Release notes</button>' : ''}<span class="sp"></span><button class="btn" id="pvCopy" title="Copy the version, features, fixes and notes as text">Copy info</button><button class="btn" data-close>Close</button>${can ? '<button class="btn primary" id="pvGo">Done</button>' : ''}</div>`);
     el.classList.add('pv-modal');
     // 2.7: every item can be changed after saving: click its text to edit it, pick a kind, move it up or down
     const KINDS = [['feature', 'FEATURE'], ['fix', 'FIX'], ['chore', 'OTHER']];
-    const paintItems = () => { el.querySelector('#pvItems').innerHTML = items.map((x, i) => `<div class="plan-item ${x.done ? 'done' : ''}" data-i="${i}"><input type="checkbox" data-done="${i}" ${x.done ? 'checked' : ''} ${can ? '' : 'disabled'}>
+    const paintItems = (touch = true) => { if (touch && typeof soon === 'function' && el.querySelector('#pvN')) soon(); el.querySelector('#pvItems').innerHTML = items.map((x, i) => `<div class="plan-item ${x.done ? 'done' : ''}" data-i="${i}"><input type="checkbox" data-done="${i}" ${x.done ? 'checked' : ''} ${can ? '' : 'disabled'}>
         ${can ? `<select class="field sm pi-kind" data-kind="${i}">${KINDS.map(([k, l]) => `<option value="${k}" ${(x.kind || 'feature') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : `<span class="pill">${(KINDS.find(k => k[0] === (x.kind || 'feature')) || KINDS[0])[1]}</span>`}
         ${can ? `<input class="field pi-text" data-text="${i}" value="${esc(x.text)}" maxlength="200" aria-label="Item">` : `<span class="pi-text">${esc(x.text)}</span>`}
         ${can ? `<span class="pi-tools"><button class="btn sm ghost" data-up="${i}" title="Move up" ${i ? '' : 'disabled'}>↑</button><button class="btn sm ghost" data-down="${i}" title="Move down" ${i < items.length - 1 ? '' : 'disabled'}>↓</button><button class="btn sm ghost" data-rm="${i}" title="Remove">✕</button></span>` : ''}</div>`).join('') || '<p class="muted">Nothing yet.</p>'; };
-    el.addEventListener('input', e => { const i = e.target.dataset.text; if (i !== undefined) items[+i].text = e.target.value; });
-    el.addEventListener('change', e => { const i = e.target.dataset.kind; if (i !== undefined) items[+i].kind = e.target.value; });
-    paintItems();
+    el.addEventListener('input', e => { const i = e.target.dataset.text; if (i !== undefined) items[+i].text = e.target.value; soon(); });
+    el.addEventListener('change', e => { const i = e.target.dataset.kind; if (i !== undefined) items[+i].kind = e.target.value; soon(); });
+    // 2.10: plans save themselves as you type (a second after you stop), and once more when the window closes
+    const rowOf = () => ({ version: el.querySelector('#pvV').value.trim(), title: el.querySelector('#pvT').value.trim(), target_date: el.querySelector('#pvD').value || null, status: el.querySelector('#pvS').value,
+      apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), items: items.map(x => ({ ...x, text: x.text.trim() })).filter(x => x.text), notes: el.querySelector('#pvN').value.trim() });
+    let savedJson = p ? JSON.stringify(rowOf()) : '', timer = null, busy = null, changed = false;
+    const stat = (m, bad) => { const s = el.querySelector('#pvAuto'); if (s) { s.textContent = m; s.classList.toggle('err', !!bad); } };
+    async function autosave() {
+      clearTimeout(timer); if (!can) return true;
+      if (busy) await busy;
+      const row = rowOf(), j = JSON.stringify(row);
+      if (!row.version) { stat('Give it a version and it saves by itself'); return false; }
+      if (j === savedJson) return true;
+      stat('Saving…');
+      busy = (p ? sb.from('admin_release_plans').update(row).eq('id', p.id).select().single() : sb.from('admin_release_plans').insert(row).select().single()).then(({ data, error }) => {
+        if (error) { stat(/duplicate|unique/.test(error.message) ? `${row.version} is already planned.` : error.message, true); return false; }
+        if (data) p = data; savedJson = j; changed = true;
+        stat('Saved ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })); return true;
+      });
+      const ok = await busy; busy = null; return ok;
+    }
+    const soon = () => { if (!can) return; clearTimeout(timer); stat('Editing…'); timer = setTimeout(autosave, 900); };
+    // when the window goes away (✕, Escape, clicking outside, Back), save what's left and refresh the list
+    const gone = new MutationObserver(() => { if (el.isConnected) return; gone.disconnect(); autosave().then(() => { if (changed) NX.releasePlans(host); }); });
+    gone.observe(document.body, { childList: true, subtree: true });
+    paintItems(false);
     const add = () => { const t = el.querySelector('#pvI').value.trim(); if (!t) return; items.push({ text: t, kind: el.querySelector('#pvK').value, done: false }); el.querySelector('#pvI').value = ''; paintItems(); el.querySelector('#pvI').focus(); };
     el.addEventListener('keydown', e => { if (e.target.id === 'pvI' && e.key === 'Enter') { e.preventDefault(); add(); } });
     el.onclick = async e => {
@@ -334,12 +357,9 @@
       if (b.dataset.up !== undefined || b.dataset.down !== undefined) { const i = +(b.dataset.up ?? b.dataset.down), j = b.dataset.up !== undefined ? i - 1 : i + 1; if (j < 0 || j >= items.length) return; [items[i], items[j]] = [items[j], items[i]]; return paintItems(); }
       if (b.id === 'pvCopy') return copyPlan({ ...(p || {}), version: el.querySelector('#pvV').value.trim() || p?.version || 'Next version', title: el.querySelector('#pvT').value.trim(), target_date: el.querySelector('#pvD').value || null, status: el.querySelector('#pvS').value, apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), items: items.filter(x => x.text.trim()), notes: el.querySelector('#pvN').value.trim() });
       if (b.id === 'pvGo') {
-        const row = { version: el.querySelector('#pvV').value.trim(), title: el.querySelector('#pvT').value.trim(), target_date: el.querySelector('#pvD').value || null, status: el.querySelector('#pvS').value,
-          apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), items: items.map(x => ({ ...x, text: x.text.trim() })).filter(x => x.text), notes: el.querySelector('#pvN').value.trim() };
-        if (!row.version) return toast('Give it a version, like 3.11.0', true);
-        const { error } = p ? await sb.from('admin_release_plans').update(row).eq('id', p.id) : await sb.from('admin_release_plans').insert(row);
-        if (error) return toast(/duplicate|unique/.test(error.message) ? `${row.version} is already planned.` : error.message, true);
-        close(); toast('✓ Saved'); return NX.releasePlans(host);
+        if (!el.querySelector('#pvV').value.trim()) return toast('Give it a version, like 3.11.0', true);
+        if (!(await autosave())) return;
+        close(); return;   // the observer refreshes the list
       }
       if (b.id === 'pvDel') { if (!confirm(`Delete the plan for ${p.version}?`)) return; const { error } = await sb.from('admin_release_plans').delete().eq('id', p.id); if (error) return toast(error.message, true); close(); toast('Deleted'); return NX.releasePlans(host); }
       if (b.id === 'pvTests') {

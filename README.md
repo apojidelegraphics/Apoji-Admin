@@ -176,6 +176,16 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 2.10.0
+
+Run `supabase/apoji-admin-2.10.sql` (this repo) in the **Nexus** Supabase project.
+
+- **Release plans save by themselves** as you type (a second after you stop) and when you close them. The button is now Done.
+- **Schedules do more:** send a broadcast, post and close a status-page notice, take Axiom offline and bring it back. Any schedule can repeat every day, weekday, week or month (until a date if you like). Coming-up items have Run now, +1 hour, and Stop repeating.
+- **Announcements:** a title, a style (info, good news, celebrate, heads up, critical), a button with a link, which apps show it (Nexus on Mac & PC, N28C), pinning (shows first and can't be dismissed), start and end times, Edit and Duplicate, and a live preview. Nexus 4.0.3 and N28C show the styles and buttons.
+- **Theme:** My settings → Privacy & theme lets you use Apoji Admin's own violet look or your Nexus theme.
+- **Fixed:** the status dot sits on the edge of every picture at any size, and the Owner's crown sits centered on top instead of floating off to the side.
+
 ## 2.9.1
 
 - **Fixed:** 2.9.0 opened to an empty window. The new profile pictures code ran before the app had finished starting.
