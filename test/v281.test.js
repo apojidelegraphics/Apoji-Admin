@@ -16,6 +16,6 @@ ok('active people card fills its height with a summary');
 assert.ok(css.includes('.fb-pic .save-img { position: static; }') && css.includes('.dg-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }') && css.includes('2.8.1 spacing pass'));
 ok('Save image under the picture, digest tiles 3 across, spacing pass');
 const pkg = JSON.parse(read('package.json'));
-assert.ok(/^2\.8\.\d+$/.test(pkg.version)); assert.ok(read('README.md').includes('## ' + pkg.version) && read('admin.js').includes("VERSION: '" + pkg.version + "'"));
+assert.ok(/^2\.(8|9)\.\d+$/.test(pkg.version)); assert.ok(read('README.md').includes('## ' + pkg.version) && read('admin.js').includes("VERSION: '" + pkg.version + "'"));
 ok('version ' + pkg.version);
 console.log(`v2.8.1: ${n} passed`);

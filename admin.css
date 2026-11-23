@@ -763,3 +763,8 @@ h3 svg.ico { color: var(--accent); }
   table.cards th, table.cards td { padding-top: 9px; padding-bottom: 9px; }
   .test-res { padding: 12px 0; gap: 6px; }
 }
+
+/* 2.9: profile frames from your Nexus profile (cosmetics.js has the frame looks) */
+.av.framed { overflow: visible; }
+.av.framed::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; pointer-events: none; }
+.av.sm.framed::after { inset: -2px; } .av.lg.framed::after, .av.xl.framed::after { inset: -5px; }

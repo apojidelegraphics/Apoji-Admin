@@ -121,12 +121,41 @@
     if (pr === 'offline' && a.last_seen) return 'Last seen ' + when(a.last_seen);
     return PRES[pr];
   }
+  // 2.9: one Apoji profile everywhere. Pictures and profile frames come from the Nexus account (apoji_profiles, nexus-v4.0.1.sql),
+  // so anything that only has a user id still shows the right picture, and your frame from Nexus shows here too.
+  const PROF = NX.profiles = NX.profiles || new Map(); let profQ = new Set(), profT = null;
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function wantProfile(id) {
+    if (!UUID.test(id) || PROF.has(id) || profQ.has(id)) return;
+    profQ.add(id); clearTimeout(profT);
+    profT = setTimeout(async () => {
+      const ids = [...profQ].slice(0, 200); profQ = new Set();
+      ids.forEach(x => PROF.set(x, PROF.get(x) || null));
+      try {
+        const { data, error } = await rawSb.rpc('apoji_profiles', { p_ids: ids });
+        if (error) return;
+        (data || []).forEach(p => { PROF.set(p.id, p); paintProfile(p); });
+      } catch {}
+    }, 250);
+  }
+  function frameKey(f) { return /^frame:[a-z0-9_-]+$/.test(f || '') ? f.slice(6) : ''; }
+  function paintProfile(p) {
+    const safe = /^https:\/\//.test(p.avatar_url || '') ? p.avatar_url.replace(/["'()\\]/g, '') : '', fk = frameKey(p.frame);
+    document.querySelectorAll(`.av[data-uid="${p.id}"]`).forEach(el => {
+      if (safe && !el.classList.contains('img')) { el.classList.add('img'); el.style.backgroundImage = `url('${safe}')`; }
+      [...el.classList].filter(c => c.startsWith('nxp-f-')).forEach(c => el.classList.remove(c));
+      if (fk) el.classList.add('nxp-f-' + fk, 'framed');
+    });
+  }
+  NX.refreshProfile = id => { PROF.delete(id); wantProfile(id); };
   function av(a, size = '', pres = null) {
     if (pres === null) pres = !!(a && (a.id || a.user_id) && NX.A.admins?.some(x => x.id === (a.id || a.user_id)));   // 2.8: every admin's picture shows if they're online, idle or away
-    const id = a?.id || a?.user_id || a?.email || '?', url = a?.avatar_url;
+    const id = a?.id || a?.user_id || a?.email || '?', P = PROF.get(id);
+    if (P === undefined) wantProfile(id);
+    const url = a?.avatar_url || P?.avatar_url, fk = frameKey(P?.frame);
     const safe = url && /^https:\/\//.test(url) ? url.replace(/["'()\\]/g, '') : '';
     const crown = (NX.A.tiers || {})[id] === 'owner' ? '<i class="av-crown" title="Owner">👑</i>' : '';   // 2.0.4: the Owner's picture wears a crown everywhere (chat too)
-    return `<span class="av ${size} ${safe ? 'img' : ''}" style="--c:${colorOf(id)};${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}${pres && a ? ' · ' + esc(presText(adminById(a.id || a.user_id) || a)) : ''}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${crown}${pres ? `<i class="pr ${presence(a)}"></i>` : ''}</span>`;
+    return `<span class="av ${size} ${safe ? 'img' : ''} ${fk ? 'framed nxp-f-' + fk : ''}" data-uid="${esc(id)}" style="--c:${colorOf(id)};${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}${pres && a ? ' · ' + esc(presText(adminById(a.id || a.user_id) || a)) : ''}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${crown}${pres ? `<i class="pr ${presence(a)}"></i>` : ''}</span>`;
   }
   const adminById = id => NX.A.admins.find(a => a.id === id);
 
@@ -410,7 +439,7 @@
   const NX = window.NX = {
     sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, presText, myStatus, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {}, WIN: IS_WIN, pc, VERSION: '2.8.2',
+    pages: {}, WIN: IS_WIN, pc, VERSION: '2.9.0',
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,
