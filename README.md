@@ -176,6 +176,12 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 3.1.0
+
+- **Profile uploads** (PEOPLE & CONTENT): Nexus 4.0.6 lets people upload their own picture for a picture frame or a profile frame (Make your own, beta). Nobody else sees one until an admin approves it here. You see the picture on a checkerboard (so the see-through parts show) and on a sample card. Approve, say no with a reason they're told, or take an approved one back down. Every decision is in the audit log.
+- Shared cosmetics: sets, the remade Ember profile frame, the new pieces, and the things people make themselves draw correctly everywhere in Admin.
+- Needs `nexus-v4.0.6.sql` from the Nexus repo.
+
 ## 3.0.0
 
 - **The Owner's crown is back in the top-left corner** of the picture, sitting on the edge, at every size.
