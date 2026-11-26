@@ -244,12 +244,20 @@
   const PST = { idea: ['Idea', 'p-closed'], planned: ['Planned', 'p-pending'], building: ['Building', 'p-reviewing'], testing: ['Testing', 'p-reviewing'], released: ['Released', 'p-approved'], done: ['Done', 'p-approved'], dropped: ['Dropped', 'p-declined'] };   // 2.8: Done
   const APPS = { nexus: "Nexus '28", admin: 'Apoji Admin', n28c: 'N28C', test_run: 'Test Run', aargon3: 'aARgon3' };
   const canPlan = () => !A.viewer && (A.owner || NX.can('changelog'));
+  // 3.3.1: where a change runs. A whole release can have platforms, and so can each item (an item's own pick wins).
+  const PLATS = [['mac', 'Mac'], ['windows', 'Windows'], ['phone', 'N28C'], ['test_run', 'Test Run']], PLAT_OK = PLATS.map(x => x[0]);
+  const platName = k => (PLATS.find(x => x[0] === k) || [k, k])[1];
+  const itemPlats = (x, p) => { const own = (x.platforms || []).filter(k => PLAT_OK.includes(k)); return own.length ? own : (p?.platforms || []).filter(k => PLAT_OK.includes(k)); };
+  const TEST_PLAT = { mac: 'mac', windows: 'windows', phone: 'phone', test_run: 'web' };   // Testing calls Test Run "web"
+  // the Testing rows for one item: one per platform it runs on, or a guess from its text
+  NX.planTestRows = (x, p, title) => { const pl = itemPlats(x, p); return pl.length ? pl.map(k => ({ title, platform: TEST_PLAT[k] })) : [{ title, platform: NX.testPlatform ? NX.testPlatform(x.text, p?.apps || []) : 'all' }]; };
+  NX.planItemPlats = itemPlats; NX.planPlatName = platName;
   // 2.7: a plain-text summary of a plan, to paste anywhere (Copy info)
   const planText = p => {
     const it = p.items || [], grp = k => it.filter(x => (x.kind || 'feature') === k);
-    const sec = (h, list) => list.length ? `\n${h}:\n${list.map(x => `- ${x.text}${x.done ? ' (done)' : ''}`).join('\n')}\n` : '';
+    const sec = (h, list) => list.length ? `\n${h}:\n${list.map(x => `- ${x.text}${(x.platforms || []).length ? ` [${x.platforms.map(platName).join(', ')}]` : ''}${x.done ? ' (done)' : ''}`).join('\n')}\n` : '';
     return [`${p.version}${p.title ? ' — ' + p.title : ''}`,
-      [p.target_date ? 'Target: ' + new Date(p.target_date + 'T12:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '', 'Status: ' + (PST[p.status]?.[0] || p.status), (p.apps || []).length ? 'Apps: ' + p.apps.map(a => APPS[a] || a).join(', ') : ''].filter(Boolean).join(' · ')]
+      [p.target_date ? 'Target: ' + new Date(p.target_date + 'T12:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '', 'Status: ' + (PST[p.status]?.[0] || p.status), (p.platforms || []).length ? 'Platforms: ' + p.platforms.map(platName).join(', ') : '', (p.apps || []).length ? 'Apps: ' + p.apps.map(a => APPS[a] || a).join(', ') : ''].filter(Boolean).join(' · ')]
       .join('\n') + '\n' + sec('Features', grp('feature')) + sec('Fixes', grp('fix')) + sec('Other', grp('chore')) + (p.notes ? `\nNotes:\n${p.notes}\n` : '');
   };
   const copyPlan = p => { navigator.clipboard?.writeText(planText(p)); toast('Copied the plan'); };
@@ -264,7 +272,7 @@
     const card = p => { const it = p.items || [], d = it.filter(x => x.done).length, pct = it.length ? Math.round(d / it.length * 100) : 0;
       return `<div class="plan ${p.status}" data-plan="${p.id}"><div class="row"><b class="plan-v">${esc(p.version)}</b><span class="pill ${PST[p.status][1]}">${PST[p.status][0].toUpperCase()}</span>${p.title ? `<span>${esc(p.title)}</span>` : ''}<span class="sp"></span>
         ${p.target_date ? `<span class="muted ${p.status !== 'released' && new Date(p.target_date + 'T23:59') < Date.now() ? 'err' : ''}">🗓 ${new Date(p.target_date + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${days(p.target_date)}</span>` : '<span class="muted">no date</span>'}</div>
-        <div class="muted">${(p.apps || []).map(a => APPS[a] || a).join(' · ')}</div>
+        <div class="muted">${(p.apps || []).map(a => APPS[a] || a).join(' · ')}${(p.platforms || []).length ? ` · <span class="plat-chips ro">${p.platforms.map(k => `<span class="plat on">${esc(platName(k))}</span>`).join('')}</span>` : ''}</div>
         ${it.length ? `<div class="plan-bar"><i style="width:${pct}%"></i></div><div class="muted">${d}/${it.length} done · ${it.filter(x => x.kind === 'feature').length} features · ${it.filter(x => x.kind === 'fix').length} fixes</div>` : ''}
         <div class="row plan-foot">${FIN.includes(p.status) ? '' : `<div class="gate-slot" data-gate="${esc(p.version)}"></div>`}${FIN.includes(p.status) && p.done_at ? `<span class="muted">${PST[p.status][0]} ${new Date(p.done_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>` : ''}<span class="sp"></span>
           ${canPlan() ? (FIN.includes(p.status) ? `<button class="btn sm ghost" data-planreopen="${p.id}" title="Back to Planned">Reopen</button>` : `<button class="btn sm" data-plandone="${p.id}" title="Mark this release as done">✓ Mark done</button>`) : ''}<button class="btn sm ghost" data-plancopy="${p.id}" title="Copy the version, features, fixes and notes as text">Copy info</button></div></div>`; };
@@ -308,8 +316,9 @@
         <label>Name</label><input class="field" id="pvT" maxlength="120" value="${esc(p?.title || '')}" placeholder="What it's about, e.g. Voice and the Nexus guide" ${can ? '' : 'disabled'}>
         <label>Target date</label><input class="field" type="date" id="pvD" value="${esc(p?.target_date || '')}" ${can ? '' : 'disabled'}>
         <label>Status</label><select class="field" id="pvS" ${can ? '' : 'disabled'}>${Object.entries(PST).map(([k, [l]]) => `<option value="${k}" ${(p?.status || 'planned') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <label>Apps</label><div class="row" style="flex-wrap:wrap">${Object.entries(APPS).map(([k, l]) => `<label class="row"><input type="checkbox" data-app="${k}" ${(p?.apps || ['nexus']).includes(k) ? 'checked' : ''} ${can ? '' : 'disabled'}> ${l}</label>`).join('')}</div></div>
-      <h3 class="pv-sec">What’s in it <span class="muted">click any item to change it</span></h3><div id="pvItems" class="pv-items"></div>
+        <label>Apps</label><div class="row" style="flex-wrap:wrap">${Object.entries(APPS).map(([k, l]) => `<label class="row"><input type="checkbox" data-app="${k}" ${(p?.apps || ['nexus']).includes(k) ? 'checked' : ''} ${can ? '' : 'disabled'}> ${l}</label>`).join('')}</div>
+        <label>Platforms</label><div><div class="plat-chips" id="pvPl">${PLATS.map(([k, l]) => `<button type="button" class="plat ${(p?.platforms || []).includes(k) ? 'on' : ''}" data-relplat="${k}" ${can ? '' : 'disabled'}>${l}</button>`).join('')}</div><small class="muted">For the whole release. None picked = everywhere. Items can pick their own below.</small></div></div>
+      <h3 class="pv-sec row"><span>What’s in it <span class="muted">click any item to change it</span></span><span class="sp"></span>${can ? '<button class="btn sm" id="pvAll" type="button">✓ Mark all done</button>' : ''}</h3><div id="pvItems" class="pv-items"></div>
       ${can ? `<div class="row pv-add"><select class="field sm" id="pvK" style="width:auto"><option value="feature">Feature</option><option value="fix">Fix</option><option value="chore">Other</option></select><input class="field" id="pvI" maxlength="200" placeholder="Add something, e.g. Live dictation" style="flex:1"><button class="btn" id="pvAdd">Add</button></div>` : ''}
       <label class="muted pv-notes-l">Notes</label><textarea class="field" id="pvN" rows="3" maxlength="4000" ${can ? '' : 'disabled'}>${esc(p?.notes || '')}</textarea>
       <div class="row pv-actions"><span class="muted pv-auto" id="pvAuto">${can ? (p ? 'Changes save by themselves' : 'Saves by itself once it has a version') : ''}</span>${p && can ? '<button class="btn danger" id="pvDel">Delete</button><button class="btn" id="pvTests" title="Adds the unfinished items to Testing for this version">🧪 Add to Testing</button><button class="btn" id="pvNotes" title="Publish the What’s new entry (and copy it for changes.json)">📋 Publish release notes</button>' : ''}<span class="sp"></span><button class="btn" id="pvCopy" title="Copy the version, features, fixes and notes as text">Copy info</button><button class="btn" data-close>Close</button>${can ? '<button class="btn primary" id="pvGo">Done</button>' : ''}</div>`);
@@ -319,12 +328,14 @@
     const paintItems = (touch = true) => { if (touch && typeof soon === 'function' && el.querySelector('#pvN')) soon(); el.querySelector('#pvItems').innerHTML = items.map((x, i) => `<div class="plan-item ${x.done ? 'done' : ''}" data-i="${i}"><input type="checkbox" data-done="${i}" ${x.done ? 'checked' : ''} ${can ? '' : 'disabled'}>
         ${can ? `<select class="field sm pi-kind" data-kind="${i}">${KINDS.map(([k, l]) => `<option value="${k}" ${(x.kind || 'feature') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : `<span class="pill">${(KINDS.find(k => k[0] === (x.kind || 'feature')) || KINDS[0])[1]}</span>`}
         ${can ? `<input class="field pi-text" data-text="${i}" value="${esc(x.text)}" maxlength="200" aria-label="Item">` : `<span class="pi-text">${esc(x.text)}</span>`}
-        ${can ? `<span class="pi-tools"><button class="btn sm ghost" data-up="${i}" title="Move up" ${i ? '' : 'disabled'}>↑</button><button class="btn sm ghost" data-down="${i}" title="Move down" ${i < items.length - 1 ? '' : 'disabled'}>↓</button><button class="btn sm ghost" data-rm="${i}" title="Remove">✕</button></span>` : ''}</div>`).join('') || '<p class="muted">Nothing yet.</p>'; };
+        <span class="plat-chips pi-plats" title="Where this one runs (none = the release's platforms)">${PLATS.map(([k, l]) => `<button type="button" class="plat ${(x.platforms || []).includes(k) ? 'on' : ''}" data-iplat="${i}:${k}" ${can ? '' : 'disabled'}>${l}</button>`).join('')}</span>
+        ${can ? `<span class="pi-tools"><button class="btn sm ghost" data-up="${i}" title="Move up" ${i ? '' : 'disabled'}>↑</button><button class="btn sm ghost" data-down="${i}" title="Move down" ${i < items.length - 1 ? '' : 'disabled'}>↓</button><button class="btn sm ghost" data-rm="${i}" title="Remove">✕</button></span>` : ''}</div>`).join('') || '<p class="muted">Nothing yet.</p>';
+      const all = el.querySelector('#pvAll'); if (all) { const every = items.length && items.every(x => x.done); all.textContent = every ? 'Mark all not done' : '✓ Mark all done'; all.disabled = !items.length; } };
     el.addEventListener('input', e => { const i = e.target.dataset.text; if (i !== undefined) items[+i].text = e.target.value; soon(); });
     el.addEventListener('change', e => { const i = e.target.dataset.kind; if (i !== undefined) items[+i].kind = e.target.value; soon(); });
     // 2.10: plans save themselves as you type (a second after you stop), and once more when the window closes
     const rowOf = () => ({ version: el.querySelector('#pvV').value.trim(), title: el.querySelector('#pvT').value.trim(), target_date: el.querySelector('#pvD').value || null, status: el.querySelector('#pvS').value,
-      apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), items: items.map(x => ({ ...x, text: x.text.trim() })).filter(x => x.text), notes: el.querySelector('#pvN').value.trim() });
+      apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), ...(NX.plansNoPlatforms ? {} : { platforms: [...el.querySelectorAll('[data-relplat].on')].map(x => x.dataset.relplat) }), items: items.map(x => ({ ...x, text: x.text.trim() })).filter(x => x.text), notes: el.querySelector('#pvN').value.trim() });
     let savedJson = p ? JSON.stringify(rowOf()) : '', timer = null, busy = null, changed = false;
     const stat = (m, bad) => { const s = el.querySelector('#pvAuto'); if (s) { s.textContent = m; s.classList.toggle('err', !!bad); } };
     async function autosave() {
@@ -335,6 +346,7 @@
       if (j === savedJson) return true;
       stat('Saving…');
       busy = (p ? sb.from('admin_release_plans').update(row).eq('id', p.id).select().single() : sb.from('admin_release_plans').insert(row).select().single()).then(({ data, error }) => {
+        if (error && /platforms/.test(error.message) && !NX.plansNoPlatforms) { NX.plansNoPlatforms = true; toast('Release platforms need supabase/apoji-admin-3.3.1.sql. Saved everything else.', true); busy = null; return autosave(); }   // 3.3.1
         if (error) { stat(/duplicate|unique/.test(error.message) ? `${row.version} is already planned.` : error.message, true); return false; }
         if (data) p = data; savedJson = j; changed = true;
         stat('Saved ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })); return true;
@@ -353,9 +365,12 @@
       if (t.dataset.done !== undefined) { items[+t.dataset.done].done = t.checked; return paintItems(); }
       const b = t.closest('button'); if (!b) return;
       if (b.id === 'pvAdd') return add();
+      if (b.id === 'pvAll') { const every = items.length && items.every(x => x.done); items.forEach(x => { x.done = !every; }); return paintItems(); }   // 3.3.1: all at once
+      if (b.dataset.relplat) { b.classList.toggle('on'); return soon(); }
+      if (b.dataset.iplat) { const [i, k] = b.dataset.iplat.split(':'), x = items[+i], set = new Set(x.platforms || []); set.has(k) ? set.delete(k) : set.add(k); x.platforms = PLATS.map(z => z[0]).filter(z => set.has(z)); if (!x.platforms.length) delete x.platforms; return paintItems(); }
       if (b.dataset.rm !== undefined) { items.splice(+b.dataset.rm, 1); return paintItems(); }
       if (b.dataset.up !== undefined || b.dataset.down !== undefined) { const i = +(b.dataset.up ?? b.dataset.down), j = b.dataset.up !== undefined ? i - 1 : i + 1; if (j < 0 || j >= items.length) return; [items[i], items[j]] = [items[j], items[i]]; return paintItems(); }
-      if (b.id === 'pvCopy') return copyPlan({ ...(p || {}), version: el.querySelector('#pvV').value.trim() || p?.version || 'Next version', title: el.querySelector('#pvT').value.trim(), target_date: el.querySelector('#pvD').value || null, status: el.querySelector('#pvS').value, apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), items: items.filter(x => x.text.trim()), notes: el.querySelector('#pvN').value.trim() });
+      if (b.id === 'pvCopy') return copyPlan({ ...(p || {}), version: el.querySelector('#pvV').value.trim() || p?.version || 'Next version', title: el.querySelector('#pvT').value.trim(), target_date: el.querySelector('#pvD').value || null, status: el.querySelector('#pvS').value, apps: [...el.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), platforms: [...el.querySelectorAll('[data-relplat].on')].map(x => x.dataset.relplat), items: items.filter(x => x.text.trim()), notes: el.querySelector('#pvN').value.trim() });
       if (b.id === 'pvGo') {
         if (!el.querySelector('#pvV').value.trim()) return toast('Give it a version, like 3.11.0', true);
         if (!(await autosave())) return;
@@ -365,8 +380,10 @@
       if (b.id === 'pvTests') {
         const todo = items.filter(x => x.kind !== 'chore'); if (!todo.length) return toast('Nothing to test yet.', true);
         const { data: have } = await sb.from('test_items').select('title').eq('release', p.version);
-        const seen = new Set((have || []).map(x => x.title));
-        const rows = todo.filter(x => !seen.has(x.text)).map((x, i) => ({ release: p.version, platform: 'all', title: x.text.slice(0, 200), steps: '', created_by: A.user.id, sort: (have || []).length + i }));
+        // 3.3.1: one test per platform the item runs on (its own, else the release's), so each one gets tested
+        const { data: have2 } = await sb.from('test_items').select('title,platform').eq('release', p.version);
+        const seen = new Set((have2 || []).map(x => x.title + '|' + (x.platform || 'all'))), plan = { ...p, platforms: [...el.querySelectorAll('[data-relplat].on')].map(x => x.dataset.relplat) };
+        const rows = todo.flatMap(x => NX.planTestRows(x, plan, x.text.slice(0, 200))).filter(r => !seen.has(r.title + '|' + r.platform)).map((r, i) => ({ release: p.version, platform: r.platform, title: r.title, steps: '', created_by: A.user.id, sort: (have || []).length + i }));
         if (!rows.length) return toast('They’re all in Testing already.');
         const { error } = await sb.from('test_items').insert(rows); if (error) return toast(error.message, true);
         toast(`🧪 Added ${rows.length} to Testing for ${p.version}`); return;

@@ -892,3 +892,11 @@ main > .card + .card { margin-top: 14px; }
 /* 3.3: feature flag platforms */
 .plat-chips { display: flex; gap: 4px; flex-wrap: wrap; } .plat-chips button { padding: 3px 9px; border-radius: 99px; border: 1px solid var(--line); background: none; color: var(--muted); font: 12px var(--sans); cursor: pointer; }
 .plat-chips button.on { border-color: var(--accent); color: var(--text); background: rgba(154,128,255,.15); } .plat-note { display: block; margin-top: 2px; font-size: 11px; }
+/* 3.3.1: platforms on release plans and their items */
+.plat-chips button:disabled { cursor: default; opacity: .8; }
+.plat-chips.ro { display: inline-flex; vertical-align: middle; } .plat-chips.ro .plat { padding: 1px 7px; border-radius: 99px; border: 1px solid var(--accent); color: var(--text); background: rgba(154,128,255,.15); font: 11px var(--sans); }
+.plan-item { grid-template-columns: auto auto minmax(0, 1fr) auto; row-gap: 4px; }
+.plan-item .pi-plats { grid-column: 3; grid-row: 2; padding-left: 8px; }
+.plan-item .pi-plats button { padding: 2px 7px; font-size: 11px; } .plan-item .pi-plats button:not(.on) { opacity: .55; } .plan-item:hover .pi-plats button:not(.on) { opacity: 1; }
+.pv-sec.row { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 760px) { .plan-item .pi-plats { grid-column: 1 / -1; grid-row: auto; padding-left: 0; } }

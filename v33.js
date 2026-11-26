@@ -123,9 +123,13 @@
     if (error) throw new Error(need33(error.message) ? SQL33 : error.message);
     let tests = 0;
     if (addTests) {
-      const { data: have } = await sb.from('test_items').select('title').eq('release', p.version);
-      const seen = new Set((have || []).map(x => x.title.toLowerCase()));
-      const rows = hl.filter(h => !seen.has((NX.testTitle ? NX.testTitle(h) : h).toLowerCase())).map((h, i) => ({ release: p.version, platform: NX.testPlatform ? NX.testPlatform(h, p.apps || []) : 'all', title: (NX.testTitle ? NX.testTitle(h) : h).slice(0, 200), steps: h.slice(0, 2000), created_by: A.user.id, sort: (have || []).length + i }));
+      // 3.3.1: each line becomes one test per platform its plan item runs on (the item's own, else the release's)
+      const { data: have } = await sb.from('test_items').select('title,platform').eq('release', p.version);
+      const seen = new Set((have || []).map(x => x.title.toLowerCase() + '|' + (x.platform || 'all')));
+      const norm = t => String(t || '').replace(/^Fixed:?\s*/i, '').replace(/[.!?]+$/, '').trim().toLowerCase();
+      const itemOf = h => (p.items || []).find(x => norm(sentence(x.text)) === norm(h)) || { text: h };
+      const rows = hl.flatMap(h => { const title = (NX.testTitle ? NX.testTitle(h) : h).slice(0, 200); return (NX.planTestRows ? NX.planTestRows(itemOf(h), p, title) : [{ title, platform: 'all' }]).map(r => ({ ...r, steps: h.slice(0, 2000) })); })
+        .filter(r => !seen.has(r.title.toLowerCase() + '|' + r.platform)).map((r, i) => ({ release: p.version, platform: r.platform, title: r.title, steps: r.steps, created_by: A.user.id, sort: (have || []).length + i }));
       if (rows.length) { const { error: er } = await sb.from('test_items').insert(rows); if (!er) tests = rows.length; }
     }
     const entry = JSON.stringify({ version: p.version, date: row.date, title: row.title, highlights: hl }, null, 2);
@@ -169,4 +173,21 @@
       const p = RX.plans.find(x => x.id === +b.dataset.publish); if (p) publishModal(p, () => P.releases());
     }, true); }
   }
+})();
+
+// 3.3.1: which admins are around in any Apoji app (Nexus, N28C, Test Run, the Admin app), so their dots match their profile
+(function () {
+  const { sb } = NX;
+  let busy = false;
+  async function appsLive() {
+    if (busy || !NX.A?.user || !(NX.A.admins || []).length || !NX.markSeen) return; busy = true;
+    try {
+      const ids = NX.A.admins.map(a => a.id), since = new Date(Date.now() - 5 * 60e3).toISOString();
+      const { data } = await sb.from('user_presence').select('user_id,seen_at').in('user_id', ids).gte('seen_at', since);
+      for (const r of data || []) NX.markSeen(r.user_id, r.seen_at);
+      if ((data || []).length) { for (const id of new Set(data.map(r => r.user_id))) NX.repaintPresence?.(id); NX.emit?.('presence', null); }
+    } catch {} finally { busy = false; }
+  }
+  setTimeout(appsLive, 4000); setInterval(appsLive, 60e3);
+  NX.appsLive = appsLive;
 })();

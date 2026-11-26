@@ -244,6 +244,9 @@
     if (error || !data?.ok) { box.innerHTML = `<h3>Apoji profile</h3><p class="muted">${error && need32(error.message) ? SQL32 : 'Couldn’t load it.'}</p>`; return; }
     const SURF = { mac: 'Mac', windows: 'Windows PC', phone: 'N28C', test_run: 'Test Run', admin: 'Apoji Admin', aargon3: 'aARgon3', mexel: 'Mexel', linux: 'Linux' };
     const c = data.cirkts || {}, ups = data.uploads || [], reps = (data.reports || []).filter(r => r.status === 'open');
+    // 3.3.1: one answer to "are they online": the same rule as their picture's dot (Admin heartbeat or an app in the last 5 min)
+    for (const a of data.apps || []) NX.markSeen?.(uid, a.seen_at);
+    if (data.card && NX.presence) { const adm = NX.adminById?.(uid); data.card.online = adm ? NX.presence(adm) !== 'offline' : (!!data.card.online || !!NX.appLive?.(uid)); NX.repaintPresence?.(uid); }   // admins: invisible stays hidden
     box.innerHTML = `<h3>Apoji profile <span class="sp"></span></h3>
       ${NC() && data.card ? `<div class="ap-card">${NC().card(data.card)}</div>` : '<p class="muted">They haven’t set up a profile yet.</p>'}
       <div class="kv" style="margin-top:10px"><span>Uses</span><span>${(data.apps || []).map(a => `${esc(SURF[a.surface] || a.surface)}${a.version ? ' ' + esc(a.version) : ''} <span class="muted">(${ago(a.seen_at)})</span>`).join(', ') || '—'}</span>

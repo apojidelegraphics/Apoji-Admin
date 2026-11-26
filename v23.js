@@ -68,6 +68,7 @@
       sb.from('user_events').select('kind,detail,created_at').eq('user_id', uid).order('created_at', { ascending: true }).limit(30)]);
     if (error) return `<div class="card"><h3>💻 What they use</h3><p class="muted" style="margin:0">${esc(sqlMsg(error.message))}</p></div>`;
     const list = (rows || []).slice().sort((a, b) => new Date(a.first_seen) - new Date(b.first_seen));
+    for (const r of rows || []) NX.markSeen?.(uid, r.seen_at); NX.repaintPresence?.(uid);   // 3.3.1: their picture's dot agrees with this card
     const live = list.filter(r => Date.now() - new Date(r.seen_at) < LIVE);
     const story = list.map(r => `${SURF[r.surface]?.[1] || r.surface} (${new Date(r.first_seen).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })})`).join(' → ');
     const got = (ev || []).find(e => e.kind === 'got_app');

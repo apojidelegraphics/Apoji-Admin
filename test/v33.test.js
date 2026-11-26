@@ -5,11 +5,11 @@ const v = R('v33.js'), sql = R('supabase/apoji-admin-3.3.sql'), pkg = JSON.parse
 let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓ ' + name); };
 ok('loaded everywhere, version 3.3.0 everywhere', () => {
   assert.ok(R('index.html').includes('<script src="v33.js"></script>') && R('sw.js').includes("'./v33.js'"));
-  assert.strictEqual(pkg.version, '3.3.0'); assert.ok(R('admin.js').includes(`VERSION: '${pkg.version}'`) && R('sw.js').includes('apoji-admin-v' + pkg.version) && R('README.md').includes('## ' + pkg.version));
+  assert.ok(pkg.version.split('.').map(Number).reduce((a, x) => a * 1000 + x) >= 3003000); assert.ok(R('admin.js').includes(`VERSION: '${pkg.version}'`) && R('sw.js').includes('apoji-admin-v' + pkg.version) && R('README.md').includes('## ' + pkg.version));
 });
 ok('plan → release notes: features first, fixes marked, chores left out', () => {
   const NX = { sb: {}, $: () => null, esc: s => s, ago: () => '', when: () => '', toast() {}, A: { tab: '' }, pages: {}, can: () => true };
-  vm.runInNewContext(v, { NX, window: {}, document: { querySelector: () => null, querySelectorAll: () => [], getElementById: () => null }, sessionStorage: { getItem: () => null, setItem() {} }, navigator: {}, performance: { now: () => 0 }, fetch: () => Promise.reject(), Set, Date, Math, Object, JSON, Promise, setTimeout, clearTimeout, String, Number, Array, URL });
+  vm.runInNewContext(v, { NX, window: {}, document: { querySelector: () => null, querySelectorAll: () => [], getElementById: () => null }, sessionStorage: { getItem: () => null, setItem() {} }, navigator: {}, performance: { now: () => 0 }, fetch: () => Promise.reject(), Set, Date, Math, Object, JSON, Promise, setTimeout, clearTimeout, setInterval: () => 0, String, Number, Array, URL });
   const lines = NX.planNotes({ items: [{ kind: 'fix', text: 'the custom profile upload doesnt show around the pfp' }, { kind: 'feature', text: 'profile visitors' }, { kind: 'chore', text: 'bump deps' }, { kind: 'feature', text: '  ' }] });
   assert.strictEqual(JSON.stringify(lines), JSON.stringify(['Profile visitors.', "Fixed: The custom profile upload doesnt show around the pfp."]));
   assert.strictEqual(typeof NX.publishNotes, 'function'); assert.strictEqual(typeof NX.publishPlanNotes, 'function');

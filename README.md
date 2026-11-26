@@ -176,6 +176,13 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 3.3.1
+
+- **Mark all done** in a release plan: one button checks every item (and unchecks them all again).
+- **Platforms on releases and on each item.** A plan can be for Mac, Windows, N28C and/or Test Run, and every item can pick its own (an item's pick wins; none = the release's). Plan cards and Copy info show them. Add to Testing and Publish release notes make one test per platform, so each one gets checked.
+- Fixed: someone's profile could say offline and online at the same time. Every presence dot now follows one rule: online if Apoji Admin is open for them or any Apoji app checked in during the last 5 minutes (the same window the profile card uses). Their picture, their profile card, Team chat and Admins online agree.
+- Needs `supabase/apoji-admin-3.3.1.sql` (this repo) for release-wide platforms. Item platforms work without it.
+
 ## 3.3.0
 
 Includes everything in 3.2.0, which was built but never pushed (that's why Testing looked the same).

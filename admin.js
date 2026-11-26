@@ -108,9 +108,16 @@
   const COLORS = ['#3dffa0', '#5ce1ff', '#ffd36b', '#ff8fd0', '#b69cff', '#ff9f6b', '#9bd65c', '#9fe7ff'];
   const colorOf = id => COLORS[[...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
   const nameOf = a => a ? (a.nickname || a.username || String(a.email || '').split('@')[0] || 'Admin') : 'Admin';
+  // 3.3.1: one rule for every presence dot: the Admin heartbeat, or any Apoji app that checked in during the last 5 minutes
+  // (user_presence, same window as the profile card's "online"). Before, someone using only the Windows app looked offline
+  // on their picture and online on their card.
+  const SEEN = new Map(), APP_LIVE = 5 * 60e3;
+  const markSeen = (uid, at) => { const t = +new Date(at || 0); if (uid && t && t > (SEEN.get(uid) || 0)) SEEN.set(uid, t); };
+  const appLive = uid => Date.now() - (SEEN.get(uid) || 0) < APP_LIVE;
   function presence(a) {
     if (!a) return 'offline';
-    const fresh = a.last_seen && Date.now() - new Date(a.last_seen) < 150e3;
+    if (a.id && !a.last_seen && !a.status) a = (NX.A.admins || []).find(x => x.id === a.id) || a;   // a bare { id } gets the admin row
+    const fresh = (a.last_seen && Date.now() - new Date(a.last_seen) < 150e3) || appLive(a.id || a.user_id);
     const st = a.id === NX.A.user?.id ? myStatus() : (a.status === 'idle' && a.back_at && new Date(a.back_at) < Date.now() ? 'auto' : a.status);
     if (a.id === NX.A.user?.id) return st === 'invisible' ? 'offline' : st === 'dnd' ? 'dnd' : st === 'idle' || NX.A.idle ? 'idle' : 'online';
     if (!fresh || st === 'invisible') return 'offline';
@@ -171,9 +178,11 @@
       if (f.style === 'image') { mineCls = ' nxp-fm-image'; if (window.NexusCosmetics.SAFE_MINE.test(P?.frame_img || '')) mineImg = `<img class="nxp-fimg" src="${esc(P.frame_img)}" alt="">`; }
       else { mineCls = ` nxp-fm-${f.style} nxp-ma-${f.anim}`; mineVars = `--ca:${f.a};--cb:${f.b};--cw:${f.width};--cg:${f.glow};--cd:${7 - f.speed * 2}s;`; }
     }
-    return `<span class="av ${size} ${safe ? 'img' : ''} ${fk ? 'framed nxp-f-' + fk + mineCls : ''}" data-uid="${esc(id)}" style="--c:${colorOf(id)};${mineVars}${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}${pres && a ? ' · ' + esc(presText(adminById(a.id || a.user_id) || a)) : ''}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${mineImg}${crown}${pres ? `<i class="pr ${presence(a)}"></i>` : ''}</span>`;
+    return `<span class="av ${size} ${safe ? 'img' : ''} ${fk ? 'framed nxp-f-' + fk + mineCls : ''}" data-uid="${esc(id)}" style="--c:${colorOf(id)};${mineVars}${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}${pres && a ? ' · ' + esc(presText(adminById(a.id || a.user_id) || a)) : ''}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${mineImg}${crown}${pres ? `<i class="pr ${presence(adminById(a?.id || a?.user_id) || a)}"></i>` : ''}</span>`;
   }
   const adminById = id => NX.A.admins.find(a => a.id === id);
+  // 3.3.1: after we learn someone was just active in an app, repaint their dots that are already on screen
+  const repaintPresence = uid => document.querySelectorAll(`.av[data-uid="${CSS.escape(uid)}"] > i.pr`).forEach(i => { i.className = 'pr ' + presence(adminById(uid) || { id: uid }); });
 
   // ---------- toasts + notifications
   function toast(text, opts = {}) {
@@ -453,9 +462,9 @@
   }
 
   const NX = window.NX = { setThemeMode, themeMode, profiles: PROF, refreshProfile: id => { PROF.delete(id); wantProfile(id); },
-    sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, presText, myStatus, PRES, adminById, applyTheme,
+    sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, presText, markSeen, appLive, repaintPresence, myStatus, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {}, WIN: IS_WIN, pc, VERSION: '3.3.0',
+    pages: {}, WIN: IS_WIN, pc, VERSION: '3.3.1',
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,
