@@ -176,6 +176,13 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 3.4.0
+
+- **Session replays** (INSIGHTS → Session replays): anonymous step-by-step replays from the Mac and Windows apps, N28C and Test Run. You see which screens people visit, where sessions end, the most-clicked buttons and the errors, and you can play any session back: the window as a box, clicks as dots where they happened, the screen name, a timeline and every step. Never what people type, their chats or who they are. Kept 30 days, and people can turn it off in each app.
+- **A/B splits on feature flags.** A new Split column gives a feature to everyone it's for, half (an A/B test), 25% or 10%. Who's in is decided by a stable hash, so it doesn't flip. "Results" compares the two halves from the replays: sessions, length, steps and errors.
+- Terms 1.1 (shared links and usage replays are in the privacy section); admins are asked to look at it once.
+- Needs the Nexus repo's `supabase/nexus-v4.2.0.sql`.
+
 ## 3.3.1
 
 - **Mark all done** in a release plan: one button checks every item (and unchecks them all again).

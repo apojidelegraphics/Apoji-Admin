@@ -3,7 +3,7 @@ const assert = require('assert'), fs = require('fs'), path = require('path'), vm
 const R = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 const pkg = JSON.parse(R('package.json')), v26 = R('v26.js'), admin = R('admin.js'), sql = R('supabase/apoji-admin-3.3.1.sql');
 let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓ ' + name); };
-ok('version 3.3.1 everywhere', () => { assert.strictEqual(pkg.version, '3.3.1'); assert.ok(admin.includes("VERSION: '3.3.1'") && R('sw.js').includes('apoji-admin-v3.3.1') && R('README.md').includes('## 3.3.1')); });
+ok('version 3.3.1 everywhere', () => { assert.ok(pkg.version.split('.').map(Number).reduce((a, x) => a * 1000 + x) >= 3003001); assert.ok(admin.includes("VERSION: '" + pkg.version + "'") && R('sw.js').includes('apoji-admin-v' + pkg.version) && R('README.md').includes('## 3.3.1')); });
 ok('mark all done toggles every item', () => { assert.ok(v26.includes("id=\"pvAll\"") && v26.includes("items.forEach(x => { x.done = !every; })") && v26.includes("'Mark all not done'")); });
 ok('platforms: item pick wins, else the release; one test per platform; Test Run is "web" in Testing', () => {
   const NX = { A: {}, pages: {}, can: () => true, testPlatform: () => 'all' };

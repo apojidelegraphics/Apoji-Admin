@@ -234,7 +234,7 @@
     ['INBOX', [['access', '🔑', 'Access requests', 'access'], ['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
     ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['profiles', '🖼', 'Profiles & frames'], ['perms', '🔐', 'Admin access', 'perms']]],
     ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['beta', 'β', 'Beta'], ['testing', '🧪', 'Testing'], ['prompts', '✍', 'Agent prompts'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
-    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['training', '🧠', 'Training'], ['freeapi', '📊', 'API usage'], ['activity', '🔥', 'Admin activity'], ['audit', '📜', 'Audit log']]],
+    ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['training', '🧠', 'Training'], ['freeapi', '📊', 'API usage'], ['replays', '👁', 'Session replays'], ['activity', '🔥', 'Admin activity'], ['audit', '📜', 'Audit log']]],
     ['MONEY', [['mexel', '🧾', 'Mexel']]],
     ['STAFF', [['shifts', '🗓', 'Shifts'], ['employees', '👥', 'Employees']]],
     ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['terms', '⚖', 'Terms'], ['me', '⚙︎', 'My settings']]]
@@ -464,7 +464,7 @@
   const NX = window.NX = { setThemeMode, themeMode, profiles: PROF, refreshProfile: id => { PROF.delete(id); wantProfile(id); },
     sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, presText, markSeen, appLive, repaintPresence, myStatus, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {}, WIN: IS_WIN, pc, VERSION: '3.3.1',
+    pages: {}, WIN: IS_WIN, pc, VERSION: '3.4.0',
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,
