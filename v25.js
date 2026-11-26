@@ -127,6 +127,7 @@
       ${(g.fails || []).length ? `<ul>${g.fails.map(f => `<li>❌ ${esc(f.title)} <span class="muted">${esc(f.platform)}</span></li>`).join('')}</ul>` : ''}
       ${g.ready ? '' : '<p class="muted" style="margin:4px 0 0">Every test needs a ✅ (a ❌ counts until someone passes it again). You can still release, but you’ll be asked first.</p>'}</div>`;
   }
+  NX.testGateCard = r => gateCard(r); NX.testAssign = r => assignModal(r);   // 3.2: the new Testing page (v32.js) uses these
   NX.releaseGate = async release => { const { data } = await sb.rpc('admin_release_gate', { p_release: release }); return data || null; };
   const origTesting = P.testing;
   P.testing = async () => {

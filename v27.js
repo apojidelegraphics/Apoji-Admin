@@ -371,6 +371,7 @@
     { name: 'checkout', project: 'aARgon3', what: 'The online store’s Stripe checkout', secret: 'STRIPE_SECRET_KEY', base: STORE, key: SKEY },
     { serverOnly: true, name: 'stripe-webhook', project: 'aARgon3', what: 'Payments and renewals from Stripe', secret: 'STRIPE_WEBHOOK_SECRET', base: STORE, key: SKEY }
   ];
+  NX.serverFns = FNS;   // 3.3: Health checks these too
 })();
 
 // =========================================================== 2.7.1: Mexel is for the Owner and the staff they pick

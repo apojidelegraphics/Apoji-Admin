@@ -312,7 +312,7 @@
       <h3 class="pv-sec">What’s in it <span class="muted">click any item to change it</span></h3><div id="pvItems" class="pv-items"></div>
       ${can ? `<div class="row pv-add"><select class="field sm" id="pvK" style="width:auto"><option value="feature">Feature</option><option value="fix">Fix</option><option value="chore">Other</option></select><input class="field" id="pvI" maxlength="200" placeholder="Add something, e.g. Live dictation" style="flex:1"><button class="btn" id="pvAdd">Add</button></div>` : ''}
       <label class="muted pv-notes-l">Notes</label><textarea class="field" id="pvN" rows="3" maxlength="4000" ${can ? '' : 'disabled'}>${esc(p?.notes || '')}</textarea>
-      <div class="row pv-actions"><span class="muted pv-auto" id="pvAuto">${can ? (p ? 'Changes save by themselves' : 'Saves by itself once it has a version') : ''}</span>${p && can ? '<button class="btn danger" id="pvDel">Delete</button><button class="btn" id="pvTests" title="Adds the unfinished items to Testing for this version">🧪 Add to Testing</button><button class="btn" id="pvNotes" title="Copies What’s New lines for changes.json">📋 Release notes</button>' : ''}<span class="sp"></span><button class="btn" id="pvCopy" title="Copy the version, features, fixes and notes as text">Copy info</button><button class="btn" data-close>Close</button>${can ? '<button class="btn primary" id="pvGo">Done</button>' : ''}</div>`);
+      <div class="row pv-actions"><span class="muted pv-auto" id="pvAuto">${can ? (p ? 'Changes save by themselves' : 'Saves by itself once it has a version') : ''}</span>${p && can ? '<button class="btn danger" id="pvDel">Delete</button><button class="btn" id="pvTests" title="Adds the unfinished items to Testing for this version">🧪 Add to Testing</button><button class="btn" id="pvNotes" title="Publish the What’s new entry (and copy it for changes.json)">📋 Publish release notes</button>' : ''}<span class="sp"></span><button class="btn" id="pvCopy" title="Copy the version, features, fixes and notes as text">Copy info</button><button class="btn" data-close>Close</button>${can ? '<button class="btn primary" id="pvGo">Done</button>' : ''}</div>`);
     el.classList.add('pv-modal');
     // 2.7: every item can be changed after saving: click its text to edit it, pick a kind, move it up or down
     const KINDS = [['feature', 'FEATURE'], ['fix', 'FIX'], ['chore', 'OTHER']];
@@ -371,6 +371,7 @@
         const { error } = await sb.from('test_items').insert(rows); if (error) return toast(error.message, true);
         toast(`🧪 Added ${rows.length} to Testing for ${p.version}`); return;
       }
+      if (b.id === 'pvNotes' && NX.publishPlanNotes) { await autosave(); close(); return NX.publishPlanNotes(p, () => NX.releasePlans(host)); }   // 3.3: one click to What's new
       if (b.id === 'pvNotes') {
         const lines = items.filter(x => x.done || p.status === 'released').map(x => x.text);
         const snip = JSON.stringify({ version: p.version, date: new Date().toISOString().slice(0, 10), title: p.title || '', highlights: lines }, null, 2);

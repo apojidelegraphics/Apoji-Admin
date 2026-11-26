@@ -194,7 +194,7 @@
   let palSeq = 0;
   function palette() {
     if (document.querySelector('.palette')) return;
-    const { el, close } = NX.modal('<input class="field" id="palQ" placeholder="Jump to a page, person, user, report or task…" autocomplete="off" style="width:100%;font-size:16px"><div class="palres" id="palR"></div><p class="muted" style="margin:8px 0 0;font-size:12px">↑↓ to move · Enter to open · Esc to close</p>');
+    const { el, close } = NX.modal('<input class="field" id="palQ" placeholder="Search all of Apoji: pages, people, users, reports, tasks, known issues, releases…" autocomplete="off" style="width:100%;font-size:16px"><div class="palres" id="palR"></div><p class="muted" style="margin:8px 0 0;font-size:12px">↑↓ to move · Enter to open · Esc to close</p>');
     el.classList.add('palette'); el.querySelector('[data-x]')?.remove();
     let items = [], sel = 0;
     const paint = () => { $('palR').innerHTML = items.map((it, i) => `${it.group && it.group !== items[i - 1]?.group ? `<h6>${esc(it.group)}</h6>` : ''}<button data-i="${i}" class="${i === sel ? 'on' : ''}"><span class="pic">${it.icHtml || esc(it.ic || '•')}</span><span class="pl">${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span></button>`).join('') || '<p class="muted" style="padding:10px">Nothing found.</p>';
@@ -217,6 +217,10 @@
       items.push(...(u?.users || []).map(x => ({ group: 'Users', icHtml: av({ id: x.id, nickname: x.nickname || x.username, avatar_url: x.avatar_url }, 'sm'), label: x.nickname || x.username || x.email, sub: x.email, run: () => NX.userDrawer(x.id) })),
         ...(f.data || []).map(x => ({ group: 'Feedback', ic: '📮', label: x.title, sub: `#${x.id} · ${x.status}`, run: () => NX.go('feedback', { arg: x.id }) })));
       paint();
+      // 3.2: Apoji-wide search (known issues, incidents, release plans, tests, Spaces, profiles)
+      const more = NX.paletteExtra ? await NX.paletteExtra(ql).catch(() => []) : [];
+      if (seq !== palSeq || !more.length) return;
+      items.push(...more); paint();
     }
     const q = $('palQ'); let t;
     q.oninput = () => { clearTimeout(t); t = setTimeout(() => search(q.value), 120); };

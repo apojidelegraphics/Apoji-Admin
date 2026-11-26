@@ -176,6 +176,27 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 3.3.0
+
+Includes everything in 3.2.0, which was built but never pushed (that's why Testing looked the same).
+
+- **Health, rebuilt.** One line at the top that says whether everything is fine, then alerts, then a tile per service (database, live updates, server functions, free AI key, desktop hub, N28C relay, schedules, status page) with a colored light and a sparkline of response times. Below: what's waiting on the team (bugs, urgent bugs, uploads, reports, access and beta requests, open known issues, open incidents), where people are using Apoji right now and today (Mac, Windows, N28C, Test Run and more), server functions, and tables and storage. Checks again every 30 seconds without jumping the page.
+- **Feature flags by platform.** Each flag has a "Where" column: Mac, Windows, N28C, Test Run. None picked means everywhere. Nexus 4.1.0, N28C and Test Run respect it.
+- **Release plan to changelog in one click.** "Publish release notes" on a plan turns its features and fixes into the What's new entry (editable first), publishes it to the website and the apps, adds the items to Testing, and copies the changes.json entry.
+- Fixed: upload review cards no longer spill out (the sample profile and "Looked at by" stay inside the card).
+- Custom uploaded frames show in avatars across the admin.
+- Needs `supabase/apoji-admin-3.3.sql` (this repo), run in the Nexus project after `apoji-admin-3.2.sql` and the Nexus repo's `nexus-v4.1.0.sql`.
+
+## 3.2.0
+
+- **Testing, rebuilt.** Releases are chips with a progress ring. Each item is one row you open to see its steps and everyone's results, mark your own result (works, broken, skip) with a note, reply to testers, turn a fail into a bug report, edit or archive. Filter by Needs testing, Failing or Passed, by platform, or search.
+- **Add from release notes.** Pick any version of the Nexus release notes, or any release plan here (including Apoji Admin plans). Each note becomes an item with a short title you can edit, the full note as its steps, and a guess at where it runs. Items already in Testing are skipped.
+- **Profiles & frames** (replaces Profile uploads): pictures waiting for review, things people made in the shop, banner pictures, bios and statuses, reported profiles, and everyone. Each one shows the real profile card. Reset part of a profile (banner, made-in-the-shop designs, bio, status, display name, pronouns, picture, or all frames and themes); the person gets a notice saying what and why, and open reports are closed.
+- **One Apoji account.** My settings has your Apoji account: your card, display name, status, pronouns and bio (saved everywhere), the apps you use, and a link code for aARgon3. Each user's drawer shows their Apoji profile: card, apps, linked apps, Cirkts, pictures, reports, and Reset. aARgon3 now gets the whole card (frames, banner, effects, things people made), still nothing private.
+- **Status page:** link each incident to the known issues behind it and the release that fixes it. The public status page shows the links.
+- **Apoji-wide search** in ⌘K: known issues, incidents, release plans, test items, Spaces, profiles and announcements, next to pages, users and reports.
+- Needs `supabase/apoji-admin-3.2.sql` (this repo), run in the Nexus project after `nexus-v4.0.6.sql`.
+
 ## 3.1.0
 
 - **Profile uploads** (PEOPLE & CONTENT): Nexus 4.0.6 lets people upload their own picture for a picture frame or a profile frame (Make your own, beta). Nobody else sees one until an admin approves it here. You see the picture on a checkerboard (so the see-through parts show) and on a sample card. Approve, say no with a reason they're told, or take an approved one back down. Every decision is in the audit log.

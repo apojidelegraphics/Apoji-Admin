@@ -494,6 +494,7 @@
       NX.labelTables();
     };
     paintOrders();
+    NX.afterUserDrawer?.(el, uid, base);   // 3.2: their Apoji profile (v32.js)
     el.onchange = async e => {
       if (e.target.id !== 'acPicF' || !e.target.files[0]) return;
       try { const image = await NX.avatarData(e.target.files[0]); if (await acct({ action: 'avatar', image })) { await NX.loadAdmins?.(); userDrawer(uid); } }

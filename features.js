@@ -591,6 +591,7 @@
     const hid = NX.store.get('health-dismissed', {});
     return out.filter(p => !hid[p[2]]);
   }
+  NX.health = { checks: () => checks(), problems: (c, all) => problems(c, all), detail: (k, c) => healthDetail(k, c), dismiss: id => dismiss(id), fresh: h => fresh(h) };   // 3.3: the new Health page (v33.js)
   const dismiss = id => { const d = NX.store.get('health-dismissed', {}); d[id] = Date.now(); for (const k of Object.keys(d)) if (Date.now() - d[k] > 7 * 864e5) delete d[k]; NX.store.set('health-dismissed', d); };
   async function healthBadge() { try { const c = await checks(); A.counts.health = problems(c).filter(p => p[0] !== 'info').length; NX.updateTitle(); } catch {} }
   // What's behind an alert

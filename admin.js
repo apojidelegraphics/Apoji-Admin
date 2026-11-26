@@ -164,7 +164,14 @@
     const url = a?.avatar_url || P?.avatar_url, fk = frameKey(P?.frame);
     const safe = url && /^https:\/\//.test(url) ? url.replace(/["'()\\]/g, '') : '';
     const crown = (NX.A.tiers || {})[id] === 'owner' ? '<i class="av-crown" title="Owner">👑</i>' : '';   // 2.0.4: the Owner's picture wears a crown everywhere (chat too)
-    return `<span class="av ${size} ${safe ? 'img' : ''} ${fk ? 'framed nxp-f-' + fk : ''}" data-uid="${esc(id)}" style="--c:${colorOf(id)};${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}${pres && a ? ' · ' + esc(presText(adminById(a.id || a.user_id) || a)) : ''}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${crown}${pres ? `<i class="pr ${presence(a)}"></i>` : ''}</span>`;
+    // 3.3: frames people made themselves (Nexus "Make your own"): their colors, or their approved picture
+    let mineCls = '', mineVars = '', mineImg = '';
+    if (fk === 'mine' && window.NexusCosmetics?.cleanCustom) {
+      const f = window.NexusCosmetics.cleanCustom(P?.custom).frame;
+      if (f.style === 'image') { mineCls = ' nxp-fm-image'; if (window.NexusCosmetics.SAFE_MINE.test(P?.frame_img || '')) mineImg = `<img class="nxp-fimg" src="${esc(P.frame_img)}" alt="">`; }
+      else { mineCls = ` nxp-fm-${f.style} nxp-ma-${f.anim}`; mineVars = `--ca:${f.a};--cb:${f.b};--cw:${f.width};--cg:${f.glow};--cd:${7 - f.speed * 2}s;`; }
+    }
+    return `<span class="av ${size} ${safe ? 'img' : ''} ${fk ? 'framed nxp-f-' + fk + mineCls : ''}" data-uid="${esc(id)}" style="--c:${colorOf(id)};${mineVars}${safe ? `background-image:url('${safe}')` : ''}" title="${esc(nameOf(a))}${pres && a ? ' · ' + esc(presText(adminById(a.id || a.user_id) || a)) : ''}">${esc(nameOf(a)[0]?.toUpperCase() || '?')}${mineImg}${crown}${pres ? `<i class="pr ${presence(a)}"></i>` : ''}</span>`;
   }
   const adminById = id => NX.A.admins.find(a => a.id === id);
 
@@ -216,14 +223,14 @@
   const TABS = [
     ['', [['dashboard', '◎', 'Dashboard'], ['chat', '💬', 'Team chat', 'chat'], ['tasks', '✅', 'Tasks', 'tasks'], ['notes', '📓', 'Team notes']]],
     ['INBOX', [['access', '🔑', 'Access requests', 'access'], ['requests', '🧪', 'Beta requests', 'requests'], ['feedback', '📮', 'Feedback & bugs', 'feedback'], ['reports', '🚩', 'Reports', 'reports']]],
-    ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['uploads', '🖼', 'Profile uploads'], ['perms', '🔐', 'Admin access', 'perms']]],
+    ['PEOPLE & CONTENT', [['users', '👤', 'Users'], ['moderation', '🛡', 'Moderation'], ['profiles', '🖼', 'Profiles & frames'], ['perms', '🔐', 'Admin access', 'perms']]],
     ['APP CONTROL', [['flags', '⚑', 'Feature flags'], ['beta', 'β', 'Beta'], ['testing', '🧪', 'Testing'], ['prompts', '✍', 'Agent prompts'], ['announce', '📣', 'Announcements'], ['broadcast', '📡', 'Broadcasts'], ['maint', '🛠', 'Maintenance'], ['status', '🟢', 'Status page'], ['schedules', '⏰', 'Schedules']]],
     ['INSIGHTS', [['health', '🩺', 'Health', 'health'], ['releases', '🚀', 'Releases'], ['axiom', '🔺', 'Axiom (Apex)', 'cage'], ['training', '🧠', 'Training'], ['freeapi', '📊', 'API usage'], ['activity', '🔥', 'Admin activity'], ['audit', '📜', 'Audit log']]],
     ['MONEY', [['mexel', '🧾', 'Mexel']]],
     ['STAFF', [['shifts', '🗓', 'Shifts'], ['employees', '👥', 'Employees']]],
     ['', [['hub', '🖥', HUB_LABEL, 'hub'], ['terms', '⚖', 'Terms'], ['me', '⚙︎', 'My settings']]]
   ];
-  const ALL_TABS = TABS.flatMap(g => g[1].map(t => t[0]));
+  const ALL_TABS = [...TABS.flatMap(g => g[1].map(t => t[0])), 'uploads'];   // 3.2: uploads is a tab of Profiles & frames
   function shell() {
     $('app').innerHTML = `<div class="wrap"><nav id="nav">${TABS.map(([h, items]) => `${h ? `<h6>${h}</h6>` : '<h6></h6>'}${items.map(([k, ic, l, b]) =>
       `<button data-tab="${k}" class="${NX.A.tab === k ? 'on' : ''}"><span class="ic">${ic}</span>${l}${b ? `<span class="n" data-badge="${b}" hidden></span>` : ''}</button>`).join('')}`).join('')}</nav><main id="main"></main></div>`;
@@ -448,7 +455,7 @@
   const NX = window.NX = { setThemeMode, themeMode, profiles: PROF, refreshProfile: id => { PROF.delete(id); wantProfile(id); },
     sb, $, esc, when, flushOutbox, ago, store, rpc, needSql, toast, notify, av, nameOf, colorOf, presence, presText, myStatus, PRES, adminById, applyTheme,
     main, labelTables, drawer, modal, ask, levelLabel, levelPill, closeOverlays, go, shell, paintHeader, updateTitle, on, emit, refreshCounts, savePrefs, loadAdmins, chime, start, SB_URL,
-    pages: {}, WIN: IS_WIN, pc, VERSION: '3.1.0',
+    pages: {}, WIN: IS_WIN, pc, VERSION: '3.3.0',
     A: { user: null, session: null, level: '', tab: 'dashboard', arg: null, admins: [], me: null, profile: {}, live: false, idle: false,
       counts: { chat: 0, requests: 0, feedback: 0, reports: 0, inbox: 0, tasks: 0, access: 0 },
       manage: false,

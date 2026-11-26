@@ -21,8 +21,18 @@
     ['skin:vortex', 'Vortex', 1250], ['skin:crystal', 'Crystal', 1400], ['skin:eclipse', 'Eclipse', 1500], ['skin:circuit', 'Circuit', 1750], ['skin:overlord', 'Overlord', 2000], ['skin:quasar', 'Quasar', 2250],
     ['skin:solar', 'Solar', 2500], ['skin:glyph', 'Glyph', 2750], ['skin:hologram', 'Hologram', 3000],
     ['pframe:sakura', 'Blossom', 750], ['pframe:aurora', 'Aurora veil', 1100], ['ptheme:frost', 'Frozen', 350], ['effect:petals', 'Falling petals', 650],   // 4.0.6: so every set matches
-    ['frame:mine', 'Make your own', 0], ['pframe:mine', 'Make your own', 0], ['effect:mine', 'Make your own', 0]   // 4.0.6 beta: built in the shop
+    ['frame:mine', 'Make your own', 0], ['pframe:mine', 'Make your own', 0], ['effect:mine', 'Make your own', 0],   // 4.0.6 beta: built in the shop
+    // 4.1.0: banners that move
+    ['banner:rainglass', 'Rain on glass', 700], ['banner:drift', 'Star drift', 650], ['banner:lava', 'Lava lamp', 800], ['banner:synthsun', 'Synth sunset', 900], ['banner:livelights', 'Live aurora', 1000], ['banner:neonrain', 'Neon rain', 1100],
+    // 4.1.0: limited items, only in the shop during their month (yours to keep once bought)
+    ['frame:harvest', 'Harvest wreath', 600], ['banner:autumn', 'Falling leaves', 650], ['effect:leaves', 'Autumn leaves', 550],
+    ['frame:snowglobe', 'Snow globe', 750], ['banner:lights', 'Holiday lights', 800], ['pframe:candy', 'Candy cane', 700], ['effect:twinkle', 'Fairy lights', 650],
+    ['frame:frostfire', 'Frostfire', 800], ['banner:fireworks', 'Fireworks', 900],
+    ['frame:hearts', 'Sweetheart', 650], ['effect:hearts', 'Floating hearts', 600]
   ];
+  // month (1–12) → limited items. Out of season they're hidden in the shop unless you already own them.
+  const SEASONS = { 11: ['frame:harvest', 'banner:autumn', 'effect:leaves'], 12: ['frame:snowglobe', 'banner:lights', 'pframe:candy', 'effect:twinkle'], 1: ['frame:frostfire', 'banner:fireworks', 'effect:twinkle'], 2: ['frame:hearts', 'effect:hearts', 'banner:lights'] };
+  const SEASON_OF = {}; for (const [m, ids] of Object.entries(SEASONS)) for (const id of ids) (SEASON_OF[id] ||= []).push(+m);
   const BETA_ITEMS = new Set(['frame:mine', 'pframe:mine', 'effect:mine']);
   const OWNER_ONLY = new Set(['frame:crown']);   // 4.0.2: the crown is the Owner's alone (never sold)
   // 4.0.4: every free app theme is in the shop too (free), next to the ones you buy. [id, name, accent, accent2, bg]
@@ -44,10 +54,17 @@
     ["midnight", "Midnight", "#6f8cff", "#a3b8ff", "#060a1c"],
     ["cherry", "Cherry", "#ff5c8a", "#ffb3c7", "#17060c"]
   ];
-  const CATALOG = [...C.map(([id, name, price], i) => ({ id, kind: id.split(':')[0], key: id.split(':')[1], name, price: OWNER_ONLY.has(id) ? 0 : price, sort: i, ...(OWNER_ONLY.has(id) ? { owner: true } : {}), ...(BETA_ITEMS.has(id) ? { beta: true } : {}) })),
+  const CATALOG = [...C.map(([id, name, price], i) => ({ id, kind: id.split(':')[0], key: id.split(':')[1], name, price: OWNER_ONLY.has(id) ? 0 : price, sort: i, ...(OWNER_ONLY.has(id) ? { owner: true } : {}), ...(BETA_ITEMS.has(id) ? { beta: true } : {}), ...(SEASON_OF[id] ? { months: SEASON_OF[id] } : {}) })),
     ...FREE_THEMES.map(([k, name], i) => ({ id: 'theme:' + k, kind: 'theme', key: k, name, price: 0, free: true, sort: -100 + i }))];
-  const KINDS = [['pack', 'Sets'], ['frame', 'Picture frames'], ['pframe', 'Profile frames'], ['ptheme', 'Profile themes'], ['banner', 'Banners'], ['effect', 'Profile effects'], ['font', 'Name fonts'], ['color', 'Name colors'], ['theme', 'App themes'], ['skin', 'Orb skins']];
+  const KINDS = [['limited', 'This month'], ['pack', 'Sets'], ['frame', 'Picture frames'], ['pframe', 'Profile frames'], ['ptheme', 'Profile themes'], ['banner', 'Banners'], ['effect', 'Profile effects'], ['font', 'Name fonts'], ['color', 'Name colors'], ['theme', 'App themes'], ['skin', 'Orb skins']];
   const item = id => CATALOG.find(x => x.id === id) || null;
+  // 4.1.0: what's in the shop this month, and whether something limited can be bought right now
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function season(t = Date.now()) {
+    const d = new Date(t), m = d.getMonth() + 1, end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    return { month: m, name: MONTHS[m - 1], items: (SEASONS[m] || []).map(item).filter(Boolean), leaves: end.getTime(), daysLeft: Math.max(1, Math.ceil((end - d) / 864e5)) };
+  }
+  const inSeason = (it, t = Date.now()) => !it?.months || it.months.includes(new Date(t).getMonth() + 1);
   // 4.0.6: sets. Everything in a set matches; buying the set gets what you don't have yet for 25% less, and "Use set" puts
   // all of it on in one go (orb skin and app theme too). The prices are worked out the same way in Supabase (cirkts_buy_pack).
   const PACKS = [
@@ -192,7 +209,7 @@
   // 4.0.6: the extra things friends see on your profile (member since, where you use Nexus, favorite agent, badges,
   // friends you share, Spaces you're both in). more = profile_card's "more".
   const AGO = t => { const d = (Date.now() - new Date(t)) / 864e5; return d < 1 ? 'today' : d < 2 ? 'yesterday' : d < 30 ? Math.floor(d) + ' days ago' : new Date(t).toLocaleDateString([], { month: 'short', year: 'numeric' }); };
-  const SURF = { mac: 'Mac', windows: 'Windows PC', linux: 'Linux', phone: 'N28C', test_run: 'Test Run', admin: 'Apoji Admin' };
+  const SURF = { mac: 'Mac', windows: 'Windows PC', linux: 'Linux', phone: 'N28C', test_run: 'Test Run', admin: 'Apoji Admin', aargon3: 'aARgon3', mexel: 'Mexel' };
   function detailsHtml(p = {}) {
     const m = p.more || {}, x = (p.style || {}).extra || {}, rows = [];
     if (m.since) rows.push(['Member since', new Date(m.since).toLocaleDateString([], { month: 'long', year: 'numeric' })]);
@@ -400,12 +417,13 @@
 @keyframes nxpEmberFlow { from { background-position: 0 100%; } to { background-position: 0 55%; } }
 .nxp-pf-flame .nxp-pfg { box-shadow: 0 0 14px rgba(255,110,30,.4), 0 14px 26px -12px rgba(255,80,10,.8), inset 0 -28px 30px -26px rgba(255,120,30,.6); animation: nxpEmberGlow 3.2s ease-in-out infinite; }
 @keyframes nxpEmberGlow { 0%, 100% { opacity: .72; } 35% { opacity: 1; } 60% { opacity: .86; } }
-.nxp-pf-flame .nxp-pfg::before { content: ''; position: absolute; left: 5%; right: 5%; bottom: 0; height: 48px; background-image: radial-gradient(1.6px 1.6px at 8% 90%, #ffd27a, transparent), radial-gradient(1.3px 1.3px at 27% 60%, #ff9a3d, transparent), radial-gradient(2px 2px at 48% 85%, #ffe6a3, transparent), radial-gradient(1.3px 1.3px at 66% 40%, #ff7a2e, transparent), radial-gradient(1.6px 1.6px at 84% 75%, #ffc15c, transparent), radial-gradient(1.2px 1.2px at 95% 30%, #ffd27a, transparent); background-size: 100% 48px; animation: nxpSparks 2.8s linear infinite; -webkit-mask: linear-gradient(transparent, #000 45%, #000 85%, transparent); mask: linear-gradient(transparent, #000 45%, #000 85%, transparent); }
-@keyframes nxpSparks { to { background-position: 0 -48px; } }
-.nxp-pf-flame .nxp-pfg::after { content: ''; position: absolute; left: 3%; right: 3%; bottom: -4px; height: 22px; border-radius: 0 0 18px 18px; background: radial-gradient(10px 20px at 50% 100%, rgba(255,236,160,.95), rgba(255,140,40,.85) 40%, rgba(230,60,10,.45) 65%, transparent 78%) 0 100% / 17px 22px repeat-x, radial-gradient(8px 15px at 50% 100%, rgba(255,190,80,.9), rgba(255,90,20,.6) 50%, transparent 78%) 6px 100% / 11px 16px repeat-x, radial-gradient(14px 12px at 50% 100%, rgba(255,110,30,.7), transparent 75%) 3px 100% / 23px 12px repeat-x; -webkit-mask: linear-gradient(to top, #000 30%, transparent); mask: linear-gradient(to top, #000 30%, transparent); filter: blur(1.1px) saturate(1.2); transform-origin: 50% 100%; animation: nxpLick 1.3s ease-in-out infinite alternate, nxpFlick2 .9s steps(3) infinite; }
-@keyframes nxpLick { from { transform: scaleY(.8); background-position: 0 100%, 6px 100%, 3px 100%; } to { transform: scaleY(1.12); background-position: 8px 100%, -2px 100%, 12px 100%; } }
+.nxp-pf-flame .nxp-pfg::before { content: ''; position: absolute; left: 3%; right: 3%; bottom: 0; height: 80px; background-image: radial-gradient(1.6px 1.6px at 8% 90%, #ffd27a, transparent), radial-gradient(1.3px 1.3px at 27% 60%, #ff9a3d, transparent), radial-gradient(2px 2px at 48% 85%, #ffe6a3, transparent), radial-gradient(1.3px 1.3px at 66% 40%, #ff7a2e, transparent), radial-gradient(1.6px 1.6px at 84% 75%, #ffc15c, transparent), radial-gradient(1.2px 1.2px at 95% 30%, #ffd27a, transparent); background-size: 100% 80px; animation: nxpSparks 3.2s linear infinite; -webkit-mask: linear-gradient(transparent, #000 45%, #000 85%, transparent); mask: linear-gradient(transparent, #000 45%, #000 85%, transparent); }
+@keyframes nxpSparks { to { background-position: 0 -80px; } }
+.nxp-pf-flame .nxp-pfg::after { content: ''; position: absolute; left: 1.5%; right: 1.5%; bottom: -3px; height: 42px; border-radius: 0 0 20px 20px; background: radial-gradient(14px 38px at 50% 100%, rgba(255,240,170,.95), rgba(255,150,40,.9) 35%, rgba(235,70,15,.55) 62%, transparent 78%) 0 100% / 26px 42px repeat-x, radial-gradient(10px 26px at 50% 100%, rgba(255,200,90,.9), rgba(255,100,20,.65) 50%, transparent 78%) 11px 100% / 19px 30px repeat-x, radial-gradient(20px 18px at 50% 100%, rgba(255,120,30,.75), transparent 75%) 5px 100% / 33px 20px repeat-x; -webkit-mask: linear-gradient(to top, #000 35%, transparent); mask: linear-gradient(to top, #000 35%, transparent); filter: blur(1.3px) saturate(1.25); transform-origin: 50% 100%; animation: nxpLick 1.3s ease-in-out infinite alternate, nxpFlick2 .9s steps(3) infinite; }
+@keyframes nxpLick { from { transform: scaleY(.78); background-position: 0 100%, 11px 100%, 5px 100%; } to { transform: scaleY(1.15); background-position: 12px 100%, 2px 100%, 18px 100%; } }
 @keyframes nxpFlick2 { 0% { opacity: .85; } 33% { opacity: 1; } 66% { opacity: .9; } }
 .nxp-sw.nxp-pf-flame .nxp-pfg::before { height: 30px; background-size: 100% 30px; }
+.nxp-sw.nxp-pf-flame .nxp-pfg::after { height: 20px; bottom: -6px; background-size: 15px 20px, 11px 16px, 19px 11px; }
 /* Blossom */
 .nxp-pf-sakura .nxp-pfx { border: 2px solid #ffb7d5; box-shadow: 0 0 12px rgba(255,140,190,.5), inset 0 0 12px rgba(255,183,213,.18); }
 .nxp-pf-sakura .nxp-pfg::before, .nxp-pf-sakura .nxp-pfg::after { content: ''; position: absolute; width: 26px; height: 26px; background: radial-gradient(ellipse 6px 3.5px at 30% 40%, #ffc6dc 60%, transparent 64%), radial-gradient(ellipse 5px 3px at 70% 62%, #ff9ec7 60%, transparent 64%), radial-gradient(ellipse 4px 2.5px at 48% 82%, #ffd9e8 60%, transparent 64%); animation: nxpSway 3.4s ease-in-out infinite alternate; }
@@ -448,15 +466,51 @@
 .nxp-pack { width: 100%; padding: 8px; border-radius: 14px; background: linear-gradient(135deg, var(--pb) 35%, color-mix(in srgb, var(--pa) 45%, var(--pb)) 160%); box-sizing: border-box; }
 .nxp-pack .nxp-card { text-align: left; }
 /* what friends see */
-.nxp-more { display: grid; gap: 7px; margin: 12px 16px 14px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); font-size: 12.5px; color: #eef4f8; }
+.nxp-more { display: grid; gap: 7px; margin: 12px 16px 14px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); font: 12.5px/1.35 -apple-system, "Segoe UI", system-ui, sans-serif; color: #eef4f8; letter-spacing: 0; }
+.nxp-more span { white-space: nowrap; } .nxp-badges i { font-family: inherit; }
+/* 4.0.7: names stay readable on a busy banner picture */
+.nxp-full .nxp-name { filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)) drop-shadow(0 0 6px rgba(0,0,0,.45)); }
 .nxp-more > div:not(.nxp-badges) { display: flex; justify-content: space-between; gap: 12px; }
 .nxp-more span { color: #9fb0bf; } .nxp-more b { font-weight: 600; text-align: right; }
 .nxp-badges { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
 .nxp-badges i { font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid rgba(255,211,107,.4); color: #ffd36b; background: rgba(255,211,107,.08); }
-@media (prefers-reduced-motion: reduce) { .nxp-av::before, .nxp-av::after, .nxp-av > i, .nxp-pfx, .nxp-pfx::before, .nxp-pfx::after, .nxp-pfg, .nxp-pfg::before, .nxp-pfg::after, .nxp-fx { animation: none !important; } }
+
+/* ===== 4.1.0 banners that move ===== */
+.nxp-b-rainglass { background: radial-gradient(1.2px 6px at 12% 20%, rgba(200,230,255,.7), transparent), radial-gradient(1px 5px at 37% 60%, rgba(200,230,255,.6), transparent), radial-gradient(1.4px 7px at 63% 30%, rgba(220,240,255,.7), transparent), radial-gradient(1px 5px at 86% 70%, rgba(200,230,255,.6), transparent), radial-gradient(3px 3px at 25% 75%, rgba(200,230,255,.5), transparent), radial-gradient(4px 4px at 72% 50%, rgba(200,230,255,.4), transparent), linear-gradient(170deg, #1b2a3c, #2d3f58 50%, #121b28); background-size: 100% 80px, 100% 80px, 100% 80px, 100% 80px, 100% 100%, 100% 100%, 100% 100%; animation: nxpRainGlass 2.4s linear infinite; }
+@keyframes nxpRainGlass { to { background-position: 0 80px, 0 80px, 0 80px, 0 80px, 0 0, 0 0, 0 0; } }
+.nxp-b-drift { background: radial-gradient(1px 1px at 10% 30%, #fff, transparent), radial-gradient(1.4px 1.4px at 30% 70%, #dfe, transparent), radial-gradient(1px 1px at 55% 25%, #fff, transparent), radial-gradient(1.6px 1.6px at 80% 60%, #cdf, transparent), radial-gradient(1px 1px at 90% 15%, #fff, transparent), linear-gradient(120deg, #050816, #14123a 60%, #2a0f3a); background-size: 160px 78px, 160px 78px, 160px 78px, 160px 78px, 160px 78px, 100% 100%; animation: nxpDrift 14s linear infinite; }
+@keyframes nxpDrift { to { background-position: -160px 0, -160px 0, -160px 0, -160px 0, -160px 0, 0 0; } }
+.nxp-b-lava { background: radial-gradient(30% 60% at 20% 70%, #ff6a3d, transparent 70%), radial-gradient(25% 55% at 70% 30%, #ffb347, transparent 70%), radial-gradient(35% 70% at 50% 110%, #ff3d6e, transparent 70%), linear-gradient(160deg, #2a0710, #4a1020); background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%; animation: nxpLava 9s ease-in-out infinite alternate; }
+@keyframes nxpLava { 50% { background-position: 60% 30%, 30% 80%, 70% 40%, 0 0; } 100% { background-position: 100% 100%, 0% 60%, 20% 0%, 0 0; } }
+.nxp-b-synthsun { background: repeating-linear-gradient(0deg, transparent 0 5px, rgba(18,6,30,.9) 5px 7px) 0 52% / 100% 48% no-repeat, radial-gradient(circle at 50% 95%, #ffd65c 0 14%, #ff4fa0 26%, transparent 40%), linear-gradient(180deg, #1a0533, #5a1460 60%, #ff4f9a); animation: nxpSynth 6s ease-in-out infinite alternate; }
+@keyframes nxpSynth { to { filter: hue-rotate(-18deg) brightness(1.1); } }
+.nxp-b-livelights { background: radial-gradient(80% 140% at 30% 120%, rgba(93,255,180,.75), transparent 60%), radial-gradient(70% 140% at 80% 110%, rgba(138,125,255,.75), transparent 60%), radial-gradient(60% 120% at 55% 130%, rgba(92,200,255,.6), transparent 60%), #050b14; background-size: 180% 100%, 180% 100%, 160% 100%, 100% 100%; animation: nxpLive 10s ease-in-out infinite alternate; }
+@keyframes nxpLive { to { background-position: 100% 0, 0 0, 60% 0, 0 0; } }
+.nxp-b-neonrain { background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(255,79,216,.5) 9px 10px, transparent 10px 23px, rgba(54,230,255,.5) 23px 24px), linear-gradient(180deg, #0b0418, #1b0630); background-size: 100% 26px, 100% 100%; animation: nxpNeonRain 1.2s linear infinite; }
+@keyframes nxpNeonRain { to { background-position: 0 26px, 0 0; } }
+/* ===== 4.1.0 limited (seasonal) items ===== */
+.nxp-b-autumn { background: radial-gradient(ellipse 5px 3px at 15% 20%, #ff8c2a 60%, transparent 64%), radial-gradient(ellipse 4px 3px at 45% 50%, #ffc14d 60%, transparent 64%), radial-gradient(ellipse 5px 3px at 75% 15%, #d9481f 60%, transparent 64%), radial-gradient(ellipse 4px 2.5px at 90% 60%, #ffa64d 60%, transparent 64%), linear-gradient(180deg, #3a1a0a, #7a3a12); background-size: 120px 78px, 120px 78px, 120px 78px, 120px 78px, 100% 100%; animation: nxpAutumn 6s linear infinite; }
+@keyframes nxpAutumn { to { background-position: 40px 78px, 40px 78px, 40px 78px, 40px 78px, 0 0; } }
+.nxp-b-lights { background: radial-gradient(circle at 8% 22%, #ff5a5a 0 3px, transparent 4px), radial-gradient(circle at 24% 30%, #ffd65c 0 3px, transparent 4px), radial-gradient(circle at 40% 22%, #5aff9a 0 3px, transparent 4px), radial-gradient(circle at 56% 30%, #5cc8ff 0 3px, transparent 4px), radial-gradient(circle at 72% 22%, #ff5a5a 0 3px, transparent 4px), radial-gradient(circle at 88% 30%, #ffd65c 0 3px, transparent 4px), linear-gradient(180deg, #0a1a10, #142a3a); animation: nxpTwinkleBanner 1.6s steps(2) infinite; }
+@keyframes nxpTwinkleBanner { 50% { filter: brightness(1.35) saturate(1.3); } }
+.nxp-b-fireworks { background: radial-gradient(circle at 25% 40%, rgba(255,90,140,.9) 0 2px, transparent 3px), radial-gradient(circle at 25% 40%, transparent 0 14px, rgba(255,90,140,.35) 15px 17px, transparent 18px), radial-gradient(circle at 70% 30%, rgba(92,200,255,.9) 0 2px, transparent 3px), radial-gradient(circle at 70% 30%, transparent 0 18px, rgba(92,200,255,.35) 19px 21px, transparent 22px), linear-gradient(180deg, #05071a, #1a1240); animation: nxpBoom 2.2s ease-out infinite; }
+@keyframes nxpBoom { 0% { filter: brightness(.7); } 15% { filter: brightness(1.6); } 100% { filter: brightness(.8); } }
+.nxp-f-harvest::before { inset: -8px; background: conic-gradient(#ff8c2a, #d9481f, #ffc14d, #7a3a12, #ff8c2a); filter: blur(5px); opacity: .7; }
+.nxp-f-harvest::after { inset: -6px; border: 4px dotted #ff9a3d; box-shadow: 0 0 0 2px #7a3a12; }
+.nxp-f-snowglobe::before { inset: -10px; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.35), transparent 40%), radial-gradient(circle, rgba(170,220,255,.25), transparent 70%); }
+.nxp-f-snowglobe::after { inset: -6px; border: 2px solid rgba(220,240,255,.9); box-shadow: inset 0 0 12px rgba(200,235,255,.6), 0 0 14px rgba(160,220,255,.5); background: radial-gradient(1.5px 1.5px at 20% 30%, #fff, transparent), radial-gradient(1.5px 1.5px at 70% 20%, #fff, transparent), radial-gradient(1.5px 1.5px at 40% 75%, #fff, transparent), radial-gradient(1.5px 1.5px at 80% 65%, #fff, transparent); animation: nxpSpin 18s linear infinite; }
+.nxp-f-frostfire::before { inset: -10px; background: conic-gradient(#5cc8ff, #b18cff, #ff6a3d, #5cc8ff); filter: blur(6px); animation: nxpSpin 5s linear infinite; }
+.nxp-f-frostfire::after { inset: -5px; border: 2.5px solid transparent; background: conic-gradient(#9fe7ff, #ff8c5a, #9fe7ff) border-box; -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) padding-box exclude, linear-gradient(#000 0 0); animation: nxpSpinR 7s linear infinite; }
+.nxp-f-hearts::before { inset: -9px; background: radial-gradient(circle, rgba(255,90,140,.6) 45%, transparent 70%); filter: blur(6px); animation: nxpMinePulse 1.4s ease-in-out infinite; }
+.nxp-f-hearts::after { inset: -5px; border: 3px solid #ff5a8c; box-shadow: 0 0 10px rgba(255,90,140,.7); }
+.nxp-pf-candy .nxp-pfx { border: 3px solid transparent; background: repeating-linear-gradient(45deg, #ff3b4f 0 8px, #fff 8px 16px) border-box; -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) padding-box exclude, linear-gradient(#000 0 0); animation: nxpMarch 1.2s linear infinite; }
+.nxp-fx-leaves { background-image: radial-gradient(ellipse 5px 3px at 15% 10%, #ff8c2a 60%, transparent 64%), radial-gradient(ellipse 4px 3px at 45% 40%, #ffc14d 60%, transparent 64%), radial-gradient(ellipse 5px 3px at 75% 20%, #d9481f 60%, transparent 64%), radial-gradient(ellipse 4px 2.5px at 30% 75%, #ffa64d 60%, transparent 64%); background-size: 100% 130px; animation: nxpPetal 7s linear infinite; }
+.nxp-fx-twinkle { background-image: radial-gradient(2px 2px at 10% 15%, #ffd65c, transparent), radial-gradient(2px 2px at 30% 8%, #ff5a5a, transparent), radial-gradient(2px 2px at 50% 15%, #5aff9a, transparent), radial-gradient(2px 2px at 70% 8%, #5cc8ff, transparent), radial-gradient(2px 2px at 90% 15%, #ffd65c, transparent); animation: nxpTwinkle 1.2s ease-in-out infinite alternate; }
+.nxp-fx-hearts { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M20 34l-7-7a4 4 0 0 1 7-5a4 4 0 0 1 7 5z' fill='%23ff5a8c'/%3E%3Cpath d='M80 74l-6-6a3.5 3.5 0 0 1 6-4a3.5 3.5 0 0 1 6 4z' fill='%23ff9ec7'/%3E%3Cpath d='M100 24l-5-5a3 3 0 0 1 5-3.5a3 3 0 0 1 5 3.5z' fill='%23ff5a8c'/%3E%3C/svg%3E"); background-size: 120px 120px; animation: nxpMineUp 6s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .nxp-av::before, .nxp-av::after, .nxp-av > i, .nxp-pfx, .nxp-pfx::before, .nxp-pfx::after, .nxp-pfg, .nxp-pfg::before, .nxp-pfg::after, .nxp-fx, .nxp-banner {  animation: none !important; } }
 `;
   const CSS = OLD_CSS + NEW_CSS;
-  const api = { CATALOG, KINDS, APP_THEMES, FREE_THEMES, FONTS, COLORS, PRES, item, card, nameHtml, nameColor, avatarHtml, swatch, CSS, key, HEX, SAFE_IMG, OWNER_ONLY, BETA_ITEMS, PACKS, PACK_OFF, pack, packPrice, packStyle, packSwatch, cleanCustom, effectTile, SAFE_MINE, MINE, detailsHtml };
+  const api = { SEASONS, season, inSeason, CATALOG, KINDS, APP_THEMES, FREE_THEMES, FONTS, COLORS, PRES, item, card, nameHtml, nameColor, avatarHtml, swatch, CSS, key, HEX, SAFE_IMG, OWNER_ONLY, BETA_ITEMS, PACKS, PACK_OFF, pack, packPrice, packStyle, packSwatch, cleanCustom, effectTile, SAFE_MINE, MINE, detailsHtml };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') {
     window.NexusCosmetics = api;

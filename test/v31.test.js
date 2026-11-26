@@ -2,7 +2,7 @@
 const assert = require('assert'), fs = require('fs'), path = require('path');
 const R = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 const v = R('v31.js'), html = R('index.html'), sw = R('sw.js'), pkg = JSON.parse(R('package.json')), admin = R('admin.js');
-assert.ok(admin.includes("['uploads', '🖼', 'Profile uploads']") && v.includes('P.uploads = async'));
+assert.ok((admin.includes("['uploads', '🖼', 'Profile uploads']") || admin.includes("'uploads'];")) && v.includes('P.uploads = async'));
 assert.ok(html.includes('<script src="v31.js"></script>') && sw.includes("'./v31.js'") && pkg.build.files.includes('v3*.js'));
 assert.ok(v.includes("sb.rpc('admin_cosmetic_uploads'") && v.includes("sb.rpc('admin_cosmetic_review'") && v.includes("sb.rpc('admin_cosmetic_takedown'"));
 assert.ok(v.includes('referrerpolicy="no-referrer"') && !/innerHTML = [^;]*\$\{u\.url\}/.test(v.replace(/esc\(u\.url\)/g, '')));   // every url goes through esc()
