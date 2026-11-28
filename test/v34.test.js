@@ -3,8 +3,8 @@ const assert = require('assert'), fs = require('fs'), path = require('path');
 const R = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 const pkg = JSON.parse(R('package.json')), v = R('v34.js'), admin = R('admin.js');
 let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓ ' + name); };
-ok('version 3.4.0 everywhere, loaded and cached', () => {
-  assert.strictEqual(pkg.version, '3.4.0'); assert.ok(admin.includes("VERSION: '3.4.0'") && R('sw.js').includes('apoji-admin-v3.4.0') && R('README.md').includes('## 3.4.0'));
+ok('version 3.4.x everywhere, loaded and cached', () => {
+  assert.ok(/^3\.4\.\d+$/.test(pkg.version)); assert.ok(admin.includes(`VERSION: '${pkg.version}'`) && R('sw.js').includes('apoji-admin-v' + pkg.version) && R('README.md').includes('## 3.4.0') && R('README.md').includes('## ' + pkg.version));
   assert.ok(R('index.html').includes('<script src="v34.js"></script>') && R('sw.js').includes("'./v34.js'") && pkg.build.files.includes('v3*.js'));
 });
 ok('Session replays page in INSIGHTS: filters, summary, player', () => {

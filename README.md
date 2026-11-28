@@ -176,6 +176,11 @@ Run `supabase/nexus-v3.8.sql` from the Nexus repo (Supabase → SQL Editor). The
 - **Team chat:** typing indicator switches in My settings, Save image on every picture, and the header fits on phones.
 - **Keep awake, rebuilt:** Off / Awake / Awake + screen on, for a set time, the battery level it stops at, what's really keeping the computer awake, and ↺ Reset.
 
+## 3.4.1
+
+- Widget frames for every picture frame show in profiles and the shop list (shared cosmetics from Nexus '28 4.4.0).
+- No emojis in the interface: ones with an icon show the icon, the rest are left out (what people write is untouched).
+
 ## 3.4.0
 
 - **Session replays** (INSIGHTS → Session replays): anonymous step-by-step replays from the Mac and Windows apps, N28C and Test Run. You see which screens people visit, where sessions end, the most-clicked buttons and the errors, and you can play any session back: the window as a box, clicks as dots where they happened, the screen name, a timeline and every step. Never what people type, their chats or who they are. Kept 30 days, and people can turn it off in each app.
